@@ -378,7 +378,10 @@ class OneDriveBasico:
 
 class StatusHandler(BaseHTTPRequestHandler):
     """Servidor web com interface segura + TESTE ONEDRIVE"""
-    
+    # BLOCO 2/3 - CORRIGIR MÉTODO test_onedrive_access
+# Encontrar na classe StatusHandler o método test_onedrive_access
+# SUBSTITUIR APENAS esta parte (linha ~330 aproximadamente):
+
     def test_onedrive_access(self):
         """Teste básico de acesso OneDrive usando credenciais atuais"""
         print("🧪 TESTE ONEDRIVE - INICIANDO")
@@ -420,45 +423,70 @@ class StatusHandler(BaseHTTPRequestHandler):
             
             print("✅ Token.json carregado com sucesso")
             
-            # 3. TENTAR RENOVAR TOKEN COM SCOPE ONEDRIVE
-            print("🔄 Testando renovação com scope OneDrive...")
+            # 3. TESTAR DIFERENTES SCOPES ONEDRIVE
+            print("🔄 Testando diferentes scopes OneDrive...")
             
-            # Scopes atuais + OneDrive
-            scopes = "https://graph.microsoft.com/.default offline_access Files.ReadWrite.All"
+            # OPÇÃO 1: Scope específico OneDrive
+            scopes_para_testar = [
+                "Files.ReadWrite offline_access",
+                "Files.ReadWrite.All offline_access", 
+                "https://graph.microsoft.com/Files.ReadWrite offline_access",
+                "https://graph.microsoft.com/Files.ReadWrite.All offline_access"
+            ]
             
             token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
-            token_data_request = {
-                'client_id': client_id,
-                'grant_type': 'refresh_token',
-                'refresh_token': token_data['refresh_token'],
-                'scope': scopes
-            }
+            access_token = None
+            scope_funcionou = None
             
-            response = requests.post(token_url, data=token_data_request)
-            
-            if response.status_code != 200:
-                print(f"❌ Erro renovação token: {response.status_code}")
-                return {
-                    "status": "error",
-                    "onedrive_access": False,
-                    "message": "Erro ao renovar token com scope OneDrive",
-                    "details": f"HTTP {response.status_code}: {response.text[:200]}"
+            for scope_teste in scopes_para_testar:
+                print(f"🧪 Testando scope: {scope_teste}")
+                
+                token_data_request = {
+                    'client_id': client_id,
+                    'grant_type': 'refresh_token', 
+                    'refresh_token': token_data['refresh_token'],
+                    'scope': scope_teste
                 }
-            
-            new_token = response.json()
-            access_token = new_token.get('access_token')
+                
+                response = requests.post(token_url, data=token_data_request)
+                
+                if response.status_code == 200:
+                    new_token = response.json()
+                    access_token = new_token.get('access_token')
+                    if access_token:
+                        scope_funcionou = scope_teste
+                        print(f"✅ Scope funcionou: {scope_teste}")
+                        break
+                else:
+                    print(f"❌ Scope falhou: {scope_teste} -> {response.status_code}")
             
             if not access_token:
-                return {
-                    "status": "error",
-                    "onedrive_access": False,
-                    "message": "Token renovado mas sem access_token",
-                    "details": "Resposta não contém access_token válido"
+                # Se nenhum scope OneDrive funcionou, testar scope atual
+                print("🔄 Testando com scope atual do email...")
+                
+                token_data_request = {
+                    'client_id': client_id,
+                    'grant_type': 'refresh_token',
+                    'refresh_token': token_data['refresh_token'],
+                    'scope': 'https://graph.microsoft.com/.default offline_access'
                 }
+                
+                response = requests.post(token_url, data=token_data_request)
+                
+                if response.status_code == 200:
+                    new_token = response.json()
+                    access_token = new_token.get('access_token')
+                    scope_funcionou = "scope atual (sem OneDrive)"
+                    print("✅ Token renovado com scope atual")
+                else:
+                    return {
+                        "status": "error",
+                        "onedrive_access": False,
+                        "message": "Nenhum scope funcionou",
+                        "details": f"Último erro: HTTP {response.status_code}: {response.text[:200]}"
+                    }
             
-            print("✅ Token renovado com scope OneDrive!")
-            
-            # 4. TESTAR ACESSO ONEDRIVE BÁSICO
+            # 4. TESTAR ACESSO ONEDRIVE
             print("🔍 Testando acesso OneDrive...")
             
             headers = {
@@ -480,6 +508,7 @@ class StatusHandler(BaseHTTPRequestHandler):
                     "onedrive_access": True,
                     "message": "Credenciais atuais funcionam para OneDrive!",
                     "details": {
+                        "scope_usado": scope_funcionou,
                         "drive_id": drive_info.get('id', 'N/A')[:20] + "...",
                         "drive_type": drive_info.get('driveType', 'N/A'),
                         "owner": drive_info.get('owner', {}).get('user', {}).get('displayName', 'N/A'),
@@ -493,7 +522,8 @@ class StatusHandler(BaseHTTPRequestHandler):
                     "status": "error",
                     "onedrive_access": False,
                     "message": "Sem permissão para acessar OneDrive",
-                    "details": "Aplicação precisa de permissão Files.ReadWrite.All no Azure"
+                    "details": f"Scope usado: {scope_funcionou}. Aplicação precisa de permissão Files.ReadWrite.All no Azure",
+                    "scope_testado": scope_funcionou
                 }
             
             else:
@@ -502,7 +532,8 @@ class StatusHandler(BaseHTTPRequestHandler):
                     "status": "error", 
                     "onedrive_access": False,
                     "message": f"Erro ao acessar OneDrive: {onedrive_response.status_code}",
-                    "details": onedrive_response.text[:200]
+                    "details": onedrive_response.text[:300],
+                    "scope_usado": scope_funcionou
                 }
         
         except Exception as e:
