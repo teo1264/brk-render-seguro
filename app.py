@@ -372,9 +372,147 @@ class OneDriveBasico:
         except Exception as e:
             print(f"❌ Erro upload: {e}")
             return None
+# BLOCO 1/3 - SUBSTITUIR A CLASSE StatusHandler COMPLETA
+# Procurar: class StatusHandler(BaseHTTPRequestHandler):
+# SUBSTITUIR TODA A CLASSE por esta versão:
 
 class StatusHandler(BaseHTTPRequestHandler):
-    """Servidor web com interface segura"""
+    """Servidor web com interface segura + TESTE ONEDRIVE"""
+    
+    def test_onedrive_access(self):
+        """Teste básico de acesso OneDrive usando credenciais atuais"""
+        print("🧪 TESTE ONEDRIVE - INICIANDO")
+        
+        try:
+            # 1. CARREGAR CONFIGURAÇÕES ATUAIS
+            client_id = os.getenv('MICROSOFT_CLIENT_ID')
+            token_path = "/opt/render/project/storage/token.json"
+            
+            if not client_id:
+                return {
+                    "status": "error",
+                    "onedrive_access": False,
+                    "message": "CLIENT_ID não configurado",
+                    "details": "Environment variable MICROSOFT_CLIENT_ID não encontrada"
+                }
+            
+            print(f"✅ CLIENT_ID encontrado: {client_id[:10]}******")
+            
+            # 2. CARREGAR TOKEN ATUAL
+            if not os.path.exists(token_path):
+                return {
+                    "status": "error", 
+                    "onedrive_access": False,
+                    "message": "Token não encontrado",
+                    "details": f"Arquivo {token_path} não existe"
+                }
+            
+            with open(token_path, 'r') as f:
+                token_data = json.load(f)
+            
+            if 'refresh_token' not in token_data:
+                return {
+                    "status": "error",
+                    "onedrive_access": False, 
+                    "message": "Refresh token não encontrado",
+                    "details": "Token.json não contém refresh_token"
+                }
+            
+            print("✅ Token.json carregado com sucesso")
+            
+            # 3. TENTAR RENOVAR TOKEN COM SCOPE ONEDRIVE
+            print("🔄 Testando renovação com scope OneDrive...")
+            
+            # Scopes atuais + OneDrive
+            scopes = "https://graph.microsoft.com/.default offline_access Files.ReadWrite.All"
+            
+            token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+            token_data_request = {
+                'client_id': client_id,
+                'grant_type': 'refresh_token',
+                'refresh_token': token_data['refresh_token'],
+                'scope': scopes
+            }
+            
+            response = requests.post(token_url, data=token_data_request)
+            
+            if response.status_code != 200:
+                print(f"❌ Erro renovação token: {response.status_code}")
+                return {
+                    "status": "error",
+                    "onedrive_access": False,
+                    "message": "Erro ao renovar token com scope OneDrive",
+                    "details": f"HTTP {response.status_code}: {response.text[:200]}"
+                }
+            
+            new_token = response.json()
+            access_token = new_token.get('access_token')
+            
+            if not access_token:
+                return {
+                    "status": "error",
+                    "onedrive_access": False,
+                    "message": "Token renovado mas sem access_token",
+                    "details": "Resposta não contém access_token válido"
+                }
+            
+            print("✅ Token renovado com scope OneDrive!")
+            
+            # 4. TESTAR ACESSO ONEDRIVE BÁSICO
+            print("🔍 Testando acesso OneDrive...")
+            
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Teste básico: informações da raiz do OneDrive
+            onedrive_url = "https://graph.microsoft.com/v1.0/me/drive/root"
+            
+            onedrive_response = requests.get(onedrive_url, headers=headers)
+            
+            if onedrive_response.status_code == 200:
+                drive_info = onedrive_response.json()
+                print("✅ ACESSO ONEDRIVE FUNCIONANDO!")
+                
+                return {
+                    "status": "success",
+                    "onedrive_access": True,
+                    "message": "Credenciais atuais funcionam para OneDrive!",
+                    "details": {
+                        "drive_id": drive_info.get('id', 'N/A')[:20] + "...",
+                        "drive_type": drive_info.get('driveType', 'N/A'),
+                        "owner": drive_info.get('owner', {}).get('user', {}).get('displayName', 'N/A'),
+                        "teste_timestamp": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    }
+                }
+            
+            elif onedrive_response.status_code == 403:
+                print("❌ ERRO 403: Sem permissão OneDrive")
+                return {
+                    "status": "error",
+                    "onedrive_access": False,
+                    "message": "Sem permissão para acessar OneDrive",
+                    "details": "Aplicação precisa de permissão Files.ReadWrite.All no Azure"
+                }
+            
+            else:
+                print(f"❌ Erro OneDrive: {onedrive_response.status_code}")
+                return {
+                    "status": "error", 
+                    "onedrive_access": False,
+                    "message": f"Erro ao acessar OneDrive: {onedrive_response.status_code}",
+                    "details": onedrive_response.text[:200]
+                }
+        
+        except Exception as e:
+            print(f"❌ ERRO GERAL: {str(e)}")
+            return {
+                "status": "error",
+                "onedrive_access": False,
+                "message": "Erro interno no teste",
+                "details": str(e)
+            }
     
     def do_GET(self):
         if self.path == '/':
@@ -399,7 +537,7 @@ class StatusHandler(BaseHTTPRequestHandler):
                 <p><strong>Client ID:</strong> {client_safe}</p>
                 <p><strong>Pasta BRK:</strong> {pasta_safe}</p>
                 <hr>
-                <p><a href="/upload-token">📁 Upload Token</a> | <a href="/health">🔍 Health</a></p>
+                <p><a href="/upload-token">📁 Upload Token</a> | <a href="/health">🔍 Health</a> | <a href="/test-onedrive">🧪 Teste OneDrive</a></p>
                 <small>🔒 Dados protegidos - Versão limpa</small>
             </body></html>
             """
@@ -422,6 +560,36 @@ class StatusHandler(BaseHTTPRequestHandler):
             </body></html>
             """
             self.wfile.write(html.encode('utf-8'))
+            
+        elif self.path == '/test-onedrive':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            try:
+                # Executar teste OneDrive
+                resultado = self.test_onedrive_access()
+                self.wfile.write(json.dumps(resultado, indent=2, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                erro_response = {
+                    "status": "error",
+                    "onedrive_access": False,
+                    "message": "Erro criando teste OneDrive",
+                    "details": str(e)
+                }
+                self.wfile.write(json.dumps(erro_response, indent=2).encode('utf-8'))
+        
+        elif self.path == '/onedrive-info':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            info = {
+                "teste": "Acesse /test-onedrive para testar acesso",
+                "objetivo": "Verificar se credenciais atuais funcionam com OneDrive",
+                "url_teste": "https://brk-render-seguro.onrender.com/test-onedrive"
+            }
+            self.wfile.write(json.dumps(info, indent=2, ensure_ascii=False).encode('utf-8'))
             
         elif self.path == '/health':
             self.send_response(200)
