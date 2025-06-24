@@ -1,0 +1,21 @@
+# 1. requirements.txt
+echo "requests==2.31.0
+python-dateutil==2.8.2" > requirements.txt
+
+# 2. .gitignore
+curl -o .gitignore https://raw.githubusercontent.com/github/gitignore/main/Python.gitignore
+
+# 3. README.md
+# [Copiar conteúdo do artifact README.md]
+
+# 4. .env.example  
+# [Copiar conteúdo do artifact .env.example]
+
+# 5. render.yaml (opcional)
+# [Copiar conteúdo do artifact render.yaml]
+
+# 6. run_local.py (opcional)
+# [Copiar conteúdo do artifact run_local.py]
+
+# 7. LICENSE (opcional)
+# [Copiar conteúdo do artifact LICENSE]
