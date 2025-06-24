@@ -1,0 +1,3 @@
+git add .
+git commit -m "feat: arquivos completos do projeto - requirements, docs, config"
+git push origin main
