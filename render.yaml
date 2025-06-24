@@ -1,0 +1,75 @@
+# 🚀 BRK Monitor - Configuração Render Deploy
+# 
+# Este arquivo configura deploy automático no Render.com
+# Funcionalidades: Build, Environment, Persistent Disk
+
+services:
+  - type: web
+    name: brk-monitor
+    env: python
+    plan: free
+    
+    # 📦 Build Configuration
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    
+    # 🌐 Network Configuration  
+    healthCheckPath: /health
+    
+    # 📁 Persistent Storage (CRÍTICO para SQLite)
+    disk:
+      name: brk-storage
+      mountPath: /opt/render/project/storage
+      sizeGB: 1
+    
+    # 🔒 Environment Variables (Configure no Dashboard)
+    envVars:
+      - key: MICROSOFT_CLIENT_ID
+        sync: false  # Configurar manualmente no Dashboard
+      
+      - key: PASTA_BRK_ID  
+        sync: false  # Configurar manualmente no Dashboard
+        
+      - key: MICROSOFT_TENANT_ID
+        value: consumers  # Valor padrão
+        
+      - key: PORT
+        value: 8080  # Render define automaticamente
+        
+    # 🔄 Auto Deploy
+    autoDeploy: true
+    
+    # 📋 Configurações Adicionais
+    region: oregon  # Região padrão (pode alterar)
+    
+    # 🛡️ Health Check
+    healthCheckPath: /health
+    healthCheckGracePeriod: 30s
+
+# 📝 Instruções de Uso:
+#
+# 1. CONECTAR REPOSITÓRIO:
+#    - Render.com → New Web Service  
+#    - Connect GitHub → brk-monitor-seguro
+#    - Render detectará este arquivo automaticamente
+#
+# 2. CONFIGURAR VARIÁVEIS OBRIGATÓRIAS:
+#    - Dashboard → Environment → Add Variable:
+#      • MICROSOFT_CLIENT_ID = seu_client_id
+#      • PASTA_BRK_ID = seu_pasta_id  
+#
+# 3. DEPLOY AUTOMÁTICO:
+#    - Render usará as configurações deste arquivo
+#    - Build: pip install -r requirements.txt
+#    - Start: python app.py
+#    - Storage: 1GB persistent disk em /opt/render/project/storage
+#
+# 4. VERIFICAR FUNCIONAMENTO:
+#    - Health check: https://seu-app.onrender.com/health
+#    - Status: https://seu-app.onrender.com/
+#    - Upload token: https://seu-app.onrender.com/upload-token
+
+# ⚠️ IMPORTANTE:
+# - MICROSOFT_CLIENT_ID e PASTA_BRK_ID devem ser configurados manualmente
+# - Persistent disk é ESSENCIAL para SQLite funcionar
+# - Health check monitora se aplicação está funcionando
