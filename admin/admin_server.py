@@ -123,54 +123,82 @@ class AdminHandler(BaseHTTPRequestHandler):
                 drive_info = onedrive_response.json()
                 print("✅ ACESSO ONEDRIVE FUNCIONANDO!")
                 
-                # 🆕 BUSCAR CDC_BRK_CCB.xlsx na pasta /BRK
-                print("🔍 BUSCANDO CDC_BRK_CCB.xlsx na pasta /BRK...")
+                # 🆕 BUSCAR ID DA PASTA /BRK/ (estratégia correta)
+                print("📁 BUSCANDO ID DA PASTA /BRK/...")
                 
-                brk_url = "https://graph.microsoft.com/v1.0/me/drive/root:/BRK:/children"
-                brk_response = requests.get(brk_url, headers=headers, timeout=30)
+                root_url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
+                root_response = requests.get(root_url, headers=headers, timeout=30)
                 
+                pasta_brk_id = None
+                if root_response.status_code == 200:
+                    items = root_response.json().get('value', [])
+                    for item in items:
+                        if item.get('name') == 'BRK' and 'folder' in item:
+                            pasta_brk_id = item.get('id')
+                            print(f"📁 PASTA /BRK/ ENCONTRADA!")
+                            print(f"   🆔 ID DA PASTA: {pasta_brk_id}")
+                            print(f"   ⚙️ Configurar: PASTA_BRK_ID={pasta_brk_id}")
+                            break
+                
+                # Listar conteúdo da pasta usando ID da pasta
                 planilha_encontrada = None
                 arquivos_brk = []
                 
-                if brk_response.status_code == 200:
-                    items = brk_response.json().get('value', [])
-                    print(f"📁 Encontrados {len(items)} arquivos na pasta /BRK")
+                if pasta_brk_id:
+                    print("📂 LISTANDO CONTEÚDO DA PASTA /BRK/...")
+                    brk_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_brk_id}/children"
+                    brk_response = requests.get(brk_url, headers=headers, timeout=30)
                     
-                    for item in items:
-                        arquivo_info = {
-                            "nome": item.get('name'),
-                            "tipo": "pasta" if 'folder' in item else "arquivo"
-                        }
-                        arquivos_brk.append(arquivo_info)
+                    if brk_response.status_code == 200:
+                        items = brk_response.json().get('value', [])
+                        print(f"📁 Pasta /BRK/ contém {len(items)} arquivos")
                         
-                        # Buscar especificamente CDC_BRK_CCB.xlsx
-                        if item.get('name', '').upper() == 'CDC_BRK_CCB.XLSX':
-                            planilha_encontrada = {
+                        for item in items:
+                            arquivo_info = {
                                 "nome": item.get('name'),
+                                "tipo": "pasta" if 'folder' in item else "arquivo",
                                 "id": item.get('id'),
-                                "tamanho": item.get('size', 0),
-                                "caminho": f"/BRK/{item.get('name')}",
-                                "url_download": f"https://graph.microsoft.com/v1.0/me/drive/items/{item.get('id')}/content"
+                                "tamanho": item.get('size', 0)
                             }
-                            print(f"🎯 CDC_BRK_CCB.xlsx ENCONTRADO!")
-                            print(f"   📍 Caminho: /BRK/{item.get('name')}")
-                            print(f"   🆔 ID: {item.get('id')}")
-                            print(f"   📏 Tamanho: {item.get('size', 0)} bytes")
-                            print(f"   ⚙️ Configurar: PLANILHA_BRK_ID={item.get('id')}")
-                            break
-                
-                if not planilha_encontrada:
-                    print("⚠️ CDC_BRK_CCB.xlsx NÃO encontrado na pasta /BRK")
-                    print(f"   📁 Arquivos encontrados: {[a['nome'] for a in arquivos_brk]}")
+                            arquivos_brk.append(arquivo_info)
+                            
+                            # Buscar CDC_BRK_CCB.xlsx dentro da pasta
+                            if item.get('name', '').upper() == 'CDC_BRK_CCB.XLSX':
+                                planilha_encontrada = {
+                                    "nome": item.get('name'),
+                                    "id": item.get('id'),
+                                    "tamanho": item.get('size', 0),
+                                    "caminho": f"/BRK/{item.get('name')}",
+                                    "url_download": f"https://graph.microsoft.com/v1.0/me/drive/items/{item.get('id')}/content"
+                                }
+                                print(f"📊 CDC_BRK_CCB.xlsx ENCONTRADO NA PASTA!")
+                                print(f"   📍 Caminho: /BRK/{item.get('name')}")
+                                print(f"   🆔 ID Arquivo: {item.get('id')}")
+                                print(f"   📏 Tamanho: {item.get('size', 0)} bytes")
+                                break
+                    else:
+                        print(f"❌ Erro listando conteúdo da pasta: {brk_response.status_code}")
+                else:
+                    print("❌ Pasta /BRK/ não encontrada")
                 
                 return {
                     "status": "success",
                     "onedrive_access": True,
-                    "message": "OneDrive OK + Busca CDC_BRK_CCB.xlsx realizada",
+                    "message": "OneDrive OK + ID da pasta /BRK/ obtido",
+                    "pasta_brk_id": pasta_brk_id,
+                    "pasta_brk_encontrada": pasta_brk_id is not None,
+                    "configurar_variavel": f"PASTA_BRK_ID={pasta_brk_id}" if pasta_brk_id else "Pasta /BRK/ não encontrada",
                     "cdc_brk_ccb_encontrado": planilha_encontrada is not None,
                     "cdc_brk_ccb": planilha_encontrada,
                     "arquivos_pasta_brk": arquivos_brk,
-                    "configurar_variavel": f"PLANILHA_BRK_ID={planilha_encontrada['id']}" if planilha_encontrada else "CDC_BRK_CCB.xlsx não encontrado em /BRK/",
+                    "total_arquivos_pasta": len(arquivos_brk),
+                    "estrategia": "ID da pasta /BRK/ permite acesso flexível a todos os arquivos",
+                    "vantagens_pasta_id": [
+                        "Acessa qualquer arquivo na pasta",
+                        "Salva PDFs processados na mesma pasta", 
+                        "Flexível para novos arquivos",
+                        "Estrutura de projeto organizada"
+                    ],
                     "details": {
                         "scope_usado": scope_funcionou,
                         "drive_id": drive_info.get('id', 'N/A')[:20] + "...",
