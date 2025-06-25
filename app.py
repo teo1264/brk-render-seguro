@@ -12,7 +12,6 @@ import logging
 # Imports do sistema existente
 from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
-from storage.onedrive_basico import OneDriveBasico
 
 # ✅ NOVO: Import da DatabaseBRK
 from processor.database_brk import DatabaseBRK, integrar_database_emailprocessor
