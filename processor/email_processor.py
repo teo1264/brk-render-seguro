@@ -354,6 +354,156 @@ class EmailProcessor:
             "amostra_casas": self.casa_oracao_vetor[:3] if len(self.casa_oracao_vetor) >= 3 else self.casa_oracao_vetor
         }
 
+    def carregar_relacao_brk_vetores_sem_pandas(self):
+        """
+        SUBSTITUTO para carregar_relacao_brk_vetores() sem pandas.
+        Carrega relacionamento CDC → Casa de Oração via leitura manual Excel.
+        """
+        try:
+            if not self.onedrive_brk_id:
+                print(f"⚠️ ONEDRIVE_BRK_ID não configurado - relacionamento indisponível")
+                return False
+            
+            print(f"📁 Carregando planilha CDC_BRK_CCB.xlsx do OneDrive (SEM pandas)...")
+            
+            headers = self.auth.obter_headers_autenticados()
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{self.onedrive_brk_id}/children"
+            
+            response = requests.get(url, headers=headers)
+            if response.status_code != 200:
+                print(f"❌ Erro acessando pasta OneDrive: {response.status_code}")
+                return False
+            
+            arquivos = response.json().get('value', [])
+            arquivo_xlsx = None
+            
+            for arquivo in arquivos:
+                if arquivo.get('name', '').lower() in ['cdc_brk_ccb.xlsx', 'relacionamento.xlsx']:
+                    arquivo_xlsx = arquivo
+                    break
+            
+            if not arquivo_xlsx:
+                print(f"❌ Arquivo CDC_BRK_CCB.xlsx não encontrado na pasta")
+                return False
+            
+            download_url = arquivo_xlsx.get('@microsoft.graph.downloadUrl')
+            if not download_url:
+                print(f"❌ URL de download não disponível")
+                return False
+            
+            print(f"⬇️ Baixando arquivo ({arquivo_xlsx.get('size', 0)} bytes)...")
+            response = requests.get(download_url)
+            if response.status_code != 200:
+                print(f"❌ Erro baixando arquivo: {response.status_code}")
+                return False
+            
+            registros = self._processar_excel_manual(response.content)
+            
+            if not registros:
+                print(f"❌ Nenhum registro encontrado na planilha")
+                return False
+            
+            self.cdc_brk_vetor = []
+            self.casa_oracao_vetor = []
+            
+            for registro in registros:
+                cdc = str(registro.get('CDC', '')).strip()
+                casa = str(registro.get('Casa', '')).strip()
+                
+                if cdc and casa:
+                    self.cdc_brk_vetor.append(cdc)
+                    self.casa_oracao_vetor.append(casa)
+            
+            print(f"✅ RELACIONAMENTO CARREGADO COM SUCESSO (SEM pandas)!")
+            print(f"   📊 Total de relacionamentos: {len(self.cdc_brk_vetor)}")
+            print(f"   📝 Amostra: {self.cdc_brk_vetor[:3]} → {[casa[:20] + '...' for casa in self.casa_oracao_vetor[:3]]}")
+            
+            return len(self.cdc_brk_vetor) > 0
+            
+        except Exception as e:
+            print(f"❌ Erro carregando relação sem pandas: {e}")
+            return False
+
+    def _processar_excel_manual(self, excel_bytes):
+        """Processa arquivo Excel (.xlsx) manualmente sem pandas."""
+        import io
+        import zipfile
+        import xml.etree.ElementTree as ET
+        
+        try:
+            registros = []
+            
+            with zipfile.ZipFile(io.BytesIO(excel_bytes), 'r') as zip_file:
+                shared_strings = []
+                try:
+                    with zip_file.open('xl/sharedStrings.xml') as f:
+                        tree = ET.parse(f)
+                        root = tree.getroot()
+                        ns = {'': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                        
+                        for si in root.findall('.//si', ns):
+                            t = si.find('.//t', ns)
+                            if t is not None and t.text:
+                                shared_strings.append(t.text)
+                            else:
+                                shared_strings.append('')
+                except:
+                    pass
+                
+                try:
+                    with zip_file.open('xl/worksheets/sheet1.xml') as f:
+                        tree = ET.parse(f)
+                        root = tree.getroot()
+                        ns = {'': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                        
+                        rows = root.findall('.//row', ns)
+                        
+                        for i, row in enumerate(rows):
+                            if i == 0:
+                                continue
+                                
+                            cells = row.findall('.//c', ns)
+                            if len(cells) >= 2:
+                                cdc_value = self._extrair_valor_celula(cells[0], shared_strings, ns)
+                                casa_value = self._extrair_valor_celula(cells[1], shared_strings, ns)
+                                
+                                if cdc_value and casa_value:
+                                    registros.append({
+                                        'CDC': str(cdc_value).strip(),
+                                        'Casa': str(casa_value).strip()
+                                    })
+                except:
+                    pass
+            
+            return registros
+            
+        except Exception as e:
+            print(f"❌ Erro processamento manual Excel: {e}")
+            return []
+
+    def _extrair_valor_celula(self, cell, shared_strings, ns):
+        """Extrai valor de uma célula Excel."""
+        try:
+            cell_type = cell.get('t', '')
+            v_element = cell.find('.//v', ns)
+            
+            if v_element is None:
+                return ''
+            
+            value = v_element.text or ''
+            
+            if cell_type == 's':
+                try:
+                    index = int(value)
+                    if 0 <= index < len(shared_strings):
+                        return shared_strings[index]
+                except:
+                    pass
+            
+            return value
+        except:
+            return '' 
+   
 # ============================================================================
 # PARA TESTAR ESTE BLOCO:
 # 
@@ -1345,7 +1495,7 @@ class EmailProcessor:
             print(f"🔄 Iniciando carregamento...")
             
             # Tentar carregar
-            sucesso = self.carregar_relacionamento_completo()
+            sucesso = self.carregar_relacao_brk_vetores_sem_pandas()
             
             if sucesso:
                 print(f"✅ RECARREGAMENTO CONCLUÍDO COM SUCESSO!")
