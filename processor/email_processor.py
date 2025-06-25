@@ -1,342 +1,375 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-📁 ARQUIVO: processor/email_processor.py
-💾 ONDE SALVAR: brk-monitor-seguro/processor/email_processor.py
-📦 FUNÇÃO: Processamento de emails BRK via Microsoft Graph
-🔧 DESCRIÇÃO: Busca, diagnóstico e extração de PDFs dos emails
-👨‍💼 AUTOR: Sidney Gubitoso, auxiliar da tesouraria
-"""
+# ============================================================================
+# BLOCO 1/4 - LEITOR ONEDRIVE + VETORES DE RELACIONAMENTO
+# Adicionar ao arquivo: processor/email_processor.py
+# 
+# FUNÇÃO: Carregar planilha CDC_BRK_CCB.xlsx do OneDrive e criar vetores
+# AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
+# LOCALIZAÇÃO: brk-monitor-seguro/processor/email_processor.py
+# ADAPTADO DO: criar_plan_brk324.py (desktop) → cloud/render
+# ============================================================================
 
-import os
+import pandas as pd
 import requests
-from datetime import datetime, timedelta
-from typing import Dict, List, Any
-from auth.microsoft_auth import MicrosoftAuth
-
+import io
+import re
+import os
 
 class EmailProcessor:
-    """
-    Processador de emails BRK via Microsoft Graph API
-    
-    Responsabilidades:
-    - Buscar emails novos na pasta BRK
-    - Diagnosticar pasta (total, 24h, mês atual)
-    - Extrair PDFs dos anexos
-    - Usar autenticação via MicrosoftAuth
-    """
-    
-    def __init__(self, microsoft_auth: MicrosoftAuth):
-        """
-        Inicializar processador com autenticação
-        
-        Args:
-            microsoft_auth (MicrosoftAuth): Instância configurada de autenticação
-        """
+    def __init__(self, microsoft_auth):
+        """Inicializar processador com autenticação"""
         self.auth = microsoft_auth
         
-        # PASTA BRK ID via environment variable
+        # PASTA BRK ID para emails (Microsoft 365)
         self.pasta_brk_id = os.getenv("PASTA_BRK_ID")
+        
+        # PASTA BRK ID para arquivos OneDrive (já descoberta anteriormente)
+        self.onedrive_brk_id = os.getenv("ONEDRIVE_BRK_ID")
+        
+        # VETORES DE RELACIONAMENTO (estilo Clipper como no desktop)
+        self.cdc_brk_vetor = []      # Vetor com códigos CDC
+        self.casa_oracao_vetor = []  # Vetor com nomes das casas (índice correspondente)
         
         if not self.pasta_brk_id:
             raise ValueError("❌ PASTA_BRK_ID não configurado!")
-        
-        print(f"📧 Email Processor inicializado")
-        print(f"   Pasta BRK: {self.pasta_brk_id[:10]}****** (protegido)")
-    
-    def buscar_emails_novos(self, dias_atras: int = 1) -> List[Dict]:
-        """
-        Buscar emails novos na pasta BRK
-        
-        Args:
-            dias_atras (int): Quantos dias atrás buscar (padrão: 1)
             
+        print(f"📧 Email Processor inicializado")
+        print(f"   📧 Pasta emails BRK: {self.pasta_brk_id[:10]}****** (emails)")
+        
+        if self.onedrive_brk_id:
+            print(f"   📁 Pasta OneDrive /BRK/: {self.onedrive_brk_id[:15]}****** (arquivos)")
+            print(f"   📄 Planilha relacionamento: CDC_BRK_CCB.xlsx (nesta pasta)")
+        else:
+            print("   ⚠️ ONEDRIVE_BRK_ID não configurado - relacionamento indisponível")
+
+    # ============================================================================
+    # FUNÇÃO 1: CARREGAR PLANILHA CDC_BRK_CCB.xlsx DO ONEDRIVE
+    # ============================================================================
+    
+    def carregar_planilha_onedrive(self):
+        """
+        Carrega a planilha CDC_BRK_CCB.xlsx do OneDrive via Graph API.
+        
+        Processo:
+        1. Usa ONEDRIVE_BRK_ID (pasta /BRK/ já descoberta anteriormente)
+        2. Busca arquivo CDC_BRK_CCB.xlsx na raiz dessa pasta
+        3. Baixa conteúdo via Graph API (/content endpoint)
+        4. Converte para DataFrame pandas
+        
+        Nota: ONEDRIVE_BRK_ID foi descoberto no teste OneDrive anterior.
+        
         Returns:
-            List[Dict]: Lista de emails encontrados
+            pd.DataFrame: Planilha carregada ou None se erro
         """
         try:
-            # Calcular data limite
-            data_limite = datetime.now() - timedelta(days=dias_atras)
-            data_limite_str = data_limite.strftime('%Y-%m-%dT%H:%M:%SZ')
+            print("🔍 Carregando planilha de relacionamento do OneDrive...")
             
-            # URL e parâmetros para Microsoft Graph
-            url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{self.pasta_brk_id}/messages"
-            params = {
-                '$filter': f"receivedDateTime ge {data_limite_str}",
-                '$expand': 'attachments',
-                '$top': 10,
-                '$orderby': 'receivedDateTime desc'
-            }
+            # Validar se pasta OneDrive /BRK/ está configurada
+            if not self.onedrive_brk_id:
+                print("❌ Erro: ONEDRIVE_BRK_ID não configurado")
+                print("💡 Esta variável deve conter o ID da pasta /BRK/ descoberto anteriormente")
+                print("💡 Configure no Render: ONEDRIVE_BRK_ID=9D0F055E98EA94D3!sca94999fd73747068e64dddaeeb442a2")
+                return None
             
-            # Primeira tentativa com token atual
+            # Obter headers autenticados
             headers = self.auth.obter_headers_autenticados()
-            response = requests.get(url, headers=headers, params=params, timeout=30)
+            if not headers:
+                print("❌ Erro: Não foi possível obter headers autenticados")
+                return None
             
-            # Se token expirou, tentar renovar
+            # Buscar arquivo CDC_BRK_CCB.xlsx na pasta /BRK/
+            print("📂 Buscando arquivo CDC_BRK_CCB.xlsx na pasta /BRK/...")
+            url_arquivos = f"https://graph.microsoft.com/v1.0/me/drive/items/{self.onedrive_brk_id}/children"
+            
+            response = requests.get(url_arquivos, headers=headers, timeout=30)
+            
+            # Tentar renovar token se expirado
             if response.status_code == 401:
                 print("🔄 Token expirado detectado, renovando...")
                 if self.auth.atualizar_token():
                     headers = self.auth.obter_headers_autenticados()
-                    response = requests.get(url, headers=headers, params=params, timeout=30)
+                    response = requests.get(url_arquivos, headers=headers, timeout=30)
                 else:
                     print("❌ Falha na renovação do token")
-                    return []
+                    return None
             
-            # Processar resposta
-            if response.status_code == 200:
-                data = response.json()
-                emails = data.get('value', [])
-                print(f"📧 Encontrados {len(emails)} emails")
-                return emails
-                
-            elif response.status_code == 404:
-                print(f"❌ Pasta BRK não encontrada: {self.pasta_brk_id}")
-                return []
-                
-            else:
-                print(f"❌ Erro buscando emails: HTTP {response.status_code}")
+            if response.status_code != 200:
+                print(f"❌ Erro ao acessar pasta OneDrive: HTTP {response.status_code}")
                 try:
                     error_detail = response.json()
                     print(f"   Detalhes: {error_detail.get('error', {}).get('message', 'N/A')}")
                 except:
                     pass
-                return []
-                
-        except requests.RequestException as e:
-            print(f"❌ Erro de rede na busca: {e}")
-            return []
-        except Exception as e:
-            print(f"❌ Erro inesperado na busca: {e}")
-            return []
-    
-    def extrair_pdfs_do_email(self, email: Dict) -> List[Dict]:
-        """
-        Extrair PDFs dos anexos do email
-        
-        Args:
-            email (Dict): Dados do email do Microsoft Graph
+                return None
             
-        Returns:
-            List[Dict]: Lista de informações dos PDFs encontrados
-        """
-        pdfs = []
-        
-        try:
-            attachments = email.get('attachments', [])
-            email_id = email.get('id', 'unknown')
+            # Procurar arquivo CDC_BRK_CCB.xlsx
+            arquivos = response.json().get('value', [])
+            arquivo_cdc = None
             
-            for attachment in attachments:
-                filename = attachment.get('name', '').lower()
-                
-                # Verificar se é PDF
-                if filename.endswith('.pdf'):
-                    pdf_info = {
-                        'email_id': email_id,
-                        'filename': attachment.get('name', 'unnamed.pdf'),
-                        'size': attachment.get('size', 0),
-                        'content_bytes': attachment.get('contentBytes', ''),
-                        'received_date': email.get('receivedDateTime', ''),
-                        'email_subject': email.get('subject', ''),
-                        'sender': email.get('from', {}).get('emailAddress', {}).get('address', 'unknown')
-                    }
-                    pdfs.append(pdf_info)
-                    
-            if pdfs:
-                print(f"📎 Encontrados {len(pdfs)} PDFs no email")
-                
-            return pdfs
+            for arquivo in arquivos:
+                nome = arquivo.get('name', '').lower()
+                if 'cdc_brk_ccb.xlsx' in nome or 'cdc brk ccb.xlsx' in nome:
+                    arquivo_cdc = arquivo
+                    break
             
-        except Exception as e:
-            print(f"❌ Erro extraindo PDFs: {e}")
-            return []
-    
-    def diagnosticar_pasta_brk(self) -> Dict:
-        """
-        Diagnóstico completo da pasta BRK
-        
-        Conta emails por período:
-        - Total geral
-        - Últimas 24 horas  
-        - Mês atual
-        
-        Returns:
-            Dict: Estatísticas da pasta BRK
-        """
-        try:
-            headers = self.auth.obter_headers_autenticados()
-            base_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{self.pasta_brk_id}/messages"
+            if not arquivo_cdc:
+                print("❌ Arquivo CDC_BRK_CCB.xlsx não encontrado na pasta /BRK/")
+                print(f"📋 Arquivos disponíveis: {[f.get('name') for f in arquivos[:5]]}")
+                return None
             
-            # TOTAL GERAL
-            print("📊 Contando emails totais...")
-            response_total = requests.get(
-                base_url, 
-                headers=headers, 
-                params={'$top': 1, '$count': 'true'},
-                timeout=30
-            )
+            # Baixar conteúdo do arquivo
+            print(f"📥 Baixando {arquivo_cdc['name']} ({arquivo_cdc.get('size', 0)} bytes)...")
+            arquivo_id = arquivo_cdc['id']
+            url_download = f"https://graph.microsoft.com/v1.0/me/drive/items/{arquivo_id}/content"
             
-            # Se token expirou, renovar e tentar novamente
-            if response_total.status_code == 401:
-                if self.auth.atualizar_token():
-                    headers = self.auth.obter_headers_autenticados()
-                    response_total = requests.get(
-                        base_url, 
-                        headers=headers, 
-                        params={'$top': 1, '$count': 'true'},
-                        timeout=30
-                    )
+            response_download = requests.get(url_download, headers=headers, timeout=60)
             
-            total_geral = 0
-            if response_total.status_code == 200:
-                total_geral = response_total.json().get('@odata.count', 0)
-            else:
-                print(f"⚠️ Erro contando total: HTTP {response_total.status_code}")
+            if response_download.status_code != 200:
+                print(f"❌ Erro baixando arquivo: HTTP {response_download.status_code}")
+                return None
             
-            # ÚLTIMAS 24 HORAS
-            print("📊 Contando emails 24h...")
-            data_24h = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
-            params_24h = {
-                '$filter': f"receivedDateTime ge {data_24h}",
-                '$top': 1,
-                '$count': 'true'
-            }
+            # Converter para DataFrame pandas
+            print("📊 Convertendo para DataFrame...")
+            excel_content = io.BytesIO(response_download.content)
+            df = pd.read_excel(excel_content, dtype=str)
             
-            response_24h = requests.get(base_url, headers=headers, params=params_24h, timeout=30)
-            total_24h = 0
-            if response_24h.status_code == 200:
-                total_24h = response_24h.json().get('@odata.count', 0)
-            else:
-                print(f"⚠️ Erro contando 24h: HTTP {response_24h.status_code}")
+            # Limpar nomes das colunas (remover espaços)
+            df.columns = df.columns.str.strip()
             
-            # MÊS ATUAL
-            print("📊 Contando emails do mês...")
-            primeiro_dia = datetime.now().replace(day=1, hour=0, minute=0, second=0)
-            data_mes = primeiro_dia.strftime('%Y-%m-%dT%H:%M:%SZ')
-            params_mes = {
-                '$filter': f"receivedDateTime ge {data_mes}",
-                '$top': 1,
-                '$count': 'true'
-            }
-            
-            response_mes = requests.get(base_url, headers=headers, params=params_mes, timeout=30)
-            total_mes = 0
-            if response_mes.status_code == 200:
-                total_mes = response_mes.json().get('@odata.count', 0)
-            else:
-                print(f"⚠️ Erro contando mês: HTTP {response_mes.status_code}")
-            
-            # Resultado consolidado
-            resultado = {
-                'total_geral': total_geral,
-                'ultimas_24h': total_24h,
-                'mes_atual': total_mes,
-                'status': 'sucesso',
-                'pasta_id': self.pasta_brk_id[:10] + "******",
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            print(f"✅ Diagnóstico concluído: {total_geral} total, {total_24h} em 24h, {total_mes} no mês")
-            return resultado
+            print(f"✅ Planilha carregada: {len(df)} linhas, colunas: {list(df.columns)}")
+            return df
             
         except requests.RequestException as e:
-            print(f"❌ Erro de rede no diagnóstico: {e}")
-            return self._resultado_erro_diagnostico(str(e))
+            print(f"❌ Erro de rede carregando planilha: {e}")
+            return None
         except Exception as e:
-            print(f"❌ Erro inesperado no diagnóstico: {e}")
-            return self._resultado_erro_diagnostico(str(e))
+            print(f"❌ Erro inesperado carregando planilha: {e}")
+            return None
+
+    # ============================================================================
+    # FUNÇÃO 2: CONVERTER DATAFRAME EM VETORES (ESTILO CLIPPER DESKTOP)
+    # ============================================================================
     
-    def _resultado_erro_diagnostico(self, erro: str) -> Dict:
+    def carregar_relacao_brk_vetores(self, df_planilha):
         """
-        Gerar resultado padrão para erro no diagnóstico
+        Converte DataFrame da planilha em vetores de relacionamento.
+        Reproduz a lógica vetorial do script desktop (estilo Clipper).
         
         Args:
-            erro (str): Mensagem de erro
+            df_planilha (pd.DataFrame): Planilha do OneDrive carregada
             
         Returns:
-            Dict: Resultado com valores zerados
-        """
-        return {
-            'total_geral': 0,
-            'ultimas_24h': 0,
-            'mes_atual': 0,
-            'status': 'erro',
-            'erro': erro,
-            'timestamp': datetime.now().isoformat()
-        }
-    
-    def buscar_email_por_id(self, email_id: str) -> Dict:
-        """
-        Buscar email específico por ID
-        
-        Args:
-            email_id (str): ID do email no Microsoft Graph
-            
-        Returns:
-            Dict: Dados do email ou vazio se não encontrado
+            bool: True se vetores carregados com sucesso
         """
         try:
-            url = f"https://graph.microsoft.com/v1.0/me/messages/{email_id}"
-            params = {'$expand': 'attachments'}
+            print("🔄 Convertendo planilha em vetores de relacionamento...")
             
-            headers = self.auth.obter_headers_autenticados()
-            response = requests.get(url, headers=headers, params=params, timeout=30)
+            # Limpar vetores anteriores
+            self.cdc_brk_vetor = []
+            self.casa_oracao_vetor = []
             
-            # Tentar renovar token se expirado
-            if response.status_code == 401:
-                if self.auth.atualizar_token():
-                    headers = self.auth.obter_headers_autenticados()
-                    response = requests.get(url, headers=headers, params=params, timeout=30)
-            
-            if response.status_code == 200:
-                return response.json()
-            else:
-                print(f"❌ Email não encontrado: {email_id}")
-                return {}
-                
-        except Exception as e:
-            print(f"❌ Erro buscando email {email_id}: {e}")
-            return {}
-    
-    def validar_acesso_pasta_brk(self) -> bool:
-        """
-        Validar se consegue acessar a pasta BRK
-        
-        Returns:
-            bool: True se pasta acessível
-        """
-        try:
-            url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{self.pasta_brk_id}"
-            headers = self.auth.obter_headers_autenticados()
-            
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            if response.status_code == 401:
-                if self.auth.atualizar_token():
-                    headers = self.auth.obter_headers_autenticados()
-                    response = requests.get(url, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                pasta_info = response.json()
-                print(f"✅ Pasta BRK acessível: {pasta_info.get('displayName', 'N/A')}")
-                return True
-            else:
-                print(f"❌ Pasta BRK inacessível: HTTP {response.status_code}")
+            if df_planilha is None or df_planilha.empty:
+                print("❌ DataFrame vazio ou inválido")
                 return False
+            
+            # Verificar se colunas necessárias existem
+            colunas_necessarias = ["CDC BRK", "Casa de Oração"]
+            colunas_existentes = df_planilha.columns.tolist()
+            
+            print(f"📋 Colunas disponíveis: {colunas_existentes}")
+            
+            for coluna in colunas_necessarias:
+                if coluna not in df_planilha.columns:
+                    print(f"❌ Coluna '{coluna}' não encontrada na planilha")
+                    return False
+            
+            # Converter linhas em vetores (removendo entradas inválidas)
+            linhas_validas = 0
+            for _, row in df_planilha.iterrows():
+                cdc = str(row["CDC BRK"]).strip()
+                casa = str(row["Casa de Oração"]).strip()
                 
+                # Validar entrada (não vazia, não NaN)
+                if cdc and casa and cdc != "nan" and casa != "nan":
+                    self.cdc_brk_vetor.append(cdc)
+                    self.casa_oracao_vetor.append(casa)
+                    linhas_validas += 1
+            
+            # Resultado
+            print(f"✅ Vetores criados: {linhas_validas} registros válidos")
+            print(f"   📊 Total original: {len(df_planilha)} linhas")
+            print(f"   ✅ Válidas: {linhas_validas} linhas")
+            print(f"   ⚠️ Ignoradas: {len(df_planilha) - linhas_validas} linhas (vazias/inválidas)")
+            
+            # Exibir amostra para validação
+            if linhas_validas > 0:
+                print(f"📝 Amostra de relacionamentos:")
+                for i in range(min(3, linhas_validas)):
+                    print(f"   • CDC: {self.cdc_brk_vetor[i]} → Casa: {self.casa_oracao_vetor[i]}")
+            
+            return linhas_validas > 0
+            
         except Exception as e:
-            print(f"❌ Erro validando pasta BRK: {e}")
+            print(f"❌ Erro convertendo em vetores: {e}")
             return False
+
+    # ============================================================================
+    # FUNÇÃO 3: BUSCAR CASA DE ORAÇÃO POR CDC (LÓGICA DESKTOP ADAPTADA)
+    # ============================================================================
     
-    def status_processamento(self) -> Dict:
+    def buscar_casa_de_oracao(self, cdc_cliente):
         """
-        Obter status atual do processamento
+        Busca Casa de Oração pelo CDC usando vetores.
+        Reproduz exatamente a lógica do script desktop com múltiplos formatos.
+        
+        Args:
+            cdc_cliente (str): Código CDC a buscar (ex: "12345-01")
+            
+        Returns:
+            str: Nome da Casa de Oração ou "Não encontrado"
+        """
+        if not cdc_cliente or cdc_cliente == "Não encontrado":
+            return "Não encontrado"
+        
+        # Garantir que vetores estão carregados
+        if not self.cdc_brk_vetor or not self.casa_oracao_vetor:
+            print("⚠️ Vetores de relacionamento não carregados")
+            return "Não encontrado"
+        
+        try:
+            # 1. TENTATIVA: Match exato primeiro
+            if cdc_cliente in self.cdc_brk_vetor:
+                indice = self.cdc_brk_vetor.index(cdc_cliente)
+                casa_encontrada = self.casa_oracao_vetor[indice]
+                print(f"✓ CDC encontrado (match exato): {cdc_cliente} → {casa_encontrada}")
+                return casa_encontrada
+            
+            # 2. TENTATIVA: Formatos alternativos (como no desktop)
+            if '-' in cdc_cliente:
+                cdc_parts = cdc_cliente.split('-')
+                if len(cdc_parts) == 2:
+                    try:
+                        # Sem zeros à esquerda
+                        cdc_sem_zeros = f"{int(cdc_parts[0])}-{int(cdc_parts[1])}"
+                        if cdc_sem_zeros in self.cdc_brk_vetor:
+                            indice = self.cdc_brk_vetor.index(cdc_sem_zeros)
+                            casa_encontrada = self.casa_oracao_vetor[indice]
+                            print(f"✓ CDC encontrado (sem zeros): {cdc_sem_zeros} → {casa_encontrada}")
+                            return casa_encontrada
+                    except ValueError:
+                        pass
+                    
+                    # Outros formatos possíveis (como no desktop)
+                    formatos_possiveis = [
+                        f"{cdc_parts[0].zfill(3)}-{cdc_parts[1].zfill(2)}",
+                        f"{cdc_parts[0].zfill(4)}-{cdc_parts[1].zfill(2)}",
+                        f"{cdc_parts[0].zfill(5)}-{cdc_parts[1].zfill(2)}",
+                        f"{cdc_parts[0]}-{cdc_parts[1].zfill(2)}"
+                    ]
+                    
+                    for formato in formatos_possiveis:
+                        if formato in self.cdc_brk_vetor:
+                            indice = self.cdc_brk_vetor.index(formato)
+                            casa_encontrada = self.casa_oracao_vetor[indice]
+                            print(f"✓ CDC encontrado (formato alternativo): {formato} → {casa_encontrada}")
+                            return casa_encontrada
+                    
+                    # 3. TENTATIVA: Remover formatação e comparar apenas números
+                    cdc_limpo = re.sub(r'[^0-9]', '', cdc_cliente)
+                    for i, cdc_ref in enumerate(self.cdc_brk_vetor):
+                        cdc_ref_limpo = re.sub(r'[^0-9]', '', cdc_ref)
+                        if cdc_limpo == cdc_ref_limpo:
+                            casa_encontrada = self.casa_oracao_vetor[i]
+                            print(f"✓ CDC encontrado (só números): {cdc_ref} → {casa_encontrada}")
+                            return casa_encontrada
+            
+            # Não encontrado em nenhum formato
+            print(f"⚠️ CDC não encontrado: {cdc_cliente}")
+            return "Não encontrado"
+            
+        except Exception as e:
+            print(f"❌ Erro buscando CDC {cdc_cliente}: {e}")
+            return "Não encontrado"
+
+    # ============================================================================
+    # FUNÇÃO 4: CARREGAR RELACIONAMENTO COMPLETO (MÉTODO PRINCIPAL)
+    # ============================================================================
+    
+    def carregar_relacionamento_completo(self):
+        """
+        Método principal para carregar relacionamento CDC → Casa de Oração.
+        
+        Processo completo:
+        1. Carregar planilha do OneDrive
+        2. Converter em vetores de relacionamento  
+        3. Validar dados carregados
         
         Returns:
-            Dict: Informações sobre estado do processamento
+            bool: True se relacionamento carregado com sucesso
+        """
+        try:
+            print("\n🔄 CARREGANDO RELACIONAMENTO CDC → CASA DE ORAÇÃO")
+            print("=" * 55)
+            
+            # Passo 1: Carregar planilha do OneDrive
+            df_planilha = self.carregar_planilha_onedrive()
+            if df_planilha is None:
+                print("❌ Falha carregando planilha do OneDrive")
+                return False
+            
+            # Passo 2: Converter em vetores
+            if not self.carregar_relacao_brk_vetores(df_planilha):
+                print("❌ Falha convertendo planilha em vetores")
+                return False
+            
+            # Passo 3: Validação final
+            total_relacionamentos = len(self.cdc_brk_vetor)
+            print(f"\n✅ RELACIONAMENTO CARREGADO COM SUCESSO!")
+            print(f"   📊 Total de relacionamentos: {total_relacionamentos}")
+            print(f"   🔍 Prontos para busca de Casas de Oração")
+            print("=" * 55)
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Erro no carregamento completo: {e}")
+            return False
+
+    # ============================================================================
+    # FUNÇÃO 5: STATUS DOS VETORES DE RELACIONAMENTO
+    # ============================================================================
+    
+    def status_relacionamento(self):
+        """
+        Retorna status atual dos vetores de relacionamento.
+        
+        Returns:
+            dict: Informações sobre estado dos vetores
         """
         return {
-            "pasta_brk_configurada": bool(self.pasta_brk_id),
-            "pasta_brk_protegida": f"{self.pasta_brk_id[:10]}******" if self.pasta_brk_id else "N/A",
-            "autenticacao_ok": bool(self.auth.access_token),
-            "pasta_acessivel": self.validar_acesso_pasta_brk()
+            "vetores_carregados": len(self.cdc_brk_vetor) > 0,
+            "total_relacionamentos": len(self.cdc_brk_vetor),
+            "onedrive_brk_configurado": bool(self.onedrive_brk_id),
+            "onedrive_brk_id_protegido": f"{self.onedrive_brk_id[:15]}******" if self.onedrive_brk_id else "N/A",
+            "amostra_cdcs": self.cdc_brk_vetor[:3] if len(self.cdc_brk_vetor) >= 3 else self.cdc_brk_vetor,
+            "amostra_casas": self.casa_oracao_vetor[:3] if len(self.casa_oracao_vetor) >= 3 else self.casa_oracao_vetor
         }
+
+# ============================================================================
+# PARA TESTAR ESTE BLOCO:
+# 
+# 1. Adicionar ao requirements.txt: pandas==2.0.3
+# 2. Configurar no Render (usando ID já descoberto):
+#    ONEDRIVE_BRK_ID=9D0F055E98EA94D3!sca94999fd73747068e64dddaeeb442a2
+# 3. Verificar que CDC_BRK_CCB.xlsx está na pasta /BRK/
+# 4. Testar no Render via logs:
+#    - processor.carregar_relacionamento_completo()
+#    - processor.buscar_casa_de_oracao("12345-01")
+# 
+# RESULTADO ESPERADO:
+# 📧 Pasta emails BRK: AQMkADAwAT****** (emails)  
+# 📁 Pasta OneDrive /BRK/: 9D0F055E98EA****** (arquivos)
+# 📄 Planilha relacionamento: CDC_BRK_CCB.xlsx (nesta pasta)
+# ✅ Planilha carregada: 150 linhas
+# ✅ Vetores criados: 148 registros válidos  
+# ✅ RELACIONAMENTO CARREGADO COM SUCESSO!
+# ============================================================================
