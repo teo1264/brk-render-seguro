@@ -137,7 +137,8 @@ class AdminHandler(BaseHTTPRequestHandler):
                             pasta_brk_id = item.get('id')
                             print(f"📁 PASTA /BRK/ ENCONTRADA!")
                             print(f"   🆔 ID DA PASTA: {pasta_brk_id}")
-                            print(f"   ⚙️ Configurar: PASTA_BRK_ID={pasta_brk_id}")
+                            print(f"   ⚙️ Configurar: ONEDRIVE_BRK_ID={pasta_brk_id}")
+                            print(f"   📋 Separado de: PASTA_BRK_ID (emails)")
                             break
                 
                 # Listar conteúdo da pasta usando ID da pasta
@@ -185,19 +186,23 @@ class AdminHandler(BaseHTTPRequestHandler):
                     "status": "success",
                     "onedrive_access": True,
                     "message": "OneDrive OK + ID da pasta /BRK/ obtido",
-                    "pasta_brk_id": pasta_brk_id,
+                    "onedrive_brk_id": pasta_brk_id,
                     "pasta_brk_encontrada": pasta_brk_id is not None,
-                    "configurar_variavel": f"PASTA_BRK_ID={pasta_brk_id}" if pasta_brk_id else "Pasta /BRK/ não encontrada",
+                    "configurar_variavel": f"ONEDRIVE_BRK_ID={pasta_brk_id}" if pasta_brk_id else "Pasta /BRK/ não encontrada",
                     "cdc_brk_ccb_encontrado": planilha_encontrada is not None,
                     "cdc_brk_ccb": planilha_encontrada,
                     "arquivos_pasta_brk": arquivos_brk,
                     "total_arquivos_pasta": len(arquivos_brk),
-                    "estrategia": "ID da pasta /BRK/ permite acesso flexível a todos os arquivos",
+                    "estrategia": "ONEDRIVE_BRK_ID = workspace completo OneDrive BRK",
+                    "estrutura_variaveis": {
+                        "PASTA_BRK_ID": "Pasta emails Microsoft 365",
+                        "ONEDRIVE_BRK_ID": "Pasta arquivos OneDrive BRK"
+                    },
                     "vantagens_pasta_id": [
-                        "Acessa qualquer arquivo na pasta",
+                        "Acessa qualquer arquivo na pasta OneDrive",
                         "Salva PDFs processados na mesma pasta", 
-                        "Flexível para novos arquivos",
-                        "Estrutura de projeto organizada"
+                        "Lê planilha CDC_BRK_CCB.xlsx",
+                        "Estrutura organizada separada dos emails"
                     ],
                     "details": {
                         "scope_usado": scope_funcionou,
@@ -501,7 +506,8 @@ class AdminHandler(BaseHTTPRequestHandler):
                 <div class="config">
                     <h3>🔒 Configuração Segura</h3>
                     <p><strong>Client ID:</strong> {client_safe}</p>
-                    <p><strong>Pasta BRK:</strong> {pasta_safe}</p>
+                    <p><strong>Pasta Emails BRK:</strong> {pasta_emails_safe}</p>
+                    <p><strong>OneDrive BRK:</strong> {onedrive_safe}</p>
                     <p><strong>Segurança:</strong> Todas as credenciais via Environment Variables</p>
                 </div>
                 
