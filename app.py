@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🚀 BRK RENDER MONITOR - Sistema Seguro (REFATORADO)
+🚀 BRK RENDER MONITOR - Processamento Automático (LIMPO)
 
 DEPLOY: Render.com com PERSISTENT DISK
-FUNÇÃO: Monitor email BRK + SQLite + OneDrive básico
+FUNÇÃO: Processamento automático de emails BRK + SQLite + OneDrive
+ESTRUTURA: Modular (auth + processor + admin separados)
 SEGURANÇA: Todas as credenciais via variáveis de ambiente
-ESTRUTURA: Autenticação e processamento modularizados
+👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
 """
 
 import os
 import time
 import sqlite3
-import requests
-import json
-import base64
 import hashlib
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from typing import Dict, List, Any
+import base64
+import json
 
 # IMPORTS DOS MÓDULOS REFATORADOS
 from auth import MicrosoftAuth
@@ -35,6 +33,7 @@ class DatabaseBRKBasico:
         self.db_path = db_path
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.criar_tabelas()
+        print(f"💾 Database: {self.db_path}")
     
     def criar_tabelas(self):
         """Criar tabelas necessárias"""
@@ -66,7 +65,7 @@ class DatabaseBRKBasico:
             conn.execute(sql_emails)
             conn.commit()
             conn.close()
-            print(f"✅ Database criado: {self.db_path}")
+            print("✅ Database tabelas criadas")
         except Exception as e:
             print(f"❌ Erro criando database: {e}")
     
@@ -87,6 +86,7 @@ class DatabaseBRKBasico:
             conn = sqlite3.connect(self.db_path)
             hash_arquivo = dados.get('hash_arquivo', '')
             
+            # Verificar duplicata por hash
             if hash_arquivo:
                 cursor = conn.execute("SELECT id FROM faturas_brk_basico WHERE hash_arquivo = ?", (hash_arquivo,))
                 if cursor.fetchone():
@@ -94,6 +94,7 @@ class DatabaseBRKBasico:
                     conn.close()
                     return False
             
+            # Inserir nova fatura
             conn.execute("""
                 INSERT INTO faturas_brk_basico 
                 (data_emissao, nota_fiscal, valor, codigo_cliente, vencimento, competencia,
@@ -110,7 +111,7 @@ class DatabaseBRKBasico:
             conn.close()
             return True
         except Exception as e:
-            print(f"❌ Erro salvando: {e}")
+            print(f"❌ Erro salvando fatura: {e}")
             return False
     
     def marcar_email_processado(self, email_id: str, pdfs_count: int):
@@ -129,14 +130,27 @@ class DatabaseBRKBasico:
         try:
             conn = sqlite3.connect(self.db_path)
             
+            # Total de faturas
             cursor = conn.execute("SELECT COUNT(*) FROM faturas_brk_basico")
             total_faturas = cursor.fetchone()[0]
             
+            # Total de emails processados
             cursor = conn.execute("SELECT COUNT(*) FROM emails_processados")
             total_emails = cursor.fetchone()[0]
             
+            # Últimas faturas
             cursor = conn.execute("SELECT nome_arquivo, data_processamento FROM faturas_brk_basico ORDER BY data_processamento DESC LIMIT 5")
             ultimas_faturas = cursor.fetchall()
+            
+            # Estatísticas por mês
+            cursor = conn.execute("""
+                SELECT DATE(data_processamento) as data, COUNT(*) as total 
+                FROM faturas_brk_basico 
+                WHERE data_processamento >= DATE('now', '-30 days')
+                GROUP BY DATE(data_processamento)
+                ORDER BY data DESC LIMIT 10
+            """)
+            faturas_por_dia = cursor.fetchall()
             
             conn.close()
             
@@ -144,15 +158,16 @@ class DatabaseBRKBasico:
                 'total_faturas': total_faturas,
                 'total_emails_processados': total_emails,
                 'ultimas_faturas': ultimas_faturas,
+                'faturas_por_dia': faturas_por_dia,
                 'ultima_atualizacao': datetime.now().isoformat()
             }
         except Exception as e:
-            print(f"❌ Erro stats: {e}")
+            print(f"❌ Erro obtendo estatísticas: {e}")
             return {}
 
 
 class OneDriveBasico:
-    """Cliente OneDrive simulado"""
+    """Cliente OneDrive simulado com persistent disk"""
     
     def __init__(self):
         self.base_path = "/BRK"
@@ -163,474 +178,113 @@ class OneDriveBasico:
     def upload_pdf(self, pdf_content: bytes, filename: str) -> str:
         """Upload simulado no persistent disk"""
         try:
-            filepath = self.local_path / filename
+            # Sanitizar nome do arquivo
+            filename_safe = self._sanitizar_filename(filename)
+            filepath = self.local_path / filename_safe
+            
+            # Evitar sobrescrever arquivo existente
+            counter = 1
+            original_filepath = filepath
+            while filepath.exists():
+                name_part = original_filepath.stem
+                ext_part = original_filepath.suffix
+                filepath = self.local_path / f"{name_part}_{counter}{ext_part}"
+                counter += 1
+            
+            # Salvar arquivo
             with open(filepath, 'wb') as f:
                 f.write(pdf_content)
             
-            caminho = f"{self.base_path}/{filename}"
-            print(f"📤 PDF salvo: {filename} ({len(pdf_content)} bytes)")
+            caminho = f"{self.base_path}/{filepath.name}"
+            print(f"📤 PDF salvo: {filepath.name} ({len(pdf_content)} bytes)")
             return caminho
+            
         except Exception as e:
-            print(f"❌ Erro upload: {e}")
+            print(f"❌ Erro upload PDF: {e}")
             return None
-
-
-class StatusHandler(BaseHTTPRequestHandler):
-    """Servidor web com interface segura + TESTES ONEDRIVE (REFATORADO)"""
     
-    def test_onedrive_access(self):
-        """Teste básico de acesso OneDrive usando classes refatoradas"""
-        print("🧪 TESTE ONEDRIVE - INICIANDO (REFATORADO)")
+    def _sanitizar_filename(self, filename: str) -> str:
+        """Sanitizar nome do arquivo para evitar problemas no filesystem"""
+        # Remover caracteres problemáticos
+        import re
+        filename_clean = re.sub(r'[<>:"/\\|?*]', '_', filename)
         
+        # Limitar tamanho
+        if len(filename_clean) > 100:
+            name_part = filename_clean[:90]
+            ext_part = filename_clean[-10:] if '.' in filename_clean else ''
+            filename_clean = name_part + ext_part
+        
+        return filename_clean
+    
+    def listar_arquivos(self) -> List[Dict]:
+        """Listar arquivos salvos"""
         try:
-            # 1. USAR AUTENTICAÇÃO REFATORADA
-            auth = MicrosoftAuth()
-            
-            if not auth.access_token or not auth.refresh_token:
-                return {
-                    "status": "error",
-                    "onedrive_access": False,
-                    "message": "Token não encontrado",
-                    "details": "Execute upload de token.json primeiro"
-                }
-            
-            print("✅ Autenticação carregada")
-            
-            # 2. TESTAR DIFERENTES SCOPES ONEDRIVE
-            print("🔄 Testando diferentes scopes OneDrive...")
-            
-            scopes_para_testar = [
-                "Files.ReadWrite offline_access",
-                "Files.ReadWrite.All offline_access", 
-                "https://graph.microsoft.com/Files.ReadWrite offline_access",
-                "https://graph.microsoft.com/Files.ReadWrite.All offline_access"
-            ]
-            
-            token_url = f"https://login.microsoftonline.com/{auth.tenant_id}/oauth2/v2.0/token"
-            access_token = None
-            scope_funcionou = None
-            
-            for scope_teste in scopes_para_testar:
-                print(f"🧪 Testando scope: {scope_teste}")
-                
-                token_data_request = {
-                    'client_id': auth.client_id,
-                    'grant_type': 'refresh_token', 
-                    'refresh_token': auth.refresh_token,
-                    'scope': scope_teste
-                }
-                
-                response = requests.post(token_url, data=token_data_request)
-                
-                if response.status_code == 200:
-                    new_token = response.json()
-                    access_token = new_token.get('access_token')
-                    if access_token:
-                        scope_funcionou = scope_teste
-                        print(f"✅ Scope funcionou: {scope_teste}")
-                        break
-                else:
-                    print(f"❌ Scope falhou: {scope_teste} -> {response.status_code}")
-            
-            if not access_token:
-                # Se nenhum scope OneDrive funcionou, testar scope atual
-                print("🔄 Testando com scope atual do email...")
-                
-                if auth.atualizar_token():
-                    access_token = auth.access_token
-                    scope_funcionou = "scope atual (sem OneDrive)"
-                    print("✅ Token renovado com scope atual")
-                else:
-                    return {
-                        "status": "error",
-                        "onedrive_access": False,
-                        "message": "Nenhum scope funcionou",
-                        "details": "Não foi possível renovar token"
-                    }
-            
-            # 3. TESTAR ACESSO ONEDRIVE
-            print("🔍 Testando acesso OneDrive...")
-            
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            onedrive_url = "https://graph.microsoft.com/v1.0/me/drive/root"
-            onedrive_response = requests.get(onedrive_url, headers=headers)
-            
-            if onedrive_response.status_code == 200:
-                drive_info = onedrive_response.json()
-                print("✅ ACESSO ONEDRIVE FUNCIONANDO!")
-                
-                return {
-                    "status": "success",
-                    "onedrive_access": True,
-                    "message": "Credenciais atuais funcionam para OneDrive!",
-                    "details": {
-                        "scope_usado": scope_funcionou,
-                        "drive_id": drive_info.get('id', 'N/A')[:20] + "...",
-                        "drive_type": drive_info.get('driveType', 'N/A'),
-                        "owner": drive_info.get('owner', {}).get('user', {}).get('displayName', 'N/A'),
-                        "teste_timestamp": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    }
-                }
-            
-            elif onedrive_response.status_code == 403:
-                print("❌ ERRO 403: Sem permissão OneDrive")
-                return {
-                    "status": "error",
-                    "onedrive_access": False,
-                    "message": "Sem permissão para acessar OneDrive",
-                    "details": f"Scope usado: {scope_funcionou}. Aplicação precisa de permissão Files.ReadWrite.All no Azure",
-                    "scope_testado": scope_funcionou
-                }
-            
-            else:
-                print(f"❌ Erro OneDrive: {onedrive_response.status_code}")
-                return {
-                    "status": "error", 
-                    "onedrive_access": False,
-                    "message": f"Erro ao acessar OneDrive: {onedrive_response.status_code}",
-                    "details": onedrive_response.text[:300],
-                    "scope_usado": scope_funcionou
-                }
-        
+            arquivos = []
+            for arquivo in self.local_path.glob("*.pdf"):
+                stat = arquivo.stat()
+                arquivos.append({
+                    'nome': arquivo.name,
+                    'tamanho': stat.st_size,
+                    'modificado': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    'caminho': f"{self.base_path}/{arquivo.name}"
+                })
+            return arquivos
         except Exception as e:
-            print(f"❌ ERRO GERAL: {str(e)}")
-            return {
-                "status": "error",
-                "onedrive_access": False,
-                "message": "Erro interno no teste",
-                "details": str(e)
-            }
-    
-    def test_create_brk_folder(self):
-        """Teste criar pasta /BRK no OneDrive (REFATORADO)"""
-        print("📁 TESTE CRIAÇÃO PASTA /BRK - INICIANDO (REFATORADO)")
-        
-        try:
-            # 1. USAR AUTENTICAÇÃO REFATORADA
-            auth = MicrosoftAuth()
-            
-            if not auth.access_token or not auth.refresh_token:
-                return {
-                    "status": "error",
-                    "message": "Configurações básicas não encontradas",
-                    "details": "Execute upload de token.json primeiro"
-                }
-            
-            # USAR SCOPE QUE FUNCIONOU
-            scope_funcional = "Files.ReadWrite offline_access"
-            
-            token_url = f"https://login.microsoftonline.com/{auth.tenant_id}/oauth2/v2.0/token"
-            token_request = {
-                'client_id': auth.client_id,
-                'grant_type': 'refresh_token',
-                'refresh_token': auth.refresh_token,
-                'scope': scope_funcional
-            }
-            
-            response = requests.post(token_url, data=token_request)
-            if response.status_code != 200:
-                return {
-                    "status": "error",
-                    "message": "Erro renovando token",
-                    "details": f"HTTP {response.status_code}"
-                }
-            
-            access_token = response.json().get('access_token')
-            print("✅ Token renovado")
-            
-            headers = {
-                'Authorization': f'Bearer {access_token}',
-                'Content-Type': 'application/json'
-            }
-            
-            # 2. VERIFICAR SE PASTA /BRK JÁ EXISTE
-            print("🔍 Verificando se pasta /BRK já existe...")
-            
-            list_url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
-            list_response = requests.get(list_url, headers=headers)
-            
-            pasta_brk_existe = False
-            pasta_brk_id = None
-            
-            if list_response.status_code == 200:
-                items = list_response.json().get('value', [])
-                for item in items:
-                    if item.get('name') == 'BRK' and 'folder' in item:
-                        pasta_brk_existe = True
-                        pasta_brk_id = item.get('id')
-                        print("✅ Pasta /BRK já existe")
-                        break
-            
-            # 3. CRIAR PASTA /BRK SE NÃO EXISTIR
-            if not pasta_brk_existe:
-                print("📁 Criando pasta /BRK...")
-                
-                create_url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
-                create_data = {
-                    "name": "BRK",
-                    "folder": {},
-                    "@microsoft.graph.conflictBehavior": "fail"
-                }
-                
-                create_response = requests.post(create_url, headers=headers, json=create_data)
-                
-                if create_response.status_code == 201:
-                    pasta_criada = create_response.json()
-                    pasta_brk_id = pasta_criada.get('id')
-                    print("✅ Pasta /BRK criada com sucesso!")
-                elif create_response.status_code == 409:
-                    print("⚠️ Pasta /BRK já existia (conflito)")
-                    pasta_brk_existe = True
-                else:
-                    return {
-                        "status": "error",
-                        "message": f"Erro criando pasta /BRK: {create_response.status_code}",
-                        "details": create_response.text[:300]
-                    }
-            
-            # 4. LISTAR CONTEÚDO DA PASTA /BRK
-            print("📂 Listando conteúdo da pasta /BRK...")
-            
-            if pasta_brk_id:
-                conteudo_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_brk_id}/children"
-            else:
-                conteudo_url = "https://graph.microsoft.com/v1.0/me/drive/root:/BRK:/children"
-            
-            conteudo_response = requests.get(conteudo_url, headers=headers)
-            
-            conteudo_pasta = []
-            if conteudo_response.status_code == 200:
-                items = conteudo_response.json().get('value', [])
-                for item in items:
-                    conteudo_pasta.append({
-                        "nome": item.get('name'),
-                        "tipo": "pasta" if 'folder' in item else "arquivo",
-                        "tamanho": item.get('size', 0),
-                        "modificado": item.get('lastModifiedDateTime', 'N/A')[:10]
-                    })
-                print(f"✅ Conteúdo listado: {len(conteudo_pasta)} items")
-            
-            # 5. RETORNAR RESULTADO COMPLETO
-            return {
-                "status": "success",
-                "brk_folder_access": True,
-                "message": "Pasta /BRK criada e acessível!",
-                "details": {
-                    "pasta_existia": pasta_brk_existe,
-                    "pasta_criada": not pasta_brk_existe,
-                    "pasta_id": pasta_brk_id[:20] + "..." if pasta_brk_id else "N/A",
-                    "conteudo_atual": conteudo_pasta,
-                    "total_items": len(conteudo_pasta),
-                    "permissoes": "Leitura + Escrita confirmadas",
-                    "teste_timestamp": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                }
-            }
-            
-        except Exception as e:
-            print(f"❌ ERRO: {str(e)}")
-            return {
-                "status": "error",
-                "brk_folder_access": False,
-                "message": "Erro interno no teste",
-                "details": str(e)
-            }
-    
-    def do_GET(self):
-        if self.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            
-            client_id = os.getenv("MICROSOFT_CLIENT_ID", "NÃO CONFIGURADO")
-            client_safe = client_id[:8] + "******" if len(client_id) > 8 else "NÃO CONFIGURADO"
-            
-            pasta_id = os.getenv("PASTA_BRK_ID", "NÃO CONFIGURADO")
-            pasta_safe = pasta_id[:10] + "******" if len(pasta_id) > 10 else "NÃO CONFIGURADO"
-            
-            html = f"""
-            <html><head><title>BRK Monitor Status</title></head>
-            <body style="font-family: Arial; margin: 50px;">
-                <h1>🚀 BRK MONITOR SEGURO (REFATORADO)</h1>
-                <p><strong>Status:</strong> ✅ Ativo</p>
-                <p><strong>Estrutura:</strong> ✅ Modularizada (auth + processor)</p>
-                <p><strong>Última exec:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</p>
-                <hr>
-                <h3>🔒 Config Segura</h3>
-                <p><strong>Client ID:</strong> {client_safe}</p>
-                <p><strong>Pasta BRK:</strong> {pasta_safe}</p>
-                <hr>
-                <p><a href="/upload-token">📁 Upload Token</a> | <a href="/health">🔍 Health</a> | <a href="/test-onedrive">🧪 Teste OneDrive</a> | <a href="/create-brk-folder">📂 Criar /BRK</a></p>
-                <small>🔒 Dados protegidos - Versão refatorada</small>
-            </body></html>
-            """
-            self.wfile.write(html.encode('utf-8'))
-            
-        elif self.path == '/upload-token':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
-            self.end_headers()
-            
-            html = """
-            <html><head><title>Upload Token</title></head>
-            <body style="font-family: Arial; margin: 50px;">
-                <h1>📁 Upload Token</h1>
-                <form method="POST" action="/upload-token">
-                    <textarea name="token_content" rows="15" cols="70" placeholder='{"access_token": "...", "refresh_token": "..."}'></textarea><br><br>
-                    <button type="submit">💾 Salvar Token</button>
-                </form>
-                <p><a href="/">← Voltar</a></p>
-            </body></html>
-            """
-            self.wfile.write(html.encode('utf-8'))
-            
-        elif self.path == '/test-onedrive':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
-            try:
-                resultado = self.test_onedrive_access()
-                self.wfile.write(json.dumps(resultado, indent=2, ensure_ascii=False).encode('utf-8'))
-            except Exception as e:
-                erro_response = {
-                    "status": "error",
-                    "onedrive_access": False,
-                    "message": "Erro criando teste OneDrive",
-                    "details": str(e)
-                }
-                self.wfile.write(json.dumps(erro_response, indent=2).encode('utf-8'))
-        
-        elif self.path == '/create-brk-folder':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
-            try:
-                resultado = self.test_create_brk_folder()
-                self.wfile.write(json.dumps(resultado, indent=2, ensure_ascii=False).encode('utf-8'))
-            except Exception as e:
-                erro_response = {
-                    "status": "error",
-                    "brk_folder_access": False,
-                    "message": "Erro executando teste criação pasta",
-                    "details": str(e)
-                }
-                self.wfile.write(json.dumps(erro_response, indent=2).encode('utf-8'))
-        
-        elif self.path == '/health':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            
-            health = {
-                "status": "healthy",
-                "service": "brk-monitor-seguro-refatorado",
-                "timestamp": datetime.now().isoformat(),
-                "estrutura": "modularizada",
-                "config": {
-                    "client_id": "ok" if os.getenv("MICROSOFT_CLIENT_ID") else "missing",
-                    "pasta_brk": "ok" if os.getenv("PASTA_BRK_ID") else "missing"
-                }
-            }
-            self.wfile.write(json.dumps(health, indent=2).encode('utf-8'))
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    def do_POST(self):
-        if self.path == '/upload-token':
-            try:
-                content_length = int(self.headers['Content-Length'])
-                post_data = self.rfile.read(content_length).decode('utf-8')
-                
-                import urllib.parse
-                parsed = urllib.parse.parse_qs(post_data)
-                token_content = parsed.get('token_content', [''])[0]
-                
-                if token_content.strip():
-                    token_data = json.loads(token_content)
-                    
-                    if 'access_token' in token_data and 'refresh_token' in token_data:
-                        token_file = "/opt/render/project/storage/token.json"
-                        os.makedirs(os.path.dirname(token_file), exist_ok=True)
-                        
-                        with open(token_file, 'w') as f:
-                            json.dump(token_data, f, indent=2)
-                        
-                        self.send_response(200)
-                        self.send_header('Content-type', 'text/html')
-                        self.end_headers()
-                        
-                        html = """
-                        <html><head><title>Sucesso</title></head>
-                        <body style="font-family: Arial; margin: 50px;">
-                            <h1>✅ Token Salvo!</h1>
-                            <p>Sistema funcionará automaticamente</p>
-                            <p><a href="/">← Voltar</a></p>
-                        </body></html>
-                        """
-                        self.wfile.write(html.encode('utf-8'))
-                        print("✅ Token salvo via web!")
-                        
-                    else:
-                        raise ValueError("Token inválido")
-                else:
-                    raise ValueError("Conteúdo vazio")
-                    
-            except Exception as e:
-                self.send_response(400)
-                self.send_header('Content-type', 'text/html')
-                self.end_headers()
-                html = f"<html><body><h1>❌ Erro: {str(e)}</h1><a href='/upload-token'>← Tentar novamente</a></body></html>"
-                self.wfile.write(html.encode('utf-8'))
-        else:
-            self.send_response(404)
-            self.end_headers()
-    
-    def log_message(self, format, *args):
-        pass
+            print(f"❌ Erro listando arquivos: {e}")
+            return []
 
 
 class BRKProcessadorBasico:
-    """Processador principal (REFATORADO)"""
+    """Processador principal BRK (MODULAR)"""
     
     def __init__(self):
         """Inicializar com classes refatoradas"""
-        print("🔧 Inicializando BRK Processador (REFATORADO)...")
+        print("🔧 Inicializando BRK Processador (MODULAR)...")
         
-        # AUTENTICAÇÃO MICROSOFT
-        self.microsoft_auth = MicrosoftAuth()
-        
-        # PROCESSAMENTO DE EMAILS  
-        self.email_processor = EmailProcessor(self.microsoft_auth)
-        
-        # COMPONENTES EXISTENTES
-        self.database = DatabaseBRKBasico()
-        self.onedrive = OneDriveBasico()
-        
-        print("✅ BRK Processador refatorado inicializado")
-        print("   📊 Estrutura: auth + processor + database + onedrive")
+        try:
+            # AUTENTICAÇÃO MICROSOFT
+            self.microsoft_auth = MicrosoftAuth()
+            
+            # PROCESSAMENTO DE EMAILS  
+            self.email_processor = EmailProcessor(self.microsoft_auth)
+            
+            # COMPONENTES DE ARMAZENAMENTO
+            self.database = DatabaseBRKBasico()
+            self.onedrive = OneDriveBasico()
+            
+            print("✅ BRK Processador inicializado com sucesso")
+            print("   📊 Estrutura: auth + processor + database + onedrive")
+            
+        except Exception as e:
+            print(f"❌ Erro inicializando processador: {e}")
+            raise
     
     def extrair_info_pdf(self, pdf_content: bytes, filename: str) -> Dict:
-        """Extrair informações básicas do PDF (mantido)"""
+        """
+        Extrair informações básicas do PDF
+        
+        FUTURO: Implementar OCR para extrair dados reais das faturas
+        """
         return {
-            'Data_Emissao': 'A extrair', 'Nota_Fiscal': 'A extrair', 'Valor': 'A extrair',
-            'Codigo_Cliente': 'A extrair', 'Vencimento': 'A extrair', 'Competencia': 'A extrair',
-            'nome_arquivo': filename, 'tamanho_bytes': len(pdf_content),
+            'Data_Emissao': 'A extrair',
+            'Nota_Fiscal': 'A extrair', 
+            'Valor': 'A extrair',
+            'Codigo_Cliente': 'A extrair',
+            'Vencimento': 'A extrair',
+            'Competencia': 'A extrair',
+            'nome_arquivo': filename,
+            'tamanho_bytes': len(pdf_content),
             'hash_arquivo': hashlib.sha256(pdf_content).hexdigest()
         }
     
     def processar_email(self, email: Dict) -> int:
-        """Processar um email (ATUALIZADO)"""
+        """Processar um email específico"""
         email_id = email.get('id', 'unknown')
         pdfs_processados = 0
         
         try:
-            # USAR EMAIL_PROCESSOR REFATORADO
+            # Extrair PDFs usando o email processor
             pdfs = self.email_processor.extrair_pdfs_do_email(email)
             if not pdfs:
                 return 0
@@ -639,34 +293,41 @@ class BRKProcessadorBasico:
             
             for pdf_info in pdfs:
                 try:
+                    # Decodificar conteúdo do PDF
                     pdf_content = base64.b64decode(pdf_info['content_bytes'])
+                    
+                    # Extrair informações (futuro: OCR)
                     dados = self.extrair_info_pdf(pdf_content, pdf_info['filename'])
                     dados['email_id'] = email_id
                     
+                    # Upload para OneDrive simulado
                     caminho = self.onedrive.upload_pdf(pdf_content, pdf_info['filename'])
                     if caminho:
                         dados['caminho_onedrive'] = caminho
                     
+                    # Salvar no banco
                     if self.database.salvar_fatura(dados):
                         pdfs_processados += 1
                         print(f"✅ {pdf_info['filename']}")
+                    
                 except Exception as e:
-                    print(f"❌ Erro PDF {pdf_info['filename']}: {e}")
+                    print(f"❌ Erro processando PDF {pdf_info.get('filename', 'unknown')}: {e}")
             
             return pdfs_processados
+            
         except Exception as e:
-            print(f"❌ Erro email {email_id}: {e}")
+            print(f"❌ Erro processando email {email_id}: {e}")
             return 0
     
-    def executar_ciclo(self):
-        """Executar ciclo completo com diagnóstico (ATUALIZADO)"""
-        print("🚀 INICIANDO PROCESSAMENTO BRK (REFATORADO)")
-        print("=" * 40)
+    def executar_ciclo_completo(self):
+        """Executar ciclo completo de processamento"""
+        print("🚀 INICIANDO PROCESSAMENTO BRK (MODULAR)")
+        print("=" * 50)
         
         inicio = datetime.now()
         
         try:
-            # DIAGNÓSTICO COM EMAIL_PROCESSOR
+            # 1. DIAGNÓSTICO DA PASTA BRK
             print("📊 DIAGNÓSTICO PASTA BRK:")
             diagnostico = self.email_processor.diagnosticar_pasta_brk()
             
@@ -677,76 +338,110 @@ class BRKProcessadorBasico:
                 print()
             else:
                 print("   ❌ Falha no diagnóstico")
+                print(f"   Erro: {diagnostico.get('erro', 'N/A')}")
                 print()
             
-            # BUSCAR EMAILS COM EMAIL_PROCESSOR
+            # 2. BUSCAR EMAILS NOVOS
             emails = self.email_processor.buscar_emails_novos(dias_atras=1)
             
             if not emails:
-                print("📧 Nenhum email novo")
+                print("📧 Nenhum email novo encontrado")
+                self._mostrar_estatisticas()
                 return
             
-            # PROCESSAR
+            # 3. PROCESSAR EMAILS
             total_pdfs = 0
             emails_processados = 0
+            emails_novos = 0
             
             for email in emails:
                 email_id = email.get('id', '')
                 
+                # Verificar se já foi processado
                 if self.database.email_ja_processado(email_id):
                     print("⏭️ Email já processado")
                     continue
                 
+                emails_novos += 1
+                
+                # Processar email
                 pdfs_count = self.processar_email(email)
+                
+                # Marcar como processado
                 self.database.marcar_email_processado(email_id, pdfs_count)
                 
                 emails_processados += 1
                 total_pdfs += pdfs_count
             
-            # RESULTADO
+            # 4. MOSTRAR RESULTADO
             duracao = (datetime.now() - inicio).total_seconds()
             
-            print(f"\n📊 RESULTADO:")
-            print(f"   Emails: {emails_processados}")
-            print(f"   PDFs: {total_pdfs}")
-            print(f"   Tempo: {duracao:.1f}s")
+            print(f"\n📊 RESULTADO DO CICLO:")
+            print(f"   📧 Emails encontrados: {len(emails)}")
+            print(f"   🆕 Emails novos: {emails_novos}")
+            print(f"   ✅ Emails processados: {emails_processados}")
+            print(f"   📎 PDFs extraídos: {total_pdfs}")
+            print(f"   ⏱️ Tempo: {duracao:.1f}s")
             
-            stats = self.database.obter_estatisticas()
-            print(f"   Total DB: {stats.get('total_faturas', 0)}")
+            # 5. ESTATÍSTICAS GERAIS
+            self._mostrar_estatisticas()
             
         except Exception as e:
-            print(f"❌ Erro no ciclo: {e}")
+            print(f"❌ Erro no ciclo de processamento: {e}")
         finally:
-            print("✅ EXECUÇÃO CONCLUÍDA (REFATORADO)")
-            print("=" * 40)
+            print("✅ CICLO CONCLUÍDO")
+            print("=" * 50)
+    
+    def _mostrar_estatisticas(self):
+        """Mostrar estatísticas do banco"""
+        try:
+            stats = self.database.obter_estatisticas()
+            print(f"\n📈 ESTATÍSTICAS GERAIS:")
+            print(f"   💾 Total faturas no banco: {stats.get('total_faturas', 0)}")
+            print(f"   📧 Total emails processados: {stats.get('total_emails_processados', 0)}")
+            
+            # Últimas faturas
+            ultimas = stats.get('ultimas_faturas', [])
+            if ultimas:
+                print(f"   📄 Últimas faturas:")
+                for nome, data in ultimas[:3]:
+                    data_fmt = data[:10] if data else 'N/A'
+                    print(f"      • {nome} ({data_fmt})")
+                    
+        except Exception as e:
+            print(f"❌ Erro obtendo estatísticas: {e}")
 
 
 def executar_processamento_background():
-    """Background processing (ATUALIZADO)"""
+    """Processamento em background (loop principal)"""
+    print("🔄 Iniciando processamento em background...")
+    
     try:
         processador = BRKProcessadorBasico()
         
         while True:
             try:
-                processador.executar_ciclo()
+                processador.executar_ciclo_completo()
+                
+                # Aguardar 10 minutos antes do próximo ciclo
+                print(f"⏰ Próximo ciclo em 10 minutos...")
                 time.sleep(600)  # 10 minutos
+                
+            except KeyboardInterrupt:
+                print("\n🛑 Processamento interrompido pelo usuário")
+                break
             except Exception as e:
-                print(f"❌ Erro background: {e}")
-                time.sleep(60)
+                print(f"❌ Erro no processamento background: {e}")
+                print("🔄 Tentando novamente em 1 minuto...")
+                time.sleep(60)  # 1 minuto antes de tentar novamente
                 
     except Exception as e:
         print(f"❌ Erro fatal inicializando processador: {e}")
-        print("⚠️ Background processamento interrompido")
+        print("⚠️ Processamento background interrompido")
 
 
-def main():
-    """Função principal SEGURA (REFATORADO)"""
-    print("🚀 BRK MONITOR SEGURO - INICIANDO (REFATORADO)")
-    print("=" * 50)
-    print("📊 ESTRUTURA: auth/ + processor/ + app.py")
-    print("=" * 50)
-    
-    # Validação rigorosa
+def validar_configuracoes():
+    """Validar configurações obrigatórias"""
     required_vars = {
         "MICROSOFT_CLIENT_ID": "Client ID Microsoft",
         "PASTA_BRK_ID": "ID da pasta BRK"
@@ -764,44 +459,84 @@ def main():
         print(f"\n❌ VARIÁVEIS FALTANDO: {missing}")
         print("Configure no Render → Environment → Add Variable")
         print("⚠️ SISTEMA PARADO POR SEGURANÇA")
-        return
+        return False
     
-    print("🔒 Configurações validadas!")
-    
-    # Testar imports dos módulos refatorados
+    return True
+
+
+def testar_imports_modulos():
+    """Testar se os módulos refatorados estão funcionando"""
     try:
+        # Testar imports
         from auth import MicrosoftAuth
         from processor import EmailProcessor
-        print("✅ Imports refatorados OK")
+        print("✅ Imports dos módulos OK")
         
-        # Teste básico de inicialização
+        # Testar inicialização básica
         test_auth = MicrosoftAuth()
         print("✅ MicrosoftAuth inicializado")
         
         test_processor = EmailProcessor(test_auth)
         print("✅ EmailProcessor inicializado")
         
+        return True
+        
     except Exception as e:
-        print(f"❌ Erro nos imports refatorados: {e}")
+        print(f"❌ Erro nos imports dos módulos: {e}")
         print("⚠️ Verifique estrutura de pastas auth/ e processor/")
+        return False
+
+
+def main():
+    """Função principal - PROCESSAMENTO PURO"""
+    print("🚀 BRK MONITOR - PROCESSAMENTO AUTOMÁTICO")
+    print("=" * 60)
+    print("📊 ESTRUTURA: Modular (auth/ + processor/ + admin/)")
+    print("🎯 FUNÇÃO: Processamento automático de emails BRK")
+    print("=" * 60)
+    
+    # 1. VALIDAR CONFIGURAÇÕES
+    if not validar_configuracoes():
         return
     
-    # Iniciar background
-    bg_thread = threading.Thread(target=executar_processamento_background, daemon=True)
-    bg_thread.start()
-    print("🔄 Background iniciado (refatorado)")
+    # 2. TESTAR MÓDULOS REFATORADOS
+    if not testar_imports_modulos():
+        return
     
-    # Servidor web
-    porta = int(os.getenv('PORT', 8080))
-    server = HTTPServer(('0.0.0.0', porta), StatusHandler)
+    print("🔒 Configurações validadas!")
+    print("📦 Módulos carregados com sucesso!")
     
-    print(f"🌐 Servidor na porta {porta}")
-    print("=" * 50)
+    # 3. OPÇÃO: INCLUIR SERVIDOR ADMIN
+    executar_admin = os.getenv("EXECUTAR_ADMIN_SERVER", "true").lower() == "true"
+    
+    if executar_admin:
+        print("🌐 Iniciando servidor administrativo...")
+        
+        try:
+            from admin import AdminServer
+            
+            # Iniciar servidor admin em thread separada
+            porta_admin = int(os.getenv('PORT', 8080))
+            admin_server = AdminServer(porta=porta_admin)
+            
+            admin_thread = threading.Thread(target=admin_server.iniciar, daemon=True)
+            admin_thread.start()
+            
+            print(f"✅ Servidor administrativo na porta {porta_admin}")
+            
+        except Exception as e:
+            print(f"⚠️ Erro iniciando servidor admin: {e}")
+            print("🔄 Continuando apenas com processamento...")
+    
+    # 4. INICIAR PROCESSAMENTO PRINCIPAL
+    print("🔄 Iniciando processamento BRK...")
     
     try:
-        server.serve_forever()
+        executar_processamento_background()
     except KeyboardInterrupt:
-        print("\n🛑 Parado")
+        print("\n🛑 Sistema parado pelo usuário")
+    except Exception as e:
+        print(f"❌ Erro fatal: {e}")
 
 
 if __name__ == "__main__":
