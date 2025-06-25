@@ -123,10 +123,54 @@ class AdminHandler(BaseHTTPRequestHandler):
                 drive_info = onedrive_response.json()
                 print("✅ ACESSO ONEDRIVE FUNCIONANDO!")
                 
+                # 🆕 BUSCAR CDC_BRK_CCB.xlsx na pasta /BRK
+                print("🔍 BUSCANDO CDC_BRK_CCB.xlsx na pasta /BRK...")
+                
+                brk_url = "https://graph.microsoft.com/v1.0/me/drive/root:/BRK:/children"
+                brk_response = requests.get(brk_url, headers=headers, timeout=30)
+                
+                planilha_encontrada = None
+                arquivos_brk = []
+                
+                if brk_response.status_code == 200:
+                    items = brk_response.json().get('value', [])
+                    print(f"📁 Encontrados {len(items)} arquivos na pasta /BRK")
+                    
+                    for item in items:
+                        arquivo_info = {
+                            "nome": item.get('name'),
+                            "tipo": "pasta" if 'folder' in item else "arquivo"
+                        }
+                        arquivos_brk.append(arquivo_info)
+                        
+                        # Buscar especificamente CDC_BRK_CCB.xlsx
+                        if item.get('name', '').upper() == 'CDC_BRK_CCB.XLSX':
+                            planilha_encontrada = {
+                                "nome": item.get('name'),
+                                "id": item.get('id'),
+                                "tamanho": item.get('size', 0),
+                                "caminho": f"/BRK/{item.get('name')}",
+                                "url_download": f"https://graph.microsoft.com/v1.0/me/drive/items/{item.get('id')}/content"
+                            }
+                            print(f"🎯 CDC_BRK_CCB.xlsx ENCONTRADO!")
+                            print(f"   📍 Caminho: /BRK/{item.get('name')}")
+                            print(f"   🆔 ID: {item.get('id')}")
+                            print(f"   📏 Tamanho: {item.get('size', 0)} bytes")
+                            print(f"   ⚙️ Configurar: PLANILHA_BRK_ID={item.get('id')}")
+                            break
+                
+                if not planilha_encontrada:
+                    print("⚠️ CDC_BRK_CCB.xlsx NÃO encontrado na pasta /BRK")
+                    print(f"   📁 Arquivos encontrados: {[a['nome'] for a in arquivos_brk]}")
+                
                 return {
                     "status": "success",
                     "onedrive_access": True,
-                    "message": "Credenciais atuais funcionam para OneDrive!",
+                    "message": "OneDrive OK + Busca CDC_BRK_CCB.xlsx realizada",
+                    "cdc_brk_ccb_encontrado": planilha_encontrada is not None,
+                    "cdc_brk_ccb": planilha_encontrada,
+                    "arquivos_pasta_brk": arquivos_brk,
+                    "configurar_variavel": f"PLANILHA_BRK_ID={planilha_encontrada['id']}" if planilha_encontrada else "CDC_BRK_CCB.xlsx não encontrado em /BRK/",
                     "details": {
                         "scope_usado": scope_funcionou,
                         "drive_id": drive_info.get('id', 'N/A')[:20] + "...",
