@@ -1,3 +1,25 @@
+# ============================================================================
+# REQUIREMENTS.TXT - CORRIGIDO PARA DATABASEBRK
+# ============================================================================
+
+# Framework Web (PRINCIPAL - estava faltando!)
+Flask==3.0.3
+
+# HTTP Requests (já tinha)
 requests==2.31.0
+
+# Manipulação de datas (já tinha)
 python-dateutil==2.8.2
+
+# Processamento de PDF (já tinha)
 pdfplumber==0.9.0
+
+# Dependências adicionais para robustez
+Werkzeug==3.0.3
+Jinja2==3.1.4
+MarkupSafe==3.0.2
+itsdangerous==2.2.0
+click==8.1.7
+
+# Para logs e debugging
+gunicorn==23.0.0
