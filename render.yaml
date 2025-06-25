@@ -1,7 +1,7 @@
-# 🚀 BRK Monitor - Configuração Render Deploy
+# 🚀 BRK Monitor - Configuração Render Deploy (MODULAR)
 # 
-# Este arquivo configura deploy automático no Render.com
-# Funcionalidades: Build, Environment, Persistent Disk
+# Configuração atualizada para estrutura modular:
+# auth/ + processor/ + admin/ + app.py
 
 services:
   - type: web
@@ -16,7 +16,7 @@ services:
     # 🌐 Network Configuration  
     healthCheckPath: /health
     
-    # 📁 Persistent Storage (CRÍTICO para SQLite)
+    # 📁 Persistent Storage (CRÍTICO para SQLite + tokens)
     disk:
       name: brk-storage
       mountPath: /opt/render/project/storage
@@ -36,6 +36,9 @@ services:
       - key: PORT
         value: 8080  # Render define automaticamente
         
+      - key: EXECUTAR_ADMIN_SERVER
+        value: true  # 🆕 Servidor admin habilitado por padrão
+        
     # 🔄 Auto Deploy
     autoDeploy: true
     
@@ -46,30 +49,46 @@ services:
     healthCheckPath: /health
     healthCheckGracePeriod: 30s
 
-# 📝 Instruções de Uso:
+# 📝 Instruções Atualizadas:
 #
-# 1. CONECTAR REPOSITÓRIO:
-#    - Render.com → New Web Service  
-#    - Connect GitHub → brk-monitor-seguro
-#    - Render detectará este arquivo automaticamente
+# 1. ESTRUTURA MODULAR SUPORTADA:
+#    - auth/microsoft_auth.py → Autenticação Microsoft
+#    - processor/email_processor.py → Processamento emails
+#    - admin/admin_server.py → Interface administrativa
+#    - app.py → Orquestração principal
 #
-# 2. CONFIGURAR VARIÁVEIS OBRIGATÓRIAS:
-#    - Dashboard → Environment → Add Variable:
-#      • MICROSOFT_CLIENT_ID = seu_client_id
-#      • PASTA_BRK_ID = seu_pasta_id  
+# 2. VARIÁVEIS OBRIGATÓRIAS:
+#    - MICROSOFT_CLIENT_ID = seu_client_id
+#    - PASTA_BRK_ID = seu_pasta_id
+#    - EXECUTAR_ADMIN_SERVER = true (servidor web incluído)
 #
-# 3. DEPLOY AUTOMÁTICO:
-#    - Render usará as configurações deste arquivo
-#    - Build: pip install -r requirements.txt
-#    - Start: python app.py
-#    - Storage: 1GB persistent disk em /opt/render/project/storage
+# 3. ENDPOINTS DISPONÍVEIS:
+#    - / → Interface administrativa
+#    - /upload-token → Upload seguro de token
+#    - /health → Health check JSON
+#    - /status → Status detalhado sistema
+#    - /test-onedrive → Teste conectividade OneDrive
+#    - /create-brk-folder → Criar pasta /BRK
 #
-# 4. VERIFICAR FUNCIONAMENTO:
-#    - Health check: https://seu-app.onrender.com/health
-#    - Status: https://seu-app.onrender.com/
-#    - Upload token: https://seu-app.onrender.com/upload-token
+# 4. FUNCIONAMENTO:
+#    - app.py → Processamento automático (10min) + Servidor admin
+#    - Persistent disk → tokens + SQLite + PDFs simulados
+#    - Logs → Estrutura modular visível
+#
+# 5. DEPLOY PROCESS:
+#    - GitHub push → Auto deploy
+#    - Build → pip install requirements.txt
+#    - Start → python app.py (híbrido: processamento + web)
+#    - Health → /health endpoint ativo
 
-# ⚠️ IMPORTANTE:
-# - MICROSOFT_CLIENT_ID e PASTA_BRK_ID devem ser configurados manualmente
-# - Persistent disk é ESSENCIAL para SQLite funcionar
-# - Health check monitora se aplicação está funcionando
+# ⚡ PERFORMANCE OTIMIZADA:
+# - Módulos separados = imports mais rápidos
+# - Classes especializadas = menos overhead
+# - Processamento isolado = melhor debugging
+# - Interface separada = manutenção simplificada
+
+# 🔮 PREPARADO PARA CRESCIMENTO:
+# - admin/ pronto para dashboard avançado
+# - processor/ pronto para OCR real
+# - auth/ pronto para OneDrive real
+# - app.py mantém coordenação simples
