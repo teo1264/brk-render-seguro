@@ -375,13 +375,13 @@ class OneDriveBasico:
 # BLOCO 1/3 - SUBSTITUIR A CLASSE StatusHandler COMPLETA
 # Procurar: class StatusHandler(BaseHTTPRequestHandler):
 # SUBSTITUIR TODA A CLASSE por esta versão:
+# BLOCO 3/3 - SUBSTITUIR CLASSE StatusHandler COMPLETA
+# Procurar: class StatusHandler(BaseHTTPRequestHandler):
+# SUBSTITUIR TODA A CLASSE por esta versão:
 
 class StatusHandler(BaseHTTPRequestHandler):
-    """Servidor web com interface segura + TESTE ONEDRIVE"""
-    # BLOCO 2/3 - CORRIGIR MÉTODO test_onedrive_access
-# Encontrar na classe StatusHandler o método test_onedrive_access
-# SUBSTITUIR APENAS esta parte (linha ~330 aproximadamente):
-
+    """Servidor web com interface segura + TESTE ONEDRIVE + CRIAÇÃO PASTA /BRK"""
+    
     def test_onedrive_access(self):
         """Teste básico de acesso OneDrive usando credenciais atuais"""
         print("🧪 TESTE ONEDRIVE - INICIANDO")
@@ -545,6 +545,145 @@ class StatusHandler(BaseHTTPRequestHandler):
                 "details": str(e)
             }
     
+    def test_create_brk_folder(self):
+        """Teste criar pasta /BRK no OneDrive"""
+        print("📁 TESTE CRIAÇÃO PASTA /BRK - INICIANDO")
+        
+        try:
+            # 1. RENOVAR TOKEN COM SCOPE FUNCIONANDO
+            client_id = os.getenv('MICROSOFT_CLIENT_ID')
+            token_path = "/opt/render/project/storage/token.json"
+            
+            if not client_id or not os.path.exists(token_path):
+                return {
+                    "status": "error",
+                    "message": "Configurações básicas não encontradas",
+                    "details": "Execute /test-onedrive primeiro"
+                }
+            
+            with open(token_path, 'r') as f:
+                token_data = json.load(f)
+            
+            # USAR SCOPE QUE FUNCIONOU
+            scope_funcional = "Files.ReadWrite offline_access"
+            
+            token_url = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+            token_request = {
+                'client_id': client_id,
+                'grant_type': 'refresh_token',
+                'refresh_token': token_data['refresh_token'],
+                'scope': scope_funcional
+            }
+            
+            response = requests.post(token_url, data=token_request)
+            if response.status_code != 200:
+                return {
+                    "status": "error",
+                    "message": "Erro renovando token",
+                    "details": f"HTTP {response.status_code}"
+                }
+            
+            access_token = response.json().get('access_token')
+            print("✅ Token renovado")
+            
+            headers = {
+                'Authorization': f'Bearer {access_token}',
+                'Content-Type': 'application/json'
+            }
+            
+            # 2. VERIFICAR SE PASTA /BRK JÁ EXISTE
+            print("🔍 Verificando se pasta /BRK já existe...")
+            
+            list_url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
+            list_response = requests.get(list_url, headers=headers)
+            
+            pasta_brk_existe = False
+            pasta_brk_id = None
+            
+            if list_response.status_code == 200:
+                items = list_response.json().get('value', [])
+                for item in items:
+                    if item.get('name') == 'BRK' and 'folder' in item:
+                        pasta_brk_existe = True
+                        pasta_brk_id = item.get('id')
+                        print("✅ Pasta /BRK já existe")
+                        break
+            
+            # 3. CRIAR PASTA /BRK SE NÃO EXISTIR
+            if not pasta_brk_existe:
+                print("📁 Criando pasta /BRK...")
+                
+                create_url = "https://graph.microsoft.com/v1.0/me/drive/root/children"
+                create_data = {
+                    "name": "BRK",
+                    "folder": {},
+                    "@microsoft.graph.conflictBehavior": "fail"
+                }
+                
+                create_response = requests.post(create_url, headers=headers, json=create_data)
+                
+                if create_response.status_code == 201:
+                    pasta_criada = create_response.json()
+                    pasta_brk_id = pasta_criada.get('id')
+                    print("✅ Pasta /BRK criada com sucesso!")
+                elif create_response.status_code == 409:
+                    print("⚠️ Pasta /BRK já existia (conflito)")
+                    pasta_brk_existe = True
+                else:
+                    return {
+                        "status": "error",
+                        "message": f"Erro criando pasta /BRK: {create_response.status_code}",
+                        "details": create_response.text[:300]
+                    }
+            
+            # 4. LISTAR CONTEÚDO DA PASTA /BRK
+            print("📂 Listando conteúdo da pasta /BRK...")
+            
+            if pasta_brk_id:
+                conteudo_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_brk_id}/children"
+            else:
+                # Buscar novamente se não temos ID
+                conteudo_url = "https://graph.microsoft.com/v1.0/me/drive/root:/BRK:/children"
+            
+            conteudo_response = requests.get(conteudo_url, headers=headers)
+            
+            conteudo_pasta = []
+            if conteudo_response.status_code == 200:
+                items = conteudo_response.json().get('value', [])
+                for item in items:
+                    conteudo_pasta.append({
+                        "nome": item.get('name'),
+                        "tipo": "pasta" if 'folder' in item else "arquivo",
+                        "tamanho": item.get('size', 0),
+                        "modificado": item.get('lastModifiedDateTime', 'N/A')[:10]
+                    })
+                print(f"✅ Conteúdo listado: {len(conteudo_pasta)} items")
+            
+            # 5. RETORNAR RESULTADO COMPLETO
+            return {
+                "status": "success",
+                "brk_folder_access": True,
+                "message": "Pasta /BRK criada e acessível!",
+                "details": {
+                    "pasta_existia": pasta_brk_existe,
+                    "pasta_criada": not pasta_brk_existe,
+                    "pasta_id": pasta_brk_id[:20] + "..." if pasta_brk_id else "N/A",
+                    "conteudo_atual": conteudo_pasta,
+                    "total_items": len(conteudo_pasta),
+                    "permissoes": "Leitura + Escrita confirmadas",
+                    "teste_timestamp": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                }
+            }
+            
+        except Exception as e:
+            print(f"❌ ERRO: {str(e)}")
+            return {
+                "status": "error",
+                "brk_folder_access": False,
+                "message": "Erro interno no teste",
+                "details": str(e)
+            }
+    
     def do_GET(self):
         if self.path == '/':
             self.send_response(200)
@@ -568,7 +707,7 @@ class StatusHandler(BaseHTTPRequestHandler):
                 <p><strong>Client ID:</strong> {client_safe}</p>
                 <p><strong>Pasta BRK:</strong> {pasta_safe}</p>
                 <hr>
-                <p><a href="/upload-token">📁 Upload Token</a> | <a href="/health">🔍 Health</a> | <a href="/test-onedrive">🧪 Teste OneDrive</a></p>
+                <p><a href="/upload-token">📁 Upload Token</a> | <a href="/health">🔍 Health</a> | <a href="/test-onedrive">🧪 Teste OneDrive</a> | <a href="/create-brk-folder">📂 Criar /BRK</a></p>
                 <small>🔒 Dados protegidos - Versão limpa</small>
             </body></html>
             """
@@ -610,6 +749,24 @@ class StatusHandler(BaseHTTPRequestHandler):
                 }
                 self.wfile.write(json.dumps(erro_response, indent=2).encode('utf-8'))
         
+        elif self.path == '/create-brk-folder':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            
+            try:
+                # Executar teste criação pasta
+                resultado = self.test_create_brk_folder()
+                self.wfile.write(json.dumps(resultado, indent=2, ensure_ascii=False).encode('utf-8'))
+            except Exception as e:
+                erro_response = {
+                    "status": "error",
+                    "brk_folder_access": False,
+                    "message": "Erro executando teste criação pasta",
+                    "details": str(e)
+                }
+                self.wfile.write(json.dumps(erro_response, indent=2).encode('utf-8'))
+        
         elif self.path == '/onedrive-info':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -618,7 +775,8 @@ class StatusHandler(BaseHTTPRequestHandler):
             info = {
                 "teste": "Acesse /test-onedrive para testar acesso",
                 "objetivo": "Verificar se credenciais atuais funcionam com OneDrive",
-                "url_teste": "https://brk-render-seguro.onrender.com/test-onedrive"
+                "url_teste": "https://brk-render-seguro.onrender.com/test-onedrive",
+                "criar_pasta": "Acesse /create-brk-folder para criar pasta /BRK"
             }
             self.wfile.write(json.dumps(info, indent=2, ensure_ascii=False).encode('utf-8'))
             
