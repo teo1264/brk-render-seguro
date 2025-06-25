@@ -1709,6 +1709,158 @@ class EmailProcessor:
         print(f"="*70)
 
 # ============================================================================
+# ADICIONAR ESTES MÉTODOS NO FINAL DO EmailProcessor (antes do comentário final)
+# Localização: processor/email_processor.py - linha ~1200 (antes do comentário ====)
+# ============================================================================
+
+    def diagnosticar_pasta_brk(self):
+        """
+        Diagnóstica a pasta BRK - conta emails total, 24h e mês atual.
+        Método necessário para compatibilidade com app.py
+        
+        Returns:
+            Dict: Diagnóstico da pasta com contadores
+        """
+        try:
+            if not self.garantir_autenticacao():
+                return {
+                    "status": "erro",
+                    "erro": "Falha na autenticação",
+                    "total_geral": 0,
+                    "ultimas_24h": 0,
+                    "mes_atual": 0
+                }
+            
+            headers = self.auth.obter_headers_autenticados()
+            
+            # 1. TOTAL GERAL da pasta
+            url_total = f"https://graph.microsoft.com/v1.0/me/mailFolders/{self.pasta_brk_id}/messages/$count"
+            response_total = requests.get(url_total, headers=headers, timeout=30)
+            
+            if response_total.status_code == 401:
+                if self.auth.atualizar_token():
+                    headers = self.auth.obter_headers_autenticados()
+                    response_total = requests.get(url_total, headers=headers, timeout=30)
+            
+            total_geral = 0
+            if response_total.status_code == 200:
+                total_geral = int(response_total.text.strip())
+            
+            # 2. ÚLTIMAS 24H
+            data_24h = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            url_24h = f"https://graph.microsoft.com/v1.0/me/mailFolders/{self.pasta_brk_id}/messages"
+            params_24h = {
+                "$filter": f"receivedDateTime ge {data_24h}",
+                "$count": "true",
+                "$top": "1"
+            }
+            response_24h = requests.get(url_24h, headers=headers, params=params_24h, timeout=30)
+            
+            ultimas_24h = 0
+            if response_24h.status_code == 200:
+                data_24h_result = response_24h.json()
+                ultimas_24h = data_24h_result.get('@odata.count', 0)
+            
+            # 3. MÊS ATUAL
+            primeiro_dia_mes = datetime.now().replace(day=1).strftime("%Y-%m-%dT00:00:00Z")
+            
+            params_mes = {
+                "$filter": f"receivedDateTime ge {primeiro_dia_mes}",
+                "$count": "true", 
+                "$top": "1"
+            }
+            response_mes = requests.get(url_24h, headers=headers, params=params_mes, timeout=30)
+            
+            mes_atual = 0
+            if response_mes.status_code == 200:
+                data_mes_result = response_mes.json()
+                mes_atual = data_mes_result.get('@odata.count', 0)
+            
+            return {
+                "status": "sucesso",
+                "total_geral": total_geral,
+                "ultimas_24h": ultimas_24h,
+                "mes_atual": mes_atual,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro no diagnóstico da pasta BRK: {e}")
+            return {
+                "status": "erro",
+                "erro": str(e),
+                "total_geral": 0,
+                "ultimas_24h": 0,
+                "mes_atual": 0
+            }
+
+    def buscar_emails_novos(self, dias_atras=1):
+        """
+        Busca emails novos na pasta BRK
+        
+        Args:
+            dias_atras (int): Quantos dias atrás buscar
+            
+        Returns:
+            List[Dict]: Lista de emails encontrados
+        """
+        try:
+            if not self.garantir_autenticacao():
+                return []
+            
+            headers = self.auth.obter_headers_autenticados()
+            
+            # Data de corte
+            data_corte = (datetime.now() - timedelta(days=dias_atras)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            
+            # Buscar emails
+            url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{self.pasta_brk_id}/messages"
+            params = {
+                "$filter": f"receivedDateTime ge {data_corte}",
+                "$expand": "attachments",
+                "$orderby": "receivedDateTime desc",
+                "$top": "50"
+            }
+            
+            response = requests.get(url, headers=headers, params=params, timeout=60)
+            
+            # Renovar token se necessário
+            if response.status_code == 401:
+                if self.auth.atualizar_token():
+                    headers = self.auth.obter_headers_autenticados()
+                    response = requests.get(url, headers=headers, params=params, timeout=60)
+            
+            if response.status_code == 200:
+                emails_data = response.json()
+                emails = emails_data.get('value', [])
+                print(f"📧 Encontrados {len(emails)} emails dos últimos {dias_atras} dia(s)")
+                return emails
+            else:
+                print(f"❌ Erro buscando emails: HTTP {response.status_code}")
+                return []
+                
+        except Exception as e:
+            print(f"❌ Erro na busca de emails: {e}")
+            return []
+
+    def status_processamento(self):
+        """
+        Método de compatibilidade - retorna status básico
+        Compatível com chamadas existentes no app.py
+        """
+        return {
+            "pasta_brk_configurada": bool(self.pasta_brk_id),
+            "pasta_brk_protegida": f"{self.pasta_brk_id[:10]}******" if self.pasta_brk_id else "N/A",
+            "autenticacao_ok": bool(self.auth.access_token),
+            "relacionamento_carregado": self.relacionamento_carregado,
+            "total_relacionamentos": len(self.cdc_brk_vetor)
+        }
+
+# ============================================================================
+# 🎉 EMAILPROCESSOR COMPLETO SEM PANDAS FINALIZADO!
+# (resto do comentário permanece igual...)
+# ============================================================================
 # 🎉 EMAILPROCESSOR COMPLETO SEM PANDAS FINALIZADO!
 # 
 # TOTAL DE FUNCIONALIDADES:
