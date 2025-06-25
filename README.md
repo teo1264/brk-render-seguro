@@ -189,3 +189,4 @@ ls -la /opt/render/project/storage/onedrive_simulado/BRK/
 ---
 
 **🔒 Versão segura - Dados sensíveis protegidos via variáveis de ambiente**
+# Deploy test
