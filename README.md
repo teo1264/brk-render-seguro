@@ -1,192 +1,261 @@
-# 🚀 BRK Monitor Seguro
+# 🏢 Sistema BRK - Controle Inteligente de Faturas
 
-Sistema automático para monitoramento de emails BRK com processamento de PDFs e armazenamento seguro.
+Sistema automático avançado para processamento de faturas BRK com **DatabaseBRK integrado**, detecção de duplicatas e organização completa no OneDrive.
 
-## 🎯 Funcionalidades
+## 🎯 Funcionalidades Avançadas
 
-- **📧 Monitor automático** de emails da pasta BRK
-- **📊 Diagnóstico em tempo real** (total, 24h, mês)
-- **💾 Armazenamento SQLite** com persistent disk
-- **📤 Upload simulado** OneDrive
-- **🌐 Interface web** para status e configuração
-- **🔒 Segurança total** - sem dados hardcoded
+### 🗃️ **DatabaseBRK - Core do Sistema**
+- **📊 SQLite organizado** no OneDrive com estrutura robusta
+- **🔍 Lógica SEEK** estilo Clipper para detecção de duplicatas
+- **⚠️ Classificação inteligente**: NORMAL / DUPLICATA / CUIDADO
+- **📁 Estrutura automática**: `/BRK/Faturas/YYYY/MM/`
+- **📝 Nomenclatura consistente** com script renomeia_brk10.py
 
-## 🔧 Configuração Local
+### 📧 **Processamento Inteligente de Emails**
+- **🤖 Extração completa** de dados das faturas PDF
+- **🏪 Relacionamento automático** CDC → Casa de Oração
+- **💧 Análise de consumo** com alertas (ALTO/NORMAL)
+- **🔄 Detecção de renegociações** entre BRK e igrejas
+- **📊 Logs estruturados** para monitoramento no Render
 
-### 1. Clonar repositório
-```bash
-git clone https://github.com/SEU_USER/brk-monitor-seguro.git
-cd brk-monitor-seguro
-```
+### 🌐 **Interface Web Completa**
+- **📋 Visualização de faturas** com filtros avançados
+- **📈 Estatísticas do banco** em tempo real
+- **⚙️ Processamento via interface** com resultados detalhados
+- **🔧 Debug completo** do sistema
+- **🚨 Alertas visuais** para consumo elevado
 
-### 2. Instalar dependências
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configurar variáveis de ambiente
-```bash
-# Criar arquivo .env
-echo "MICROSOFT_CLIENT_ID=seu_client_id_aqui" > .env
-echo "PASTA_BRK_ID=seu_pasta_id_aqui" >> .env
-echo "MICROSOFT_TENANT_ID=consumers" >> .env
-```
-
-### 4. Executar localmente
-```bash
-python app.py
-```
-
-Acesse: http://localhost:8080
-
-## ☁️ Deploy no Render
-
-### 1. Conectar repositório
-- Render.com → New Web Service
-- Conectar este repositório GitHub
-- Nome: `brk-monitor`
-
-### 2. Configurar build
-```bash
-Build Command: pip install -r requirements.txt
-Start Command: python app.py
-```
-
-### 3. Configurar variáveis de ambiente
-No Render Dashboard → Environment:
-
-| Variável | Valor | Descrição |
-|----------|-------|-----------|
-| `MICROSOFT_CLIENT_ID` | `seu_client_id` | Client ID da aplicação Microsoft |
-| `PASTA_BRK_ID` | `seu_pasta_id` | ID da pasta BRK no Outlook |
-| `MICROSOFT_TENANT_ID` | `consumers` | Tenant Microsoft (opcional) |
-| `PORT` | `8080` | Porta do servidor (automático) |
-
-### 4. Habilitar Persistent Disk
-- Render Dashboard → Service → Storage
-- Add Disk: `/opt/render/project/storage` (1GB)
-
-## 🔑 Setup Inicial Token
-
-### 1. Via interface web
-1. Acesse: `https://seu-app.onrender.com/upload-token`
-2. Cole o conteúdo do seu `token.json` local
-3. Clique "Salvar Token"
-
-### 2. Arquivo token.json local
-```json
-{
-  "access_token": "eyJ0eXAiOiJKV1QiLCJub...",
-  "refresh_token": "0.ARwA6WgJJ9X2qE...",
-  "expires_in": 3600
-}
-```
-
-## 📊 Monitoramento
-
-### Logs esperados (a cada 10 minutos):
-```
-🚀 INICIANDO PROCESSAMENTO BRK
-========================================
-📊 DIAGNÓSTICO PASTA BRK:
-   📧 Total: 1,247
-   📅 24h: 3
-   📆 Mês: 45
-
-📧 Encontrados 2 emails
-📎 Processando 1 PDFs...
-✅ fatura_brk_123.pdf
-
-📊 RESULTADO:
-   Emails: 1
-   PDFs: 1
-   Tempo: 2.3s
-   Total DB: 15
-✅ EXECUÇÃO CONCLUÍDA
-========================================
-```
-
-### Endpoints disponíveis:
-- `/` - Status principal
-- `/upload-token` - Upload inicial do token
-- `/health` - Health check JSON
-
-## 🛡️ Segurança
-
-### ✅ Implementado:
-- **Sem hardcoded values** - todas as credenciais via ENV
-- **Logs seguros** - IDs ocultados (`fea6ce2a******`)
-- **Validação obrigatória** - sistema para se ENV faltando
-- **Token renovação automática** - refresh_token gerenciado
-- **Interface web segura** - dados sensíveis protegidos
-
-### 🔒 Dados protegidos:
-- `MICROSOFT_CLIENT_ID`
-- `PASTA_BRK_ID`
-- `token.json` (access/refresh tokens)
-
-## 📁 Estrutura do Projeto
+## 🚀 **Arquitetura do Sistema**
 
 ```
-brk-monitor-seguro/
-├── app.py              # Aplicação principal
-├── requirements.txt    # Dependências Python
-├── README.md          # Esta documentação
-├── .gitignore         # Arquivos ignorados
-└── .env.example       # Exemplo de configuração
+🏢 Sistema BRK
+├── 📧 EmailProcessor (SEM pandas - Python 3.13)
+│   ├── 🔍 Extração completa PDF (pdfplumber)
+│   ├── 🏪 Relacionamento CDC → Casa OneDrive
+│   ├── 💧 Análise consumo automática
+│   └── 📊 Logs estruturados Render
+├── 🗃️ DatabaseBRK (SQLite + OneDrive)
+│   ├── 🔍 Lógica SEEK (CDC + Competência)
+│   ├── ⚠️ Detecção duplicatas inteligente
+│   ├── 📁 Estrutura /Faturas/YYYY/MM/
+│   └── 📝 Nomenclatura padronizada
+└── 🌐 Interface Web Flask
+    ├── 📋 Visualização faturas
+    ├── 📈 Estatísticas avançadas
+    ├── ⚙️ Processamento interativo
+    └── 🔧 Debug sistema
 ```
 
-## 🔄 Fluxo de Funcionamento
+## 🔧 Configuração e Deploy
 
-1. **Background Process**: Executa a cada 10 minutos
-2. **Diagnóstico**: Conta emails (total, 24h, mês)
-3. **Busca**: Emails novos (últimas 24h)
-4. **Processamento**: Extrai PDFs dos anexos
-5. **Armazenamento**: SQLite + OneDrive simulado
-6. **Controle**: Evita duplicatas por hash SHA256
+### **📋 Variáveis de Ambiente Necessárias**
 
-## 🐛 Troubleshooting
+| Variável | Obrigatória | Descrição |
+|----------|-------------|-----------|
+| `CLIENT_ID` | ✅ | Client ID da aplicação Microsoft |
+| `CLIENT_SECRET` | ✅ | Client Secret da aplicação Microsoft |
+| `REDIRECT_URI` | ✅ | URL de callback (render app + /callback) |
+| `PASTA_BRK_ID` | ✅ | ID da pasta "BRK" no Outlook |
+| `ONEDRIVE_BRK_ID` | ⚠️ | ID da pasta "/BRK/" no OneDrive (DatabaseBRK) |
 
-### Token expirado
+### **🚀 Deploy no Render**
+
+1. **Fork/Clone** este repositório
+2. **Render.com** → New Web Service → Conectar repo
+3. **Configurar build**:
+   ```bash
+   Build Command: pip install -r requirements.txt
+   Start Command: python app.py
+   ```
+4. **Configurar Environment Variables** (tabela acima)
+5. **Deploy automático** - pronto em ~3 minutos!
+
+### **📊 Requirements.txt Atualizado**
 ```
-🔄 Token expirado, renovando...
-✅ Token renovado com sucesso
+Flask==3.0.3
+requests==2.31.0
+python-dateutil==2.8.2
+pdfplumber==0.9.0
+gunicorn==23.0.0
 ```
 
-### Variáveis não configuradas
+## 🔑 **Primeiro Acesso**
+
+1. **Acesse**: `https://seu-app.onrender.com`
+2. **Clique "Login"** → Autenticação Microsoft automática
+3. **Sistema inicializa**: DatabaseBRK + relacionamento CDC
+4. **Pronto para usar**: Processamento completo ativo
+
+## 📊 **Como Funciona na Prática**
+
+### **📧 Quando chega email BRK:**
+
 ```
-❌ VARIÁVEIS FALTANDO: ['MICROSOFT_CLIENT_ID (Client ID Microsoft)']
-Configure no Render → Environment → Add Variable
-⚠️ SISTEMA PARADO POR SEGURANÇA
+📧 Email → 🔍 PDF extraído → 🏪 Casa relacionada → 💧 Consumo analisado
+                ↓
+🔍 SEEK: CDC + Competência na DatabaseBRK
+                ↓
+✅ NORMAL: Fatura nova → Salva organizada
+🔄 DUPLICATA: Email duplicado → Marca status  
+⚠️ CUIDADO: Dados diferentes → Alerta renegociação
+                ↓
+📁 /BRK/Faturas/2025/02/15-02-BRK 02-2025 - Igreja Central - vc. 15-02-2025 - 127,45.pdf
+📊 SQLite: Registro completo com alertas e análises
 ```
 
-### Pasta BRK não encontrada
-- Verificar `PASTA_BRK_ID` no Render Environment
-- Conferir permissões da aplicação Microsoft
+### **🎯 Resultado Automático:**
+- **📊 Dados extraídos**: CDC, Casa, Valor, Consumo, Alertas
+- **🔍 Status definido**: NORMAL/DUPLICATA/CUIDADO  
+- **📁 Arquivo organizado**: Estrutura /YYYY/MM/ automática
+- **💾 Banco atualizado**: SQLite com histórico completo
 
-## 📈 Próximas Versões
+## 🌐 **Endpoints Disponíveis**
 
-- [ ] Extração real de dados dos PDFs (OCR)
-- [ ] OneDrive API real (não simulado)
-- [ ] Dashboard web com gráficos
-- [ ] Notificações por email/Slack
-- [ ] Processamento de outros tipos de anexo
+### **🔧 Core do Sistema**
+- `GET /` - Dashboard principal com status completo
+- `GET /login` - Autenticação Microsoft automática
+- `GET /diagnostico-pasta` - Diagnóstico pasta BRK + DatabaseBRK
 
-## 📝 Logs e Debug
+### **⚙️ Processamento**
+- `POST /processar-emails-novos` - Processa emails com salvamento automático
+- `GET /processar-emails-form` - Interface web para processamento
 
-### Verificar funcionamento:
-```bash
-# Logs do Render
-tail -f /var/log/render.log
+### **📊 DatabaseBRK**
+- `GET /estatisticas-banco` - Estatísticas completas do SQLite
+- `GET /faturas` - API listagem faturas (com filtros)
+- `GET /faturas-html` - Interface visual navegação faturas
 
-# Status do banco
-sqlite3 /opt/render/project/storage/brk_basico.db "SELECT COUNT(*) FROM faturas_brk_basico;"
+### **🔧 Manutenção**
+- `POST /recarregar-relacionamento` - Força reload CDC → Casa
+- `GET /debug-sistema` - Debug completo DatabaseBRK
+- `GET /health` - Health check para Render
 
-# Arquivos salvos
-ls -la /opt/render/project/storage/onedrive_simulado/BRK/
+## 🗃️ **Estrutura DatabaseBRK**
+
+### **📊 Tabela faturas_brk:**
+```sql
+- id, data_processamento, status_duplicata, observacao
+- email_id, nome_arquivo_original, nome_arquivo, hash_arquivo  
+- cdc, nota_fiscal, casa_oracao, data_emissao, vencimento
+- competencia, valor, medido_real, faturado, media_6m
+- porcentagem_consumo, alerta_consumo
+- dados_extraidos_ok, relacionamento_usado
 ```
+
+### **🔍 Índices de Performance:**
+- `idx_cdc_competencia` - Busca SEEK principal
+- `idx_status_duplicata` - Filtros por status
+- `idx_casa_oracao` - Relatórios por igreja
+- `idx_competencia` - Análises mensais
+
+## 📈 **Logs Esperados (Render)**
+
+### **✅ Inicialização Sucesso:**
+```
+🚀 Sistema BRK iniciado com DatabaseBRK integrado
+   📧 Pasta emails: 1234567890******
+   📁 OneDrive BRK: 987654321098765******
+   🗃️ DatabaseBRK: Ativo
+✅ Microsoft Auth configurado
+✅ Relacionamento disponível: 248 registros
+📊 Registros extraídos do Excel: 248
+📋 Estrutura confirmada: Coluna A=Casa, Coluna B=CDC
+```
+
+### **⚙️ Processamento Automático:**
+```
+🔄 Processando emails dos últimos 1 dia(s)
+✅ DatabaseBRK ativo - faturas serão salvas automaticamente
+📧 Processando email: Fatura BRK Janeiro 2025
+📄 Texto extraído: 2847 caracteres
+  ✓ CDC encontrado: 513-01
+  ✓ Casa encontrada: Igreja Central
+  ✓ Valor: R$ 127,45
+  ✓ Análise: Consumo acima do esperado (+25%)
+🔍 SEEK: CDC 513-01 + Jan/2025 → NOT FOUND() → STATUS: NORMAL
+✅ Fatura salva: Status NORMAL
+📁 Nome padronizado: 15-02-BRK 02-2025 - Igreja Central - vc. 15-02-2025 - 127,45.pdf
+```
+
+## 🚨 **Detecção de Cenários Críticos**
+
+### **⚠️ Renegociação Detectada:**
+```
+🔍 SEEK: CDC 513-01 + Jan/2025 → FOUND()
+⚠️ Valores diferentes → STATUS: CUIDADO
+📊 Diferenças: VALOR, VENCIMENTO
+🚨 ALERTA: Possível renegociação - verificar com BRK
+```
+
+### **🔄 Email Duplicado:**
+```
+🔍 SEEK: CDC 513-01 + Jan/2025 → FOUND()
+✅ Dados idênticos → STATUS: DUPLICATA
+📝 Email duplicado - dados idênticos
+```
+
+### **📊 Alto Consumo:**
+```
+💧 Medido Real: 25m³
+📈 Média 6M: 12m³
+📊 Variação: +108.33% em relação à média
+🚨 **ALTO CONSUMO DETECTADO!** 🚨
+```
+
+## 🛡️ **Contingência e Robustez**
+
+### **🔄 OneDrive Indisponível:**
+- Sistema detecta falha OneDrive
+- Salva temporariamente local (Render)
+- Sincroniza quando OneDrive volta
+- Zero perda de dados
+
+### **⚠️ Relacionamento CDC Falha:**
+- Sistema continua funcionando
+- Usa extração básica PDF
+- Logs indicam problema
+- Recarregamento manual disponível
+
+### **🔧 Self-Healing:**
+- Criação automática estrutura OneDrive
+- Inicialização SQLite automática
+- Renovação token automática
+- Retry inteligente em falhas
+
+## 🎯 **Diferencial Técnico**
+
+### **✅ Sem Pandas (Python 3.13):**
+- Deploy sempre 3 minutos (sem compilação)
+- Processamento Excel via XML nativo
+- Menor uso memória
+- Compatibilidade total
+
+### **🔍 Lógica SEEK Clipper:**
+- Performance otimizada (índices SQLite)
+- Detecção duplicatas precisa
+- Compatibilidade com desktop
+- Escalabilidade garantida
+
+### **📝 Nomenclatura Consistente:**
+- Mesmo padrão script renomeia_brk10.py
+- Organização visual intuitiva
+- Compatibilidade ferramentas existentes
+
+## 📞 **Suporte e Manutenção**
+
+### **👨‍💼 Desenvolvido por:**
+Sidney Gubitoso - Auxiliar Tesouraria Administrativa Mauá
+
+### **🔧 Versão Atual:**
+DatabaseBRK v1.0 - Sistema completo com detecção duplicatas
+
+### **📊 Status:**
+- ✅ Em produção ativa
+- ✅ Monitoramento 24/7
+- ✅ Backup automático
+- ✅ Contingência implementada
 
 ---
 
-**🔒 Versão segura - Dados sensíveis protegidos via variáveis de ambiente**
-# Deploy test
+**🏆 Sistema BRK - Processamento inteligente de faturas com DatabaseBRK integrado**  
+**🎯 Zero intervenção manual - Máxima precisão - Organização total**
