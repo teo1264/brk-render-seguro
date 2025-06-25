@@ -440,6 +440,7 @@ class AdminHandler(BaseHTTPRequestHandler):
                     <a href="/status">📊 Status Detalhado</a>
                     <a href="/test-onedrive">🧪 Teste OneDrive</a>
                     <a href="/create-brk-folder">📂 Criar Pasta /BRK</a>
+                    <a href="/list-onedrive-files">📋 Descobrir CDC_BRK_CCB.xlsx</a>
                 </div>
                 
                 <div class="footer">
