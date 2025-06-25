@@ -192,11 +192,16 @@ class EmailProcessor:
         Processa arquivo Excel (.xlsx) manualmente sem pandas.
         Lê estrutura XML interna do Excel.
         
+        ESTRUTURA REAL da planilha CDC_BRK_CCB.xlsx:
+        - Coluna A → Nome da Casa de Oração
+        - Coluna B → CDC (Código do cliente BRK) - 6 a 9 caracteres, formato variável
+        - Coluna E → Dia fixo de vencimento (não usado no momento)
+        
         Args:
             excel_bytes: Conteúdo binário do arquivo Excel
             
         Returns:
-            List[Dict]: Registros processados
+            List[Dict]: Registros processados {'Casa': nome, 'CDC': codigo}
         """
         try:
             registros = []
@@ -243,28 +248,50 @@ class EmailProcessor:
                             cells = row.findall('.//c', ns)
                             if len(cells) >= 2:
                                 
-                                # Primeira coluna (CDC)
-                                cdc_value = self._extrair_valor_celula(cells[0], shared_strings, ns)
+                                # ✅ CORREÇÃO: Estrutura real da planilha
+                                # Coluna A = Casa de Oração, Coluna B = CDC
+                                casa_value = self._extrair_valor_celula(cells[0], shared_strings, ns)  # Coluna A
+                                cdc_value = self._extrair_valor_celula(cells[1], shared_strings, ns)   # Coluna B
                                 
-                                # Segunda coluna (Casa de Oração)
-                                casa_value = self._extrair_valor_celula(cells[1], shared_strings, ns)
-                                
-                                if cdc_value and casa_value:
-                                    registros.append({
-                                        'CDC': str(cdc_value).strip(),
-                                        'Casa': str(casa_value).strip()
-                                    })
+                                # Validação e limpeza
+                                if casa_value and cdc_value:
+                                    casa_limpa = str(casa_value).strip()
+                                    cdc_limpo = str(cdc_value).strip()
+                                    
+                                    # Validação básica CDC (deve conter hífen e ter tamanho razoável)
+                                    if (cdc_limpo and '-' in cdc_limpo and 
+                                        6 <= len(cdc_limpo) <= 9 and
+                                        casa_limpa and len(casa_limpa) > 3):
+                                        
+                                        registros.append({
+                                            'Casa': casa_limpa,      # Casa de Oração
+                                            'CDC': cdc_limpo         # Código CDC
+                                        })
+                                        
+                                        # Log apenas dos primeiros 5 para não poluir
+                                        if len(registros) <= 5:
+                                            casa_resumida = casa_limpa[:25] + "..." if len(casa_limpa) > 25 else casa_limpa
+                                            print(f"📝 Lido: {casa_resumida} → CDC: {cdc_limpo}")
+                                    else:
+                                        # Log apenas de problemas significativos
+                                        if cdc_limpo and '-' not in cdc_limpo:
+                                            print(f"⚠️ CDC sem hífen ignorado: '{cdc_limpo}'")
                 
                 except Exception as e:
                     print(f"⚠️ Erro lendo planilha: {e}")
             
             print(f"📊 Registros extraídos do Excel: {len(registros)}")
+            print(f"📋 Estrutura confirmada: Coluna A=Casa, Coluna B=CDC")
+            
+            if len(registros) > 5:
+                print(f"📝 ... e mais {len(registros) - 5} registros processados")
+            
             return registros
             
         except Exception as e:
             print(f"❌ Erro processamento manual Excel: {e}")
             return []
-
+            
     def _extrair_valor_celula(self, cell, shared_strings, ns):
         """
         Extrai valor de uma célula Excel.
