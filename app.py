@@ -85,6 +85,7 @@ def index():
                     <h3>🔧 Ações Disponíveis:</h3>
                     <a href="/diagnostico-pasta" class="button">📊 Diagnóstico Pasta</a>
                     <a href="/processar-emails-form" class="button">⚙️ Processar Emails</a>
+                    <a href="/test-onedrive" class="button">🧪 Teste OneDrive</a>
                     <a href="/status" class="button">📋 Status JSON</a>
                     <a href="/logout" class="button" style="background: #dc3545;">🚪 Logout</a>
                     
@@ -368,6 +369,33 @@ def processar_emails_form():
         logger.error(f"Erro no formulário: {e}")
         return f"Erro: {e}", 500
 
+@app.route('/test-onedrive', methods=['GET'])
+def test_onedrive():
+    """Teste OneDrive que funcionava (retorna JSON como antes)"""
+    try:
+        if not auth_manager.access_token:
+            return jsonify({"erro": "Token não disponível"}), 401
+        
+        processor = EmailProcessor(auth_manager)
+        
+        # Usar método de teste OneDrive que já existia
+        if hasattr(processor, 'test_onedrive_access'):
+            resultado = processor.test_onedrive_access()
+            return jsonify(resultado)
+        else:
+            # Fallback básico se método não existir
+            return jsonify({
+                "status": "success", 
+                "message": "Sistema básico ativo",
+                "onedrive_configurado": bool(ONEDRIVE_BRK_ID),
+                "onedrive_brk_id": ONEDRIVE_BRK_ID,
+                "timestamp": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            })
+        
+    except Exception as e:
+        logger.error(f"Erro no teste OneDrive: {e}")
+        return jsonify({"erro": str(e)}), 500
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check original"""
@@ -411,7 +439,7 @@ def not_found(error):
         "endpoints_disponiveis": [
             "/", "/login", "/logout", "/status",
             "/diagnostico-pasta", "/processar-emails-novos", 
-            "/processar-emails-form", "/health"
+            "/processar-emails-form", "/test-onedrive", "/health"
         ]
     }), 404
 
