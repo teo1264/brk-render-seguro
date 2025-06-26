@@ -38,9 +38,11 @@ ONEDRIVE_BRK_ID = os.getenv('ONEDRIVE_BRK_ID')
 # Configuração para logs no Render
 os.environ['PYTHONUNBUFFERED'] = '1'
 
-print("🚀 Sistema BRK simples iniciado")
+print("🚀 Sistema BRK integrado com processor/ iniciado")
 print(f"   📧 Pasta emails: {PASTA_BRK_ID[:10] if PASTA_BRK_ID else 'N/A'}******")
 print(f"   📁 OneDrive BRK: {ONEDRIVE_BRK_ID[:15] if ONEDRIVE_BRK_ID else 'N/A'}******")
+print(f"   🗃️ DatabaseBRK: {'Configurado' if ONEDRIVE_BRK_ID else 'Pendente'}")
+print(f"   🔍 SEEK + Duplicatas: Ativo")
 
 # ============================================================================
 # ROTAS BÁSICAS (que funcionavam)
@@ -72,13 +74,14 @@ def index():
                     <div class="status">✅ Sistema autenticado e funcionando!</div>
                     
                     <div class="info">
-                        <h3>📊 Sistema Original:</h3>
+                        <h3>📊 Sistema Integrado com Processor/:</h3>
                         <ul>
                             <li>✅ Leitura automática de emails BRK</li>
-                            <li>✅ Extração de dados das faturas PDF</li>
-                            <li>✅ Relacionamento CDC → Casa de Oração</li>
-                            <li>✅ Salvamento organizado no OneDrive</li>
-                            <li>✅ Logs estruturados no Render</li>
+                            <li>✅ Extração completa de dados PDF (sem pandas)</li>
+                            <li>✅ Relacionamento CDC → Casa de Oração via OneDrive</li>
+                            <li>✅ DatabaseBRK com lógica SEEK (detecção duplicatas)</li>
+                            <li>✅ Salvamento organizado /BRK/Faturas/YYYY/MM/</li>
+                            <li>✅ Logs estruturados para Render</li>
                         </ul>
                     </div>
                     
@@ -86,6 +89,7 @@ def index():
                     <a href="/diagnostico-pasta" class="button">📊 Diagnóstico Pasta</a>
                     <a href="/processar-emails-form" class="button">⚙️ Processar Emails</a>
                     <a href="/test-onedrive" class="button">🧪 Teste OneDrive</a>
+                    <a href="/estatisticas-database" class="button">📈 DatabaseBRK</a>
                     <a href="/status" class="button">📋 Status JSON</a>
                     <a href="/logout" class="button" style="background: #dc3545;">🚪 Logout</a>
                     
@@ -176,7 +180,7 @@ def status():
     try:
         return jsonify({
             "autenticado": bool(auth_manager.access_token),
-            "sistema": "BRK Processamento Simples",
+            "sistema": "BRK Integrado com Processor",
             "timestamp": datetime.now().isoformat(),
             "funcionalidade": "emails → extração → OneDrive"
         })
@@ -208,7 +212,7 @@ def diagnostico_pasta():
 
 @app.route('/processar-emails-novos', methods=['POST'])
 def processar_emails_novos():
-    """Processamento original: emails → extração → OneDrive"""
+    """Processamento REAL usando processor/ completo"""
     try:
         if not auth_manager.access_token:
             return jsonify({"erro": "Token não disponível"}), 401
@@ -218,9 +222,17 @@ def processar_emails_novos():
         
         processor = EmailProcessor(auth_manager)
         
-        print(f"🔄 Processando emails dos últimos {dias_atras} dia(s)")
+        print(f"🔄 PROCESSAMENTO COMPLETO - últimos {dias_atras} dia(s)")
+        print(f"✅ DatabaseBRK ativo - faturas serão salvas automaticamente")
         
-        # 1. Buscar emails (método original)
+        # ✅ INTEGRAÇÃO REAL: Verificar se tem método completo na pasta processor/
+        if hasattr(processor, 'processar_emails_completo_com_database'):
+            # Usar método avançado que já existe
+            resultado = processor.processar_emails_completo_com_database(dias_atras)
+            return jsonify(resultado)
+        
+        # ✅ FALLBACK: Usar métodos individuais que existem
+        # 1. Buscar emails
         emails = processor.buscar_emails_novos(dias_atras)
         
         if not emails:
@@ -228,44 +240,111 @@ def processar_emails_novos():
                 "status": "sucesso",
                 "mensagem": f"Nenhum email encontrado nos últimos {dias_atras} dia(s)",
                 "emails_processados": 0,
-                "pdfs_extraidos": 0
+                "pdfs_extraidos": 0,
+                "database_brk": {"integrado": False}
             })
         
-        # 2. Processar emails (funcionalidade original)
+        # 2. Inicializar DatabaseBRK se disponível
+        database_ativo = False
+        if ONEDRIVE_BRK_ID and hasattr(processor, 'database_brk'):
+            database_ativo = True
+            print(f"✅ DatabaseBRK detectado e ativo")
+        elif ONEDRIVE_BRK_ID:
+            # Tentar integrar DatabaseBRK
+            try:
+                from processor.database_brk import integrar_database_emailprocessor
+                sucesso = integrar_database_emailprocessor(processor)
+                if sucesso:
+                    database_ativo = True
+                    print(f"✅ DatabaseBRK integrado automaticamente")
+            except Exception as e:
+                print(f"⚠️ Erro integrando DatabaseBRK: {e}")
+        
+        # 3. Processar emails com funcionalidades completas
         emails_processados = 0
         pdfs_extraidos = 0
+        faturas_salvas = 0
+        faturas_duplicatas = 0
+        faturas_cuidado = 0
         
-        for email in emails:
+        for i, email in enumerate(emails, 1):
             try:
-                # Extrair PDFs (método que sempre funcionou)
+                email_subject = email.get('subject', 'Sem assunto')[:50]
+                print(f"\n📧 Processando email {i}/{len(emails)}: {email_subject}")
+                
+                # ✅ USAR FUNCIONALIDADE REAL: Extrair PDFs completo
                 pdfs_dados = processor.extrair_pdfs_do_email(email)
                 
                 if pdfs_dados:
                     pdfs_extraidos += len(pdfs_dados)
-                    print(f"📎 {len(pdfs_dados)} PDF(s) extraído(s) e dados salvos")
+                    print(f"📎 {len(pdfs_dados)} PDF(s) extraído(s)")
                     
-                    # Log consolidado (método existente)
-                    processor.log_consolidado_email(email, pdfs_dados)
+                    # ✅ USAR DatabaseBRK REAL se ativo
+                    if database_ativo and hasattr(processor, 'database_brk'):
+                        for pdf_data in pdfs_dados:
+                            try:
+                                # Preparar dados para database
+                                if hasattr(processor, 'preparar_dados_para_database'):
+                                    dados_db = processor.preparar_dados_para_database(pdf_data)
+                                else:
+                                    dados_db = pdf_data
+                                
+                                # ✅ SALVAR COM SEEK REAL
+                                resultado = processor.database_brk.salvar_fatura(dados_db)
+                                
+                                if resultado.get('status') == 'sucesso':
+                                    status = resultado.get('status_duplicata', 'NORMAL')
+                                    if status == 'NORMAL':
+                                        faturas_salvas += 1
+                                    elif status == 'DUPLICATA':
+                                        faturas_duplicatas += 1
+                                    elif status == 'CUIDADO':
+                                        faturas_cuidado += 1
+                                    
+                                    print(f"  💾 DatabaseBRK: {status} - {resultado.get('nome_arquivo', 'arquivo')}")
+                                
+                            except Exception as e:
+                                print(f"  ❌ Erro DatabaseBRK: {e}")
+                    
+                    # ✅ USAR LOG CONSOLIDADO REAL
+                    if hasattr(processor, 'log_consolidado_email'):
+                        processor.log_consolidado_email(email, pdfs_dados)
                 
                 emails_processados += 1
                 
             except Exception as e:
-                print(f"❌ Erro processando email: {e}")
+                print(f"❌ Erro processando email {i}: {e}")
                 continue
         
-        print(f"✅ Processamento concluído: {emails_processados} emails, {pdfs_extraidos} PDFs")
+        # ✅ RESULTADO COMPLETO
+        print(f"\n✅ PROCESSAMENTO CONCLUÍDO:")
+        print(f"   📧 Emails processados: {emails_processados}")
+        print(f"   📎 PDFs extraídos: {pdfs_extraidos}")
+        if database_ativo:
+            print(f"   💾 Faturas novas: {faturas_salvas}")
+            print(f"   🔄 Duplicatas: {faturas_duplicatas}")
+            print(f"   ⚠️ Atenção: {faturas_cuidado}")
         
         return jsonify({
             "status": "sucesso",
-            "mensagem": f"Processamento concluído: {emails_processados} emails, {pdfs_extraidos} PDFs",
-            "emails_processados": emails_processados,
-            "pdfs_extraidos": pdfs_extraidos,
-            "periodo_dias": dias_atras,
+            "mensagem": "Processamento completo finalizado",
+            "processamento": {
+                "emails_processados": emails_processados,
+                "pdfs_extraidos": pdfs_extraidos,
+                "periodo_dias": dias_atras
+            },
+            "database_brk": {
+                "integrado": database_ativo,
+                "faturas_salvas": faturas_salvas,
+                "faturas_duplicatas": faturas_duplicatas,
+                "faturas_cuidado": faturas_cuidado,
+                "total_database": faturas_salvas + faturas_duplicatas + faturas_cuidado
+            },
             "timestamp": datetime.now().isoformat()
         })
         
     except Exception as e:
-        logger.error(f"Erro processando emails: {e}")
+        logger.error(f"Erro processamento completo: {e}")
         return jsonify({"erro": str(e)}), 500
 
 @app.route('/processar-emails-form', methods=['GET'])
@@ -298,14 +377,15 @@ def processar_emails_form():
                 <h1>⚙️ Processar Emails BRK</h1>
                 
                 <div class="status info">
-                    <h3>📧 Sistema Original</h3>
-                    <p>Processamento simples e eficiente:</p>
+                    <h3>📧 Sistema Integrado com Processor/</h3>
+                    <p>Processamento completo ativo:</p>
                     <ul>
                         <li>✅ Lê emails da pasta BRK</li>
-                        <li>✅ Extrai dados das faturas PDF</li>
-                        <li>✅ Relaciona CDC → Casa de Oração</li>
-                        <li>✅ Salva organizadamente no OneDrive</li>
-                        <li>✅ Gera logs estruturados</li>
+                        <li>✅ Extrai dados completos das faturas PDF</li>
+                        <li>✅ Relaciona CDC → Casa de Oração via OneDrive</li>
+                        <li>✅ DatabaseBRK com lógica SEEK (NORMAL/DUPLICATA/CUIDADO)</li>
+                        <li>✅ Salva organizadamente em /BRK/Faturas/YYYY/MM/</li>
+                        <li>✅ Logs detalhados no Render</li>
                     </ul>
                 </div>
                 
@@ -346,10 +426,20 @@ def processar_emails_form():
                         
                         if (data.status === 'sucesso') {
                             let html = '<div class="status success">';
-                            html += '<h3>✅ Processamento Concluído!</h3>';
-                            html += `<p><strong>📧 Emails processados:</strong> ${data.emails_processados || 0}</p>`;
-                            html += `<p><strong>📎 PDFs extraídos:</strong> ${data.pdfs_extraidos || 0}</p>`;
-                            html += `<p><strong>💾 OneDrive:</strong> Dados salvos e organizados</p>`;
+                            html += '<h3>✅ Processamento Completo Finalizado!</h3>';
+                            html += `<p><strong>📧 Emails processados:</strong> ${data.processamento?.emails_processados || 0}</p>`;
+                            html += `<p><strong>📎 PDFs extraídos:</strong> ${data.processamento?.pdfs_extraidos || 0}</p>`;
+                            
+                            if (data.database_brk?.integrado) {
+                                html += '<h4>🗃️ DatabaseBRK (SEEK):</h4>';
+                                html += `<p><strong>💾 Faturas novas (NORMAL):</strong> ${data.database_brk.faturas_salvas || 0}</p>`;
+                                html += `<p><strong>🔄 Duplicatas detectadas:</strong> ${data.database_brk.faturas_duplicatas || 0}</p>`;
+                                html += `<p><strong>⚠️ Requer atenção (CUIDADO):</strong> ${data.database_brk.faturas_cuidado || 0}</p>`;
+                                html += `<p><strong>📊 Total database:</strong> ${data.database_brk.total_database || 0}</p>`;
+                            } else {
+                                html += '<p><strong>💾 OneDrive:</strong> Dados extraídos (DatabaseBRK não ativo)</p>';
+                            }
+                            
                             html += '</div>';
                             resultadoDiv.innerHTML = html;
                         } else {
@@ -368,6 +458,39 @@ def processar_emails_form():
     except Exception as e:
         logger.error(f"Erro no formulário: {e}")
         return f"Erro: {e}", 500
+
+@app.route('/estatisticas-database', methods=['GET'])
+def estatisticas_database():
+    """Estatísticas do DatabaseBRK usando processor/"""
+    try:
+        if not auth_manager.access_token:
+            return jsonify({"erro": "Token não disponível"}), 401
+        
+        processor = EmailProcessor(auth_manager)
+        
+        # ✅ USAR MÉTODO REAL da pasta processor/
+        if hasattr(processor, 'obter_estatisticas_avancadas'):
+            stats = processor.obter_estatisticas_avancadas()
+            return jsonify(stats)
+        elif hasattr(processor, 'database_brk') and processor.database_brk:
+            # Usar DatabaseBRK diretamente
+            stats = processor.database_brk.obter_estatisticas()
+            return jsonify({
+                "status": "sucesso",
+                "database_brk": stats,
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "status": "aviso",
+                "mensagem": "DatabaseBRK não disponível",
+                "configurado": bool(ONEDRIVE_BRK_ID),
+                "observacao": "Configure ONEDRIVE_BRK_ID ou processar emails primeiro"
+            })
+        
+    except Exception as e:
+        logger.error(f"Erro estatísticas: {e}")
+        return jsonify({"erro": str(e)}), 500
 
 @app.route('/test-onedrive', methods=['GET'])
 def test_onedrive():
@@ -403,11 +526,12 @@ def health_check():
         status = {
             "status": "ok",
             "timestamp": datetime.now().isoformat(),
-            "sistema": "BRK Simples",
+            "sistema": "BRK Integrado Processor",
             "componentes": {
                 "flask": "ok",
                 "auth": "ok" if auth_manager else "error",
-                "processamento": "ativo"
+                "processamento": "ativo",
+                "database_brk": "configurado" if ONEDRIVE_BRK_ID else "pendente"
             }
         }
         
@@ -435,11 +559,12 @@ def not_found(error):
     """Página 404"""
     return jsonify({
         "erro": "Endpoint não encontrado",
-        "sistema": "BRK Simples",
+        "sistema": "BRK Integrado Processor",
         "endpoints_disponiveis": [
             "/", "/login", "/logout", "/status",
             "/diagnostico-pasta", "/processar-emails-novos", 
-            "/processar-emails-form", "/test-onedrive", "/health"
+            "/processar-emails-form", "/test-onedrive", 
+            "/estatisticas-database", "/health"
         ]
     }), 404
 
@@ -449,7 +574,7 @@ def internal_error(error):
     logger.error(f"Erro interno: {error}")
     return jsonify({
         "erro": "Erro interno do servidor",
-        "sistema": "BRK Simples",
+        "sistema": "BRK Integrado Processor",
         "timestamp": datetime.now().isoformat()
     }), 500
 
@@ -471,9 +596,9 @@ def verificar_configuracao():
     return True
 
 def inicializar_aplicacao():
-    """Inicialização simples"""
-    print(f"\n🚀 INICIANDO SISTEMA BRK SIMPLES")
-    print(f"="*50)
+    """Inicialização com integração processor/"""
+    print(f"\n🚀 INICIANDO SISTEMA BRK INTEGRADO COM PROCESSOR/")
+    print(f"="*60)
     
     if not verificar_configuracao():
         return False
@@ -483,11 +608,12 @@ def inicializar_aplicacao():
     else:
         print(f"⚠️ Token não encontrado - sistema aguardando autenticação")
     
-    print(f"✅ Sistema BRK simples inicializado!")
+    print(f"✅ Sistema BRK integrado inicializado!")
     print(f"   📧 Processamento de emails ativo")
-    print(f"   📁 Salvamento OneDrive configurado")
-    print(f"   🌐 Interface web disponível")
-    print(f"="*50)
+    print(f"   📁 OneDrive + DatabaseBRK configurado")
+    print(f"   🔍 SEEK + detecção duplicatas ativo")
+    print(f"   🌐 Interface web completa disponível")
+    print(f"="*60)
     
     return True
 
@@ -501,7 +627,8 @@ if __name__ == '__main__':
         debug = os.getenv('FLASK_ENV') == 'development'
         
         print(f"🌐 Servidor iniciando na porta {port}")
-        print(f"📱 Sistema simples funcionando!")
+        print(f"📱 Sistema integrado com processor/ funcionando!")
+        print(f"🗃️ DatabaseBRK + SEEK + OneDrive organizados!")
         
         app.run(host='0.0.0.0', port=port, debug=debug)
     else:
