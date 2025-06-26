@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🏢 APP.PY LIMPO - Sistema BRK com DatabaseBRK Integrado
-📦 ARQUITETURA MODULAR: auth/ + processor/ + app.py minimalista
-🔧 CADA ROTA: 3-5 linhas máximo - lógica nos módulos
+🏢 APP.PY ORIGINAL SIMPLES - Sistema BRK funcionando
+📦 FUNCIONALIDADE: emails → extração → OneDrive → logs
 👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
 """
-
-# ============================================================================
-# APP.PY LIMPO - BLOCO 1/5 - IMPORTS E CONFIGURAÇÕES
-# ============================================================================
 
 import os
 import json
@@ -17,10 +12,9 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, redirect, session, render_template_string
 import logging
 
-# Imports dos módulos (arquitetura modular)
+# Imports dos módulos (que já funcionam)
 from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
-from processor.database_brk import integrar_database_emailprocessor
 
 # Configuração do Flask
 app = Flask(__name__)
@@ -36,8 +30,7 @@ logger = logging.getLogger(__name__)
 # Instância global do gerenciador de auth
 auth_manager = MicrosoftAuth()
 
-# ✅ VARIÁVEIS CORRIGIDAS - CONSISTENTES COM AUTH/MICROSOFT_AUTH.PY
-# ✅ VARIÁVEIS EXATAS DO RENDER (confirmadas)
+# ✅ VARIÁVEIS ORIGINAIS (que funcionavam)
 MICROSOFT_CLIENT_ID = os.getenv('MICROSOFT_CLIENT_ID')
 PASTA_BRK_ID = os.getenv('PASTA_BRK_ID')
 ONEDRIVE_BRK_ID = os.getenv('ONEDRIVE_BRK_ID')
@@ -45,26 +38,24 @@ ONEDRIVE_BRK_ID = os.getenv('ONEDRIVE_BRK_ID')
 # Configuração para logs no Render
 os.environ['PYTHONUNBUFFERED'] = '1'
 
-print("🚀 Sistema BRK iniciado com DatabaseBRK integrado")
+print("🚀 Sistema BRK simples iniciado")
 print(f"   📧 Pasta emails: {PASTA_BRK_ID[:10] if PASTA_BRK_ID else 'N/A'}******")
 print(f"   📁 OneDrive BRK: {ONEDRIVE_BRK_ID[:15] if ONEDRIVE_BRK_ID else 'N/A'}******")
-print(f"   🗃️ DatabaseBRK: Ativo")
 
 # ============================================================================
-# BLOCO 2 COMPLETO - ROTAS DE AUTENTICAÇÃO (CORRIGIDAS)
-# COPIE ESTE CÓDIGO E SUBSTITUA AS 4 ROTAS NO SEU APP.PY
+# ROTAS BÁSICAS (que funcionavam)
 # ============================================================================
 
 @app.route('/')
 def index():
-    """Página inicial com status da autenticação"""
+    """Dashboard simples"""
     try:
         if auth_manager.access_token:
             status_html = """
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Sistema BRK - Autenticado</title>
+                <title>Sistema BRK - Dashboard</title>
                 <meta charset="UTF-8">
                 <style>
                     body { font-family: Arial; margin: 40px; background: #f5f5f5; }
@@ -77,31 +68,29 @@ def index():
             </head>
             <body>
                 <div class="container">
-                    <h1>🏢 Sistema BRK - Controle de Faturas</h1>
-                    <div class="status">✅ Sistema autenticado e pronto para uso!</div>
+                    <h1>🏢 Sistema BRK - Processamento de Faturas</h1>
+                    <div class="status">✅ Sistema autenticado e funcionando!</div>
                     
                     <div class="info">
-                        <h3>📊 Funcionalidades Disponíveis:</h3>
+                        <h3>📊 Sistema Original:</h3>
                         <ul>
-                            <li>✅ Extração completa de dados das faturas PDF</li>
+                            <li>✅ Leitura automática de emails BRK</li>
+                            <li>✅ Extração de dados das faturas PDF</li>
                             <li>✅ Relacionamento CDC → Casa de Oração</li>
-                            <li>✅ Análise de consumo com alertas automáticos</li>
-                            <li>✅ Detecção inteligente de duplicatas</li>
-                            <li>✅ Banco SQLite organizado no OneDrive</li>
-                            <li>✅ Estrutura de pastas automatizada</li>
+                            <li>✅ Salvamento organizado no OneDrive</li>
+                            <li>✅ Logs estruturados no Render</li>
                         </ul>
                     </div>
                     
                     <h3>🔧 Ações Disponíveis:</h3>
-                    <a href="/diagnostico-pasta" class="button">📊 Diagnóstico da Pasta</a>
+                    <a href="/diagnostico-pasta" class="button">📊 Diagnóstico Pasta</a>
                     <a href="/processar-emails-form" class="button">⚙️ Processar Emails</a>
-                    <a href="/estatisticas-banco" class="button">📈 Estatísticas do Banco</a>
-                    <a href="/faturas" class="button">📋 Ver Faturas</a>
+                    <a href="/status" class="button">📋 Status JSON</a>
                     <a href="/logout" class="button" style="background: #dc3545;">🚪 Logout</a>
                     
                     <div class="info">
-                        <small>📱 Desenvolvido para Tesouraria Administrativa Mauá<br>
-                        🔧 Versão com DatabaseBRK integrado - Sidney Gubitoso</small>
+                        <small>📱 Sistema simples e eficiente<br>
+                        🔧 Sidney Gubitoso - Tesouraria Administrativa Mauá</small>
                     </div>
                 </div>
             </body>
@@ -116,7 +105,7 @@ def index():
 
 @app.route('/login')
 def login():
-    """Redireciona para página de upload de token"""
+    """Login simples"""
     try:
         login_html = """
         <!DOCTYPE html>
@@ -132,12 +121,12 @@ def login():
         </head>
         <body>
             <div class="container">
-                <h1>🔑 Sistema BRK - Autenticação</h1>
+                <h1>🔑 Sistema BRK - Login</h1>
                 <div class="info">
-                    <p>Sistema já autenticado via token persistente no Render.</p>
-                    <p>Se precisar reautenticar, use interface administrativa.</p>
+                    <p>Sistema autenticado via token persistente.</p>
+                    <p>Processamento automático ativo.</p>
                 </div>
-                <a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Voltar ao Dashboard</a>
+                <a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Dashboard</a>
             </div>
         </body>
         </html>
@@ -147,18 +136,9 @@ def login():
         logger.error(f"Erro no login: {e}")
         return f"Erro no login: {e}", 500
 
-@app.route('/callback')
-def callback():
-    """Callback placeholder - sistema usa token persistente"""
-    try:
-        return redirect('/')
-    except Exception as e:
-        logger.error(f"Erro no callback: {e}")
-        return f"Erro no callback: {e}", 500
-
 @app.route('/logout')
 def logout():
-    """Logout do sistema"""
+    """Logout simples"""
     try:
         session.clear()
         logger.info("Logout realizado")
@@ -178,8 +158,8 @@ def logout():
         <body>
             <div class="container">
                 <h1>🚪 Logout Realizado</h1>
-                <p>Sessão encerrada. Token persistente mantido no Render.</p>
-                <a href="/" class="button">🏠 Voltar ao Sistema</a>
+                <p>Sessão encerrada. Sistema continua funcionando.</p>
+                <a href="/" class="button">🏠 Voltar ao Dashboard</a>
             </div>
         </body>
         </html>
@@ -191,30 +171,34 @@ def logout():
 
 @app.route('/status')
 def status():
-    """Status da autenticação em JSON"""
+    """Status JSON simples"""
     try:
         return jsonify({
             "autenticado": bool(auth_manager.access_token),
-            "token_valido": auth_manager.validar_token() if auth_manager.access_token else False,
-            "sistema": "BRK com DatabaseBRK",
-            "timestamp": datetime.now().isoformat()
+            "sistema": "BRK Processamento Simples",
+            "timestamp": datetime.now().isoformat(),
+            "funcionalidade": "emails → extração → OneDrive"
         })
     except Exception as e:
         logger.error(f"Erro no status: {e}")
         return jsonify({"erro": str(e)}), 500
+
 # ============================================================================
-# APP.PY LIMPO - BLOCO 3/5 - ROTAS PRINCIPAIS (REFATORADO LIMPO)
+# FUNCIONALIDADES PRINCIPAIS (originais)
 # ============================================================================
 
 @app.route('/diagnostico-pasta', methods=['GET'])
 def diagnostico_pasta():
-    """Diagnóstico da pasta BRK com DatabaseBRK integrado"""
+    """Diagnóstico da pasta BRK (original)"""
     try:
         if not auth_manager.access_token:
             return jsonify({"erro": "Token não disponível"}), 401
         
         processor = EmailProcessor(auth_manager)
+        
+        # Usar método que EXISTE e funcionava
         resultado = processor.diagnosticar_pasta_brk()
+        
         return jsonify(resultado)
         
     except Exception as e:
@@ -223,15 +207,61 @@ def diagnostico_pasta():
 
 @app.route('/processar-emails-novos', methods=['POST'])
 def processar_emails_novos():
-    """Processa emails novos com salvamento automático no DatabaseBRK"""
+    """Processamento original: emails → extração → OneDrive"""
     try:
         if not auth_manager.access_token:
             return jsonify({"erro": "Token não disponível"}), 401
         
         data = request.get_json() or {}
+        dias_atras = data.get('dias_atras', 1)
+        
         processor = EmailProcessor(auth_manager)
-        resultado = processor.processar_emails_completo_com_database(data.get('dias_atras', 1))
-        return jsonify(resultado)
+        
+        print(f"🔄 Processando emails dos últimos {dias_atras} dia(s)")
+        
+        # 1. Buscar emails (método original)
+        emails = processor.buscar_emails_novos(dias_atras)
+        
+        if not emails:
+            return jsonify({
+                "status": "sucesso",
+                "mensagem": f"Nenhum email encontrado nos últimos {dias_atras} dia(s)",
+                "emails_processados": 0,
+                "pdfs_extraidos": 0
+            })
+        
+        # 2. Processar emails (funcionalidade original)
+        emails_processados = 0
+        pdfs_extraidos = 0
+        
+        for email in emails:
+            try:
+                # Extrair PDFs (método que sempre funcionou)
+                pdfs_dados = processor.extrair_pdfs_do_email(email)
+                
+                if pdfs_dados:
+                    pdfs_extraidos += len(pdfs_dados)
+                    print(f"📎 {len(pdfs_dados)} PDF(s) extraído(s) e dados salvos")
+                    
+                    # Log consolidado (método existente)
+                    processor.log_consolidado_email(email, pdfs_dados)
+                
+                emails_processados += 1
+                
+            except Exception as e:
+                print(f"❌ Erro processando email: {e}")
+                continue
+        
+        print(f"✅ Processamento concluído: {emails_processados} emails, {pdfs_extraidos} PDFs")
+        
+        return jsonify({
+            "status": "sucesso",
+            "mensagem": f"Processamento concluído: {emails_processados} emails, {pdfs_extraidos} PDFs",
+            "emails_processados": emails_processados,
+            "pdfs_extraidos": pdfs_extraidos,
+            "periodo_dias": dias_atras,
+            "timestamp": datetime.now().isoformat()
+        })
         
     except Exception as e:
         logger.error(f"Erro processando emails: {e}")
@@ -239,7 +269,7 @@ def processar_emails_novos():
 
 @app.route('/processar-emails-form', methods=['GET'])
 def processar_emails_form():
-    """Formulário para processar emails com DatabaseBRK"""
+    """Formulário original para processar emails"""
     try:
         if not auth_manager.access_token:
             return redirect('/login')
@@ -267,13 +297,14 @@ def processar_emails_form():
                 <h1>⚙️ Processar Emails BRK</h1>
                 
                 <div class="status info">
-                    <h3>🗃️ Sistema com DatabaseBRK Integrado</h3>
+                    <h3>📧 Sistema Original</h3>
+                    <p>Processamento simples e eficiente:</p>
                     <ul>
-                        <li>✅ Extração automática de dados das faturas</li>
-                        <li>✅ Detecção inteligente de duplicatas</li>
-                        <li>✅ Classificação: NORMAL / DUPLICATA / CUIDADO</li>
-                        <li>✅ Salvamento organizado no OneDrive</li>
-                        <li>✅ Banco SQLite com histórico completo</li>
+                        <li>✅ Lê emails da pasta BRK</li>
+                        <li>✅ Extrai dados das faturas PDF</li>
+                        <li>✅ Relaciona CDC → Casa de Oração</li>
+                        <li>✅ Salva organizadamente no OneDrive</li>
+                        <li>✅ Gera logs estruturados</li>
                     </ul>
                 </div>
                 
@@ -315,16 +346,9 @@ def processar_emails_form():
                         if (data.status === 'sucesso') {
                             let html = '<div class="status success">';
                             html += '<h3>✅ Processamento Concluído!</h3>';
-                            html += `<p><strong>📧 Emails processados:</strong> ${data.processamento?.emails_processados || 0}</p>`;
-                            html += `<p><strong>📎 PDFs extraídos:</strong> ${data.processamento?.pdfs_extraidos || 0}</p>`;
-                            
-                            if (data.database_brk?.integrado) {
-                                html += '<h4>🗃️ DatabaseBRK:</h4>';
-                                html += `<p><strong>💾 Faturas novas:</strong> ${data.database_brk.faturas_salvas || 0}</p>`;
-                                html += `<p><strong>🔄 Duplicatas:</strong> ${data.database_brk.faturas_duplicatas || 0}</p>`;
-                                html += `<p><strong>⚠️ Requer atenção:</strong> ${data.database_brk.faturas_cuidado || 0}</p>`;
-                            }
-                            
+                            html += `<p><strong>📧 Emails processados:</strong> ${data.emails_processados || 0}</p>`;
+                            html += `<p><strong>📎 PDFs extraídos:</strong> ${data.pdfs_extraidos || 0}</p>`;
+                            html += `<p><strong>💾 OneDrive:</strong> Dados salvos e organizados</p>`;
                             html += '</div>';
                             resultadoDiv.innerHTML = html;
                         } else {
@@ -344,141 +368,24 @@ def processar_emails_form():
         logger.error(f"Erro no formulário: {e}")
         return f"Erro: {e}", 500
 
-@app.route('/recarregar-relacionamento', methods=['POST'])
-def recarregar_relacionamento():
-    """Força recarregamento do relacionamento CDC → Casa de Oração"""
-    try:
-        if not auth_manager.access_token:
-            return jsonify({"erro": "Token não disponível"}), 401
-        
-        processor = EmailProcessor(auth_manager)
-        sucesso = processor.recarregar_relacionamento_manual(forcar=True)
-        
-        if sucesso:
-            return jsonify({
-                "status": "sucesso",
-                "mensagem": "Relacionamento recarregado com sucesso",
-                "total_registros": len(processor.cdc_brk_vetor),
-                "timestamp": datetime.now().isoformat()
-            })
-        else:
-            return jsonify({
-                "status": "erro", 
-                "mensagem": "Falha no recarregamento do relacionamento"
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Erro recarregando relacionamento: {e}")
-        return jsonify({"erro": str(e)}), 500
-
-# ============================================================================
-# APP.PY LIMPO - BLOCO 4/5 - ROTAS DATABASEBRK (REFATORADO LIMPO)
-# ============================================================================
-
-@app.route('/estatisticas-banco', methods=['GET'])
-def estatisticas_banco():
-    """Estatísticas completas do DatabaseBRK"""
-    try:
-        if not auth_manager.access_token:
-            return jsonify({"erro": "Token não disponível"}), 401
-        
-        processor = EmailProcessor(auth_manager)
-        stats = processor.obter_estatisticas_database_completas()
-        return jsonify(stats)
-        
-    except Exception as e:
-        logger.error(f"Erro obtendo estatísticas: {e}")
-        return jsonify({"erro": str(e)}), 500
-
-@app.route('/faturas', methods=['GET'])
-def listar_faturas():
-    """Lista faturas do DatabaseBRK com filtros opcionais"""
-    try:
-        if not auth_manager.access_token:
-            return jsonify({"erro": "Token não disponível"}), 401
-        
-        processor = EmailProcessor(auth_manager)
-        resultado = processor.buscar_faturas_com_filtros(request.args)
-        return jsonify(resultado)
-        
-    except Exception as e:
-        logger.error(f"Erro listando faturas: {e}")
-        return jsonify({"erro": str(e)}), 500
-
-@app.route('/faturas-html', methods=['GET'])
-def faturas_html():
-    """Interface web para visualizar faturas"""
-    try:
-        if not auth_manager.access_token:
-            return redirect('/login')
-        
-        processor = EmailProcessor(auth_manager)
-        html_interface = processor.gerar_interface_faturas_html()
-        return html_interface
-        
-    except Exception as e:
-        logger.error(f"Erro na interface de faturas: {e}")
-        return f"Erro: {e}", 500
-
-@app.route('/debug-sistema', methods=['GET'])
-def debug_sistema():
-    """Debug completo do sistema incluindo DatabaseBRK"""
-    try:
-        if not auth_manager.access_token:
-            return jsonify({"erro": "Token não disponível"}), 401
-        
-        processor = EmailProcessor(auth_manager)
-        debug_info = processor.diagnostico_completo_sistema()
-        return jsonify(debug_info)
-        
-    except Exception as e:
-        logger.error(f"Erro no debug: {e}")
-        return jsonify({"erro": str(e)}), 500
-
-@app.route('/teste-completo', methods=['POST'])
-def teste_completo():
-    """Executa teste completo de todas as funcionalidades"""
-    try:
-        if not auth_manager.access_token:
-            return jsonify({"erro": "Token não disponível"}), 401
-        
-        processor = EmailProcessor(auth_manager)
-        resultados = processor.testar_funcionalidades_completas()
-        return jsonify(resultados)
-        
-    except Exception as e:
-        logger.error(f"Erro no teste completo: {e}")
-        return jsonify({"erro": str(e)}), 500
-
-# ============================================================================
-# APP.PY LIMPO - BLOCO 5/5 - UTILITÁRIOS E INICIALIZAÇÃO (CORRETO - MANTIDO)
-# ============================================================================
-
 @app.route('/health', methods=['GET'])
 def health_check():
-    """Health check para monitoramento do Render"""
+    """Health check original"""
     try:
         status = {
             "status": "ok",
             "timestamp": datetime.now().isoformat(),
-            "sistema": "BRK com DatabaseBRK",
+            "sistema": "BRK Simples",
             "componentes": {
                 "flask": "ok",
                 "auth": "ok" if auth_manager else "error",
-                "database_brk": "disponivel"
+                "processamento": "ativo"
             }
         }
         
-        # Teste rápido de autenticação se token disponível
+        # Teste rápido de autenticação
         if auth_manager.access_token:
             status["componentes"]["token"] = "disponivel"
-            try:
-                if auth_manager.verificar_token_valido():
-                    status["componentes"]["token"] = "valido"
-                else:
-                    status["componentes"]["token"] = "expirado"
-            except:
-                status["componentes"]["token"] = "erro_verificacao"
         else:
             status["componentes"]["token"] = "nao_disponivel"
         
@@ -492,20 +399,19 @@ def health_check():
         }), 500
 
 # ============================================================================
-# TRATAMENTO DE ERROS GLOBAIS
+# TRATAMENTO DE ERROS
 # ============================================================================
 
 @app.errorhandler(404)
 def not_found(error):
-    """Página 404 customizada"""
+    """Página 404"""
     return jsonify({
         "erro": "Endpoint não encontrado",
-        "sistema": "BRK com DatabaseBRK",
+        "sistema": "BRK Simples",
         "endpoints_disponiveis": [
             "/", "/login", "/logout", "/status",
-            "/diagnostico-pasta", "/processar-emails-novos", "/processar-emails-form",
-            "/estatisticas-banco", "/faturas", "/faturas-html",
-            "/recarregar-relacionamento", "/debug-sistema", "/teste-completo", "/health"
+            "/diagnostico-pasta", "/processar-emails-novos", 
+            "/processar-emails-form", "/health"
         ]
     }), 404
 
@@ -515,67 +421,45 @@ def internal_error(error):
     logger.error(f"Erro interno: {error}")
     return jsonify({
         "erro": "Erro interno do servidor",
-        "sistema": "BRK com DatabaseBRK",
+        "sistema": "BRK Simples",
         "timestamp": datetime.now().isoformat()
     }), 500
 
 # ============================================================================
-# INICIALIZAÇÃO DO APLICATIVO
+# INICIALIZAÇÃO
 # ============================================================================
+
 def verificar_configuracao():
-    """Verifica se todas as variáveis de ambiente estão configuradas"""
+    """Verifica configurações básicas"""
     variaveis_obrigatorias = ['MICROSOFT_CLIENT_ID', 'PASTA_BRK_ID']
-    variaveis_opcionais = ['ONEDRIVE_BRK_ID']
     
     missing = [var for var in variaveis_obrigatorias if not os.getenv(var)]
     
     if missing:
-        print(f"❌ ERRO: Variáveis de ambiente não configuradas: {', '.join(missing)}")
-        print(f"   Configure estas variáveis no Render para o sistema funcionar")
+        print(f"❌ ERRO: Variáveis não configuradas: {', '.join(missing)}")
         return False
     
-    print(f"✅ Variáveis obrigatórias configuradas")
-    
-    # Verificar opcionais
-    for var in variaveis_opcionais:
-        if os.getenv(var):
-            print(f"✅ {var} configurado (DatabaseBRK ativo)")
-        else:
-            print(f"⚠️ {var} não configurado (DatabaseBRK limitado)")
-    
-    # Confirmar PYTHONUNBUFFERED para logs
-    if os.getenv('PYTHONUNBUFFERED'):
-        print(f"✅ PYTHONUNBUFFERED configurado (logs Render otimizados)")
-    
+    print(f"✅ Configuração básica OK")
     return True
 
-# ============================================================================
-# FUNÇÃO INICIALIZAR_APLICACAO (CORRIGIDA)
-# ENCONTRE ESTA FUNÇÃO NO FINAL DO SEU APP.PY E SUBSTITUA
-# ============================================================================
-
 def inicializar_aplicacao():
-    """Inicialização da aplicação"""
-    print(f"\n🚀 INICIANDO SISTEMA BRK COM DATABASEBRK")
-    print(f"="*60)
+    """Inicialização simples"""
+    print(f"\n🚀 INICIANDO SISTEMA BRK SIMPLES")
+    print(f"="*50)
     
-    # Verificar configuração
     if not verificar_configuracao():
-        print(f"❌ Falha na verificação de configuração")
         return False
     
-    # Auth manager já foi inicializado no topo do arquivo
     if auth_manager.access_token:
-        print(f"✅ Microsoft Auth funcionando - Token carregado")
+        print(f"✅ Autenticação funcionando")
     else:
-        print(f"⚠️ Microsoft Auth inicializado - Token não encontrado")
+        print(f"⚠️ Token não encontrado - sistema aguardando autenticação")
     
-    print(f"✅ Sistema BRK inicializado com sucesso!")
-    print(f"   🗃️ DatabaseBRK: Integrado")
-    print(f"   📊 SQLite: Automático")
-    print(f"   📁 OneDrive: Organizado")
-    print(f"   🔍 Duplicatas: Detecção ativa")
-    print(f"="*60)
+    print(f"✅ Sistema BRK simples inicializado!")
+    print(f"   📧 Processamento de emails ativo")
+    print(f"   📁 Salvamento OneDrive configurado")
+    print(f"   🌐 Interface web disponível")
+    print(f"="*50)
     
     return True
 
@@ -584,32 +468,14 @@ def inicializar_aplicacao():
 # ============================================================================
 
 if __name__ == '__main__':
-    # Inicializar aplicação
     if inicializar_aplicacao():
-        # Executar aplicação
         port = int(os.getenv('PORT', 5000))
         debug = os.getenv('FLASK_ENV') == 'development'
         
-        print(f"🌐 Iniciando servidor na porta {port}")
-        print(f"🔧 Debug mode: {debug}")
-        print(f"📱 Acesse: https://seu-app.onrender.com")
+        print(f"🌐 Servidor iniciando na porta {port}")
+        print(f"📱 Sistema simples funcionando!")
         
         app.run(host='0.0.0.0', port=port, debug=debug)
     else:
-        print(f"❌ Falha na inicialização - servidor não iniciado")
+        print(f"❌ Falha na inicialização")
         exit(1)
-
-# ============================================================================
-# 🎉 APP.PY LIMPO FINALIZADO!
-# 
-# ARQUITETURA MODULAR ALCANÇADA:
-# ✅ auth/ → Apenas autenticação Microsoft
-# ✅ processor/ → Toda inteligência do sistema  
-# ✅ app.py → Apenas rotas Flask minimalistas
-# 
-# CADA ROTA: 3-5 linhas máximo
-# LÓGICA: 100% nos módulos processor/
-# VARIÁVEIS: Consistentes (MICROSOFT_*)
-# 
-# STATUS: ✅ PRONTO PARA DEPLOY
-# ============================================================================
