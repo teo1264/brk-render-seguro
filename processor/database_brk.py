@@ -745,6 +745,62 @@ class DatabaseBRK:
             'onedrive_id': self.db_onedrive_id,
             'filename': self.db_filename
         }
+    
+    # ============================================================================
+    # MÉTODOS DE COMPATIBILIDADE COM EMAILPROCESSOR
+    # ============================================================================
+    
+    def inicializar_sistema(self):
+        """
+        Método de compatibilidade com EmailProcessor atual.
+        O novo sistema já inicializa automaticamente no __init__.
+        """
+        try:
+            # Sistema já foi inicializado no __init__
+            if self.conn:
+                print(f"✅ Sistema DatabaseBRK já inicializado")
+                return True
+            else:
+                # Tentar reinicializar se necessário
+                self._inicializar_database_sistema()
+                return bool(self.conn)
+        except Exception as e:
+            print(f"❌ Erro reinicializando sistema: {e}")
+            return False
+    
+    def verificar_conexao(self):
+        """
+        Método de compatibilidade - verifica se conexão está ativa.
+        """
+        try:
+            if self.conn:
+                # Testar conexão com query simples
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+                return True
+            return False
+        except Exception as e:
+            print(f"⚠️ Conexão database inativa: {e}")
+            return False
+    
+    def get_connection(self):
+        """
+        Método de compatibilidade - retorna conexão SQLite.
+        """
+        return self.conn
+    
+    def salvar_dados_fatura(self, dados_fatura):
+        """
+        Alias para salvar_fatura - compatibilidade com nomes diferentes.
+        """
+        return self.salvar_fatura(dados_fatura)
+    
+    def inserir_fatura(self, dados_fatura):
+        """
+        Outro alias possível para salvar_fatura.
+        """
+        return self.salvar_fatura(dados_fatura)
 
 
 # ============================================================================
@@ -769,3 +825,34 @@ def criar_database_brk(auth_manager, onedrive_brk_id):
     except Exception as e:
         print(f"❌ Erro criando DatabaseBRK: {e}")
         return None
+
+
+def integrar_database_emailprocessor(email_processor):
+    """
+    Função de compatibilidade com EmailProcessor.
+    Integra DatabaseBRK ao EmailProcessor existente.
+    
+    Args:
+        email_processor: Instância de EmailProcessor
+        
+    Returns:
+        bool: True se integração bem-sucedida
+    """
+    try:
+        if hasattr(email_processor, 'database_brk') and email_processor.database_brk:
+            print(f"✅ DatabaseBRK já integrado ao EmailProcessor")
+            return True
+        
+        # Criar nova instância DatabaseBRK
+        db_brk = DatabaseBRK(
+            email_processor.auth, 
+            email_processor.onedrive_brk_id
+        )
+        
+        email_processor.database_brk = db_brk
+        print(f"✅ DatabaseBRK integrado ao EmailProcessor")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Erro na integração: {e}")
+        return False
