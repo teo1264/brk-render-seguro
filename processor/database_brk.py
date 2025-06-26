@@ -510,6 +510,7 @@ class DatabaseBRK:
         agora = datetime.now()
         print(f"📅 Pasta definida por DATA ATUAL (fallback): {agora.year}/{agora.month:02d}")
         return agora.year, agora.month
+ 
         # Formato: Jan/2025, Fev/2025, etc.
         meses_por_nome = {
             'jan': 1, 'janeiro': 1,
