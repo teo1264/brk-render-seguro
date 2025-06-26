@@ -222,10 +222,6 @@ def processar_emails_novos():
         dias_atras = data.get('dias_atras', 1)
         
         processor = EmailProcessor(auth_manager)
-        # Diagnóstico de teste (remover após identificar problema)
-        from processor.diagnostico_teste import ativar_diagnostico
-        ativar_diagnostico(processor)
-        
         print(f"🔄 PROCESSAMENTO COMPLETO - últimos {dias_atras} dia(s)")
         print(f"✅ DatabaseBRK ativo - faturas serão salvas automaticamente")
         
@@ -612,8 +608,11 @@ def inicializar_aplicacao():
         
         # 🆕 CRIAR EmailProcessor
         processor = EmailProcessor(auth_manager)
-        
+         # Diagnóstico de teste (remover após identificar problema)
+        from processor.diagnostico_teste import ativar_diagnostico
+        ativar_diagnostico(processor)
         # 🆕 VERIFICAR DEPENDÊNCIAS DO MONITOR
+
         deps = verificar_dependencias_monitor(processor)
         if deps['dependencias_ok']:
             print(f"✅ Dependências do monitor validadas")
