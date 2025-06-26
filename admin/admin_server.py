@@ -459,78 +459,312 @@ class AdminHandler(BaseHTTPRequestHandler):
             self._handle_not_found()
     
     def _handle_homepage(self):
-        """Página inicial administrativa"""
+        """Página inicial administrativa - VERSÃO MELHORADA"""
         self.send_response(200)
         self.send_header('Content-type', 'text/html; charset=utf-8')
         self.end_headers()
         
-        client_id = os.getenv("MICROSOFT_CLIENT_ID", "NÃO CONFIGURADO")
-        client_safe = client_id[:8] + "******" if len(client_id) > 8 else "NÃO CONFIGURADO"
-        
-        pasta_id = os.getenv("PASTA_BRK_ID", "NÃO CONFIGURADO")
-        pasta_safe = pasta_id[:10] + "******" if len(pasta_id) > 10 else "NÃO CONFIGURADO"
+        # Obter dados dinâmicos em tempo real
+        try:
+            # Status do sistema
+            client_id = os.getenv("MICROSOFT_CLIENT_ID", "")
+            pasta_brk_id = os.getenv("PASTA_BRK_ID", "")
+            onedrive_brk_id = os.getenv("ONEDRIVE_BRK_ID", "")
+            
+            # Dados seguros para exibição
+            client_safe = client_id[:8] + "******" if len(client_id) > 8 else "❌ NÃO CONFIGURADO"
+            pasta_safe = pasta_brk_id[:10] + "******" if len(pasta_brk_id) > 10 else "❌ NÃO CONFIGURADO"
+            onedrive_safe = onedrive_brk_id[:15] + "******" if len(onedrive_brk_id) > 15 else "❌ NÃO CONFIGURADO"
+            
+            # Verificar autenticação
+            try:
+                auth = MicrosoftAuth()
+                auth_ok = bool(auth.access_token)
+                token_expira = "Token ativo" if auth_ok else "Token expirado"
+            except:
+                auth_ok = False
+                token_expira = "Erro carregando"
+            
+            # Verificar processamento
+            try:
+                processor = EmailProcessor(MicrosoftAuth())
+                processor_ok = True
+                total_relacionamentos = len(getattr(processor, 'cdc_brk_vetor', []))
+            except:
+                processor_ok = False
+                total_relacionamentos = 0
+            
+            # Status geral
+            status_geral = "🟢 OPERACIONAL" if (client_id and pasta_brk_id and auth_ok) else "🟡 CONFIGURAÇÃO INCOMPLETA"
+            if not client_id or not pasta_brk_id:
+                status_geral = "🔴 CONFIGURAÇÃO FALTANDO"
+                
+        except Exception as e:
+            # Fallback se erro
+            client_safe = pasta_safe = onedrive_safe = "❌ ERRO CARREGANDO"
+            auth_ok = processor_ok = False
+            token_expira = "Erro"
+            total_relacionamentos = 0
+            status_geral = "🔴 ERRO SISTEMA"
         
         html = f"""
         <!DOCTYPE html>
         <html lang="pt-BR">
         <head>
-            <title>BRK Monitor - Administração</title>
+            <title>BRK Monitor - Centro de Controle</title>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 50px; background: #f5f5f5; }}
-                .container {{ background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                .header {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 15px; }}
-                .status {{ background: #d4edda; padding: 15px; border-radius: 5px; margin: 15px 0; }}
-                .config {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }}
-                .nav {{ margin: 20px 0; }}
-                .nav a {{ display: inline-block; margin: 5px 10px 5px 0; padding: 10px 15px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; }}
-                .nav a:hover {{ background: #2980b9; }}
-                .footer {{ margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }}
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                body {{ 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                }}
+                .container {{ 
+                    max-width: 1200px; 
+                    margin: 0 auto; 
+                    background: rgba(255,255,255,0.95);
+                    border-radius: 15px;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    overflow: hidden;
+                }}
+                .header {{ 
+                    background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+                    color: white; 
+                    padding: 30px;
+                    text-align: center;
+                }}
+                .header h1 {{ font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }}
+                .header p {{ font-size: 1.1em; opacity: 0.9; }}
+                
+                .status-grid {{ 
+                    display: grid; 
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+                    gap: 20px; 
+                    padding: 30px;
+                }}
+                .status-card {{ 
+                    background: white;
+                    border-radius: 10px;
+                    padding: 25px;
+                    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+                    border-left: 5px solid #3498db;
+                    transition: transform 0.3s ease;
+                }}
+                .status-card:hover {{ transform: translateY(-5px); }}
+                .status-card h3 {{ color: #2c3e50; margin-bottom: 15px; font-size: 1.3em; }}
+                .status-item {{ margin: 10px 0; display: flex; justify-content: space-between; align-items: center; }}
+                .status-label {{ font-weight: 600; color: #555; }}
+                .status-value {{ 
+                    padding: 5px 10px; 
+                    border-radius: 20px; 
+                    font-size: 0.9em;
+                    font-weight: bold;
+                }}
+                .status-ok {{ background: #d4edda; color: #155724; }}
+                .status-warning {{ background: #fff3cd; color: #856404; }}
+                .status-error {{ background: #f8d7da; color: #721c24; }}
+                
+                .main-status {{ 
+                    text-align: center; 
+                    padding: 40px;
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                }}
+                .main-status h2 {{ font-size: 2em; margin-bottom: 20px; }}
+                .status-indicator {{ 
+                    display: inline-block;
+                    padding: 15px 30px;
+                    border-radius: 50px;
+                    font-size: 1.2em;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                }}
+                
+                .actions-grid {{ 
+                    display: grid; 
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+                    gap: 15px; 
+                    padding: 30px;
+                    background: #f8f9fa;
+                }}
+                .action-btn {{ 
+                    display: block;
+                    text-decoration: none;
+                    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    text-align: center;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                    box-shadow: 0 3px 10px rgba(52, 152, 219, 0.3);
+                }}
+                .action-btn:hover {{ 
+                    transform: translateY(-3px);
+                    box-shadow: 0 5px 20px rgba(52, 152, 219, 0.4);
+                }}
+                .action-btn.warning {{ background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); }}
+                .action-btn.success {{ background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }}
+                .action-btn.info {{ background: linear-gradient(135deg, #8e44ad 0%, #9b59b6 100%); }}
+                
+                .footer {{ 
+                    background: #2c3e50; 
+                    color: white; 
+                    text-align: center; 
+                    padding: 20px;
+                    font-size: 0.9em;
+                }}
+                .footer a {{ color: #3498db; text-decoration: none; }}
+                
+                .timestamp {{ 
+                    position: absolute;
+                    top: 20px;
+                    right: 20px;
+                    background: rgba(0,0,0,0.7);
+                    color: white;
+                    padding: 8px 15px;
+                    border-radius: 20px;
+                    font-size: 0.8em;
+                }}
+                
+                @media (max-width: 768px) {{
+                    .status-grid, .actions-grid {{ grid-template-columns: 1fr; }}
+                    .header h1 {{ font-size: 2em; }}
+                    .container {{ margin: 10px; }}
+                }}
             </style>
+            <script>
+                function updateTimestamp() {{
+                    const now = new Date();
+                    const timestamp = now.toLocaleString('pt-BR');
+                    document.querySelector('.timestamp').textContent = timestamp;
+                }}
+                setInterval(updateTimestamp, 1000);
+                window.onload = updateTimestamp;
+            </script>
         </head>
         <body>
+            <div class="timestamp"></div>
+            
             <div class="container">
                 <div class="header">
-                    <h1>🚀 BRK MONITOR - ADMINISTRAÇÃO</h1>
-                    <p><strong>Versão:</strong> Refatorada Modular | <strong>Interface:</strong> Administrativa HTTPS</p>
+                    <h1>🚀 BRK MONITOR</h1>
+                    <p>Centro de Controle Administrativo | Sistema Integrado de Processamento de Faturas</p>
                 </div>
                 
-                <div class="status">
-                    <h3>📊 Status do Sistema</h3>
-                    <p><strong>Status:</strong> ✅ Ativo</p>
-                    <p><strong>Última verificação:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</p>
-                    <p><strong>Estrutura:</strong> ✅ auth/ + processor/ + admin/</p>
+                <div class="main-status">
+                    <h2>Status Geral do Sistema</h2>
+                    <div class="status-indicator {'status-ok' if '🟢' in status_geral else 'status-warning' if '🟡' in status_geral else 'status-error'}">{status_geral}</div>
                 </div>
                 
-                <div class="config">
-                    <h3>🔒 Configuração Segura</h3>
-                    <p><strong>Client ID:</strong> {client_safe}</p>
-                    <p><strong>Pasta Emails BRK:</strong> {pasta_emails_safe}</p>
-                    <p><strong>OneDrive BRK:</strong> {onedrive_safe}</p>
-                    <p><strong>Segurança:</strong> Todas as credenciais via Environment Variables</p>
+                <div class="status-grid">
+                    <div class="status-card">
+                        <h3>🔐 Configuração & Autenticação</h3>
+                        <div class="status-item">
+                            <span class="status-label">Client ID:</span>
+                            <span class="status-value {'status-ok' if len(client_id) > 8 else 'status-error'}">{client_safe}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Token Status:</span>
+                            <span class="status-value {'status-ok' if auth_ok else 'status-error'}">{token_expira}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Autenticação:</span>
+                            <span class="status-value {'status-ok' if auth_ok else 'status-error'}">{'✅ Ativa' if auth_ok else '❌ Inativa'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="status-card">
+                        <h3>📧 Processamento de Emails</h3>
+                        <div class="status-item">
+                            <span class="status-label">Pasta Emails:</span>
+                            <span class="status-value {'status-ok' if len(pasta_brk_id) > 10 else 'status-error'}">{pasta_safe}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Processador:</span>
+                            <span class="status-value {'status-ok' if processor_ok else 'status-error'}">{'✅ OK' if processor_ok else '❌ Erro'}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Monitor:</span>
+                            <span class="status-value status-ok">✅ Ativo (10min)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="status-card">
+                        <h3>📁 OneDrive & Relacionamento</h3>
+                        <div class="status-item">
+                            <span class="status-label">OneDrive BRK:</span>
+                            <span class="status-value {'status-ok' if len(onedrive_brk_id) > 15 else 'status-warning'}">{onedrive_safe}</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Relacionamentos:</span>
+                            <span class="status-value {'status-ok' if total_relacionamentos > 0 else 'status-warning'}">{total_relacionamentos} CDCs</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Database:</span>
+                            <span class="status-value {'status-ok' if len(onedrive_brk_id) > 15 else 'status-warning'}">{'✅ Ativo' if len(onedrive_brk_id) > 15 else '⚠️ Configurar'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="status-card">
+                        <h3>📊 Sistema & Performance</h3>
+                        <div class="status-item">
+                            <span class="status-label">Versão:</span>
+                            <span class="status-value status-ok">Refatorada v2.0</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Arquitetura:</span>
+                            <span class="status-value status-ok">Modular</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Deploy:</span>
+                            <span class="status-value status-ok">Render ✅</span>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="nav">
-                    <h3>🛠️ Funções Administrativas</h3>
-                    <a href="/upload-token">📁 Upload Token</a>
-                    <a href="/health">🔍 Health Check</a>
-                    <a href="/status">📊 Status Detalhado</a>
-                    <a href="/test-onedrive">🧪 Teste OneDrive</a>
-                    <a href="/create-brk-folder">📂 Criar Pasta /BRK</a>
-                    <a href="/list-onedrive-files">📋 Descobrir CDC_BRK_CCB.xlsx</a>
+                <div class="actions-grid">
+                    <a href="/upload-token" class="action-btn warning">
+                        📁 Upload Token<br>
+                        <small>Configurar autenticação Microsoft</small>
+                    </a>
+                    <a href="/test-onedrive" class="action-btn info">
+                        🧪 Teste OneDrive<br>
+                        <small>Verificar acesso e descobrir IDs</small>
+                    </a>
+                    <a href="/status" class="action-btn">
+                        📊 Status Detalhado<br>
+                        <small>Diagnóstico completo JSON</small>
+                    </a>
+                    <a href="/health" class="action-btn success">
+                        🔍 Health Check<br>
+                        <small>Verificação rápida sistema</small>
+                    </a>
+                    <a href="/create-brk-folder" class="action-btn info">
+                        📂 Criar Pasta BRK<br>
+                        <small>Configurar estrutura OneDrive</small>
+                    </a>
+                    <a href="https://brk-render-seguro.onrender.com" class="action-btn success" target="_blank">
+                        🌐 Sistema Principal<br>
+                        <small>Interface de produção</small>
+                    </a>
                 </div>
                 
                 <div class="footer">
-                    <p>🔒 <strong>Interface Administrativa Segura</strong> - Dados sensíveis protegidos</p>
-                    <p>📁 Estrutura modular: Autenticação, Processamento e Administração separados</p>
+                    <p>🔒 <strong>Interface Administrativa Segura</strong> | Estrutura Modular: auth/ + processor/ + admin/</p>
+                    <p>📧 Sidney Gubitoso - Tesouraria Administrativa Mauá | 
+                    <a href="https://github.com/seu-repo" target="_blank">📁 GitHub</a> | 
+                    <a href="https://dashboard.render.com" target="_blank">☁️ Render</a></p>
                 </div>
             </div>
         </body>
         </html>
         """
         self.wfile.write(html.encode('utf-8'))
-    
+        
     def _handle_upload_token_page(self):
         """Página de upload de token"""
         self.send_response(200)
