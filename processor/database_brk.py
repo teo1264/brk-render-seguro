@@ -478,20 +478,21 @@ class DatabaseBRK:
             hoje = datetime.now()
             return f"/BRK/Faturas/{hoje.year}/{hoje.month:02d}/"
 
-def _extrair_ano_mes(self, competencia, vencimento):
-    """
-    Extrai ano e mês PRIORIZANDO VENCIMENTO
-    CORRIGIDO: vencimento primeiro, competência como backup
-    """
-    # ✅ PRIORIDADE 1: VENCIMENTO (mais importante para organização do usuário)
-    if vencimento and re.match(r'\d{2}/\d{2}/\d{4}', vencimento):
-        try:
-            partes = vencimento.split('/')
-            dia, mes, ano = partes[0], int(partes[1]), int(partes[2])
-            print(f"📅 Pasta definida por VENCIMENTO: {vencimento} → /{ano}/{mes:02d}/")
-            return ano, mes
-        except Exception as e:
-            print(f"⚠️ Erro processando vencimento '{vencimento}': {e}")
+    def _extrair_ano_mes(self, competencia, vencimento):
+        """
+        Extrai ano e mês PRIORIZANDO VENCIMENTO
+        CORRIGIDO: vencimento primeiro, competência como backup
+        """
+        # ✅ PRIORIDADE 1: VENCIMENTO (mais importante para organização do usuário)
+        if vencimento and re.match(r'\d{2}/\d{2}/\d{4}', vencimento):
+            try:
+                partes = vencimento.split('/')
+                dia, mes, ano = partes[0], int(partes[1]), int(partes[2])
+                print(f"📅 Pasta definida por VENCIMENTO: {vencimento} → /{ano}/{mes:02d}/")
+                return ano, mes
+            except Exception as e:
+                print(f"⚠️ Erro processando vencimento '{vencimento}': {e}")
+        # ... resto do método com indentação correta   
     
     # ✅ FALLBACK: COMPETÊNCIA (se vencimento falhar)
     if competencia:
