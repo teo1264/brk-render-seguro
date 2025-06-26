@@ -37,11 +37,13 @@ logger = logging.getLogger(__name__)
 auth_manager = MicrosoftAuth()
 
 # ✅ VARIÁVEIS CORRIGIDAS - CONSISTENTES COM AUTH/MICROSOFT_AUTH.PY
+# ✅ VARIÁVEIS EXATAS DO RENDER (confirmadas)
 MICROSOFT_CLIENT_ID = os.getenv('MICROSOFT_CLIENT_ID')
-MICROSOFT_CLIENT_SECRET = os.getenv('MICROSOFT_CLIENT_SECRET')  
-MICROSOFT_REDIRECT_URI = os.getenv('MICROSOFT_REDIRECT_URI')
 PASTA_BRK_ID = os.getenv('PASTA_BRK_ID')
 ONEDRIVE_BRK_ID = os.getenv('ONEDRIVE_BRK_ID')
+
+# Configuração para logs no Render
+os.environ['PYTHONUNBUFFERED'] = '1'
 
 print("🚀 Sistema BRK iniciado com DatabaseBRK integrado")
 print(f"   📧 Pasta emails: {PASTA_BRK_ID[:10] if PASTA_BRK_ID else 'N/A'}******")
@@ -507,10 +509,9 @@ def internal_error(error):
 # ============================================================================
 # INICIALIZAÇÃO DO APLICATIVO
 # ============================================================================
-
 def verificar_configuracao():
     """Verifica se todas as variáveis de ambiente estão configuradas"""
-    variaveis_obrigatorias = ['MICROSOFT_CLIENT_ID', 'MICROSOFT_CLIENT_SECRET', 'MICROSOFT_REDIRECT_URI', 'PASTA_BRK_ID']
+    variaveis_obrigatorias = ['MICROSOFT_CLIENT_ID', 'PASTA_BRK_ID']
     variaveis_opcionais = ['ONEDRIVE_BRK_ID']
     
     missing = [var for var in variaveis_obrigatorias if not os.getenv(var)]
@@ -528,6 +529,10 @@ def verificar_configuracao():
             print(f"✅ {var} configurado (DatabaseBRK ativo)")
         else:
             print(f"⚠️ {var} não configurado (DatabaseBRK limitado)")
+    
+    # Confirmar PYTHONUNBUFFERED para logs
+    if os.getenv('PYTHONUNBUFFERED'):
+        print(f"✅ PYTHONUNBUFFERED configurado (logs Render otimizados)")
     
     return True
 
