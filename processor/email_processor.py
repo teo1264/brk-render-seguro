@@ -135,14 +135,24 @@ class EmailProcessor:
                     'database_ativo': False
                 }
             
-            # Usar método salvar_fatura do DatabaseBRK
-            resultado = self.database_brk.salvar_fatura(dados_fatura)
-            
+            # 🔧 CORREÇÃO: Usar preparar_dados_para_database para mapeamento correto
+            dados_mapeados = self.preparar_dados_para_database(dados_fatura)
+        
+            if not dados_mapeados:
+               return {
+                   'status': 'erro',
+                   'mensagem': 'Erro no mapeamento de dados',
+                   'database_ativo': bool(self.database_brk)
+               }
+        
+            # Usar método salvar_fatura do DatabaseBRK com dados mapeados
+            resultado = self.database_brk.salvar_fatura(dados_mapeados)
+        
             if resultado.get('status') == 'sucesso':
                 print(f"💾 DatabaseBRK: {resultado.get('status_duplicata', 'NORMAL')} - {resultado.get('nome_arquivo', 'arquivo')}")
-            
+        
             return resultado
-            
+             
         except Exception as e:
             print(f"❌ Erro salvando no DatabaseBRK: {e}")
             return {
