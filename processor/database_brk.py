@@ -478,26 +478,68 @@ class DatabaseBRK:
             hoje = datetime.now()
             return f"/BRK/Faturas/{hoje.year}/{hoje.month:02d}/"
 
-    def _extrair_ano_mes(self, competencia, vencimento):
-        """
-        Extrai ano e mês de competência ou vencimento
-        """
-        # Tentar competência primeiro
-        if competencia:
-            if re.search(r'(\d{2})[/-](\d{4})', competencia):
+def _extrair_ano_mes(self, competencia, vencimento):
+    """
+    Extrai ano e mês PRIORIZANDO VENCIMENTO
+    CORRIGIDO: vencimento primeiro, competência como backup
+    """
+    # ✅ PRIORIDADE 1: VENCIMENTO (mais importante para organização do usuário)
+    if vencimento and re.match(r'\d{2}/\d{2}/\d{4}', vencimento):
+        try:
+            partes = vencimento.split('/')
+            dia, mes, ano = partes[0], int(partes[1]), int(partes[2])
+            print(f"📅 Pasta definida por VENCIMENTO: {vencimento} → /{ano}/{mes:02d}/")
+            return ano, mes
+        except Exception as e:
+            print(f"⚠️ Erro processando vencimento '{vencimento}': {e}")
+    
+    # ✅ FALLBACK: COMPETÊNCIA (se vencimento falhar)
+    if competencia:
+        # Formato: 01/2025, 02/2025, etc.
+        if re.search(r'(\d{2})[/-](\d{4})', competencia):
+            try:
                 match = re.search(r'(\d{2})[/-](\d{4})', competencia)
                 mes, ano = int(match.group(1)), int(match.group(2))
+                print(f"📅 Pasta definida por COMPETÊNCIA (fallback): {competencia} → /{ano}/{mes:02d}/")
                 return ano, mes
+            except Exception as e:
+                print(f"⚠️ Erro processando competência '{competencia}': {e}")
         
-        # Tentar vencimento
-        if vencimento and re.match(r'\d{2}/\d{2}/\d{4}', vencimento):
-            partes = vencimento.split('/')
-            mes, ano = int(partes[1]), int(partes[2])
-            return ano, mes
+        # Formato: Jan/2025, Fev/2025, etc.
+        meses_por_nome = {
+            'jan': 1, 'janeiro': 1,
+            'fev': 2, 'fevereiro': 2,
+            'mar': 3, 'março': 3,
+            'abr': 4, 'abril': 4,
+            'mai': 5, 'maio': 5,
+            'jun': 6, 'junho': 6,
+            'jul': 7, 'julho': 7,
+            'ago': 8, 'agosto': 8,
+            'set': 9, 'setembro': 9,
+            'out': 10, 'outubro': 10,
+            'nov': 11, 'novembro': 11,
+            'dez': 12, 'dezembro': 12
+        }
         
-        # Fallback para data atual
-        hoje = datetime.now()
-        return hoje.year, hoje.month
+        try:
+            competencia_lower = competencia.lower()
+            for nome_mes, num_mes in meses_por_nome.items():
+                if nome_mes in competencia_lower:
+                    # Buscar ano na string
+                    match_ano = re.search(r'(\d{4})', competencia)
+                    if match_ano:
+                        ano = int(match_ano.group(1))
+                        print(f"📅 Pasta definida por COMPETÊNCIA (nome): {competencia} → /{ano}/{num_mes:02d}/")
+                        return ano, num_mes
+        except Exception as e:
+            print(f"⚠️ Erro processando competência por nome '{competencia}': {e}")
+    
+    # ✅ ÚLTIMO RECURSO: DATA ATUAL
+    hoje = datetime.now()
+    print(f"📅 Pasta definida por DATA ATUAL (último recurso): /{hoje.year}/{hoje.month:02d}/")
+    print(f"   ⚠️ Vencimento: '{vencimento}' | Competência: '{competencia}' (ambos inválidos)")
+    
+    return hoje.year, hoje.month
 
     def _inserir_registro_sqlite(self, dados_fatura):
         """
