@@ -17,8 +17,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Any
 
 # Imports dos módulos refatorados
-from auth import MicrosoftAuth
-from processor import EmailProcessor
+from auth.microsoft_auth import MicrosoftAuth
+from processor.email_processor import EmailProcessor
 
 
 class AdminHandler(BaseHTTPRequestHandler):
