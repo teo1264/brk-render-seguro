@@ -1128,49 +1128,6 @@ class EmailProcessor:
         except Exception as e:
             print(f"❌ Erro extraindo PDFs do email: {e}")
             return []
-                                    
-                                else:
-                                    # Falha na extração - manter dados básicos (COMPATIBILIDADE)
-                                    pdf_completo = {
-                                        **pdf_info_basico,
-                                        'dados_extraidos_ok': False,
-                                        'erro_extracao': 'Falha na extração de dados',
-                                        'relacionamento_usado': False
-                                    }
-                                    pdfs_com_dados.append(pdf_completo)
-                                    print(f"⚠️ PDF básico (falha extração): {nome_original}")
-                                    
-                            except Exception as e:
-                                print(f"❌ Erro extraindo dados do PDF {nome_original}: {e}")
-                                # Manter dados básicos em caso de erro (COMPATIBILIDADE)
-                                pdf_completo = {
-                                    **pdf_info_basico,
-                                    'dados_extraidos_ok': False,
-                                    'erro_extracao': str(e),
-                                    'relacionamento_usado': False
-                                }
-                                pdfs_com_dados.append(pdf_completo)
-                        else:
-                            print(f"⚠️ PDF sem conteúdo: {nome_original}")
-                            # Ainda assim retorna estrutura básica (COMPATIBILIDADE)
-                            pdfs_com_dados.append(pdf_info_basico)
-                            
-                    except Exception as e:
-                        print(f"❌ Erro processando anexo {nome_original}: {e}")
-            
-            # Log resumo do processamento
-            if pdfs_brutos > 0:
-                print(f"\n📊 RESUMO PROCESSAMENTO:")
-                print(f"   📎 PDFs encontrados: {pdfs_brutos}")
-                print(f"   ✅ PDFs processados: {pdfs_processados}")
-                print(f"   📋 Relacionamento: {'✅ Usado' if relacionamento_ok else '❌ Indisponível'}")
-                print(f"   🔄 Extração avançada: {'✅ Ativa' if pdfs_processados > 0 else '❌ Falhou'}")
-                
-            return pdfs_com_dados
-            
-        except Exception as e:
-            print(f"❌ Erro extraindo PDFs do email: {e}")
-            return []
             
     def log_consolidado_email(self, email_data, pdfs_processados):
         """
