@@ -1236,6 +1236,7 @@ class EmailProcessor:
                 'Competencia': pdf_data.get('Competencia', 'Não encontrado'),
                 'email_id': pdf_data.get('email_id', ''),
                 'nome_arquivo': pdf_data.get('filename', pdf_data.get('nome_arquivo', 'unknown.pdf')),
+                'nome_arquivo_original': pdf_data.get('filename', 'arquivo_desconhecido.pdf'),
                 'hash_arquivo': pdf_data.get('hash_arquivo', ''),
                 'tamanho_bytes': pdf_data.get('size', pdf_data.get('tamanho_bytes', 0)),
                 'caminho_onedrive': ''  # Será preenchido pelo OneDrive
