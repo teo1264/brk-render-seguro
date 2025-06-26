@@ -184,7 +184,8 @@ class DatabaseBRK:
                 self.db_local_cache = tmp_file.name
             
             # ETAPA 2: Criar estrutura SQLite
-            conn_temp = sqlite3.connect(self.db_local_cache)
+            conn_temp = sqlite3.connect(self.db_local_cache, check_same_thread=False)
+            conn_temp.execute("PRAGMA journal_mode=WAL")
             self._criar_estrutura_sqlite(conn_temp)
             conn_temp.close()
             
@@ -292,7 +293,8 @@ class DatabaseBRK:
             if not self.db_local_cache or not os.path.exists(self.db_local_cache):
                 raise ValueError("Cache local não disponível")
             
-            self.conn = sqlite3.connect(self.db_local_cache)
+            self.conn = sqlite3.connect(self.db_local_cache, check_same_thread=False)
+            self.conn.execute("PRAGMA journal_mode=WAL")
             print(f"✅ SQLite conectado via cache local")
             
         except Exception as e:
@@ -310,7 +312,8 @@ class DatabaseBRK:
             os.makedirs(os.path.dirname(self.db_fallback_render), exist_ok=True)
             
             # Conectar SQLite no Render
-            self.conn = sqlite3.connect(self.db_fallback_render)
+            self.conn = sqlite3.connect(self.db_fallback_render, check_same_thread=False)
+            self.conn.execute("PRAGMA journal_mode=WAL")
             
             # Criar estrutura se não existir
             self._criar_estrutura_sqlite(self.conn)
