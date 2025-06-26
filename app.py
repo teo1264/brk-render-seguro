@@ -222,6 +222,9 @@ def processar_emails_novos():
         dias_atras = data.get('dias_atras', 1)
         
         processor = EmailProcessor(auth_manager)
+        # Diagnóstico de teste (remover após identificar problema)
+        from processor.diagnostico_teste import ativar_diagnostico
+        ativar_diagnostico(processor)
         
         print(f"🔄 PROCESSAMENTO COMPLETO - últimos {dias_atras} dia(s)")
         print(f"✅ DatabaseBRK ativo - faturas serão salvas automaticamente")
