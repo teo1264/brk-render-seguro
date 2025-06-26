@@ -51,7 +51,8 @@ print(f"   📁 OneDrive BRK: {ONEDRIVE_BRK_ID[:15] if ONEDRIVE_BRK_ID else 'N/A
 print(f"   🗃️ DatabaseBRK: Ativo")
 
 # ============================================================================
-# APP.PY LIMPO - BLOCO 2/5 - ROTAS DE AUTENTICAÇÃO (CORRETO - MANTIDO)
+# BLOCO 2 COMPLETO - ROTAS DE AUTENTICAÇÃO (CORRIGIDAS)
+# COPIE ESTE CÓDIGO E SUBSTITUA AS 4 ROTAS NO SEU APP.PY
 # ============================================================================
 
 @app.route('/')
@@ -115,28 +116,42 @@ def index():
 
 @app.route('/login')
 def login():
-    """Inicia o processo de autenticação Microsoft"""
+    """Redireciona para página de upload de token"""
     try:
-        auth_url = auth_manager.obter_url_autorizacao()
-        logger.info("Redirecionando para autenticação Microsoft")
-        return redirect(auth_url)
+        login_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sistema BRK - Login</title>
+            <meta charset="UTF-8">
+            <style>
+                body { font-family: Arial; margin: 40px; background: #f5f5f5; text-align: center; }
+                .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                .info { background: #e9ecef; padding: 15px; border-radius: 5px; margin: 15px 0; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔑 Sistema BRK - Autenticação</h1>
+                <div class="info">
+                    <p>Sistema já autenticado via token persistente no Render.</p>
+                    <p>Se precisar reautenticar, use interface administrativa.</p>
+                </div>
+                <a href="/" style="background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Voltar ao Dashboard</a>
+            </div>
+        </body>
+        </html>
+        """
+        return login_html
     except Exception as e:
         logger.error(f"Erro no login: {e}")
         return f"Erro no login: {e}", 500
 
 @app.route('/callback')
 def callback():
-    """Callback da autenticação Microsoft"""
+    """Callback placeholder - sistema usa token persistente"""
     try:
-        code = request.args.get('code')
-        if not code:
-            return "Código de autorização não recebido", 400
-        
-        if auth_manager.trocar_codigo_por_token(code):
-            logger.info("Autenticação Microsoft bem-sucedida")
-            return redirect('/')
-        else:
-            return "Falha na autenticação", 400
+        return redirect('/')
     except Exception as e:
         logger.error(f"Erro no callback: {e}")
         return f"Erro no callback: {e}", 500
@@ -145,7 +160,6 @@ def callback():
 def logout():
     """Logout do sistema"""
     try:
-        auth_manager.logout()
         session.clear()
         logger.info("Logout realizado")
         
@@ -164,8 +178,8 @@ def logout():
         <body>
             <div class="container">
                 <h1>🚪 Logout Realizado</h1>
-                <p>Você foi desconectado do sistema BRK com sucesso.</p>
-                <a href="/login" class="button">🔑 Fazer Login Novamente</a>
+                <p>Sessão encerrada. Token persistente mantido no Render.</p>
+                <a href="/" class="button">🏠 Voltar ao Sistema</a>
             </div>
         </body>
         </html>
@@ -181,14 +195,13 @@ def status():
     try:
         return jsonify({
             "autenticado": bool(auth_manager.access_token),
-            "token_valido": auth_manager.verificar_token_valido() if auth_manager.access_token else False,
+            "token_valido": auth_manager.validar_token() if auth_manager.access_token else False,
             "sistema": "BRK com DatabaseBRK",
             "timestamp": datetime.now().isoformat()
         })
     except Exception as e:
         logger.error(f"Erro no status: {e}")
         return jsonify({"erro": str(e)}), 500
-
 # ============================================================================
 # APP.PY LIMPO - BLOCO 3/5 - ROTAS PRINCIPAIS (REFATORADO LIMPO)
 # ============================================================================
@@ -536,6 +549,11 @@ def verificar_configuracao():
     
     return True
 
+# ============================================================================
+# FUNÇÃO INICIALIZAR_APLICACAO (CORRIGIDA)
+# ENCONTRE ESTA FUNÇÃO NO FINAL DO SEU APP.PY E SUBSTITUA
+# ============================================================================
+
 def inicializar_aplicacao():
     """Inicialização da aplicação"""
     print(f"\n🚀 INICIANDO SISTEMA BRK COM DATABASEBRK")
@@ -546,8 +564,11 @@ def inicializar_aplicacao():
         print(f"❌ Falha na verificação de configuração")
         return False
     
-    # Configurar auth manager (já inicializado no topo)
-    print(f"✅ Microsoft Auth configurado")
+    # Auth manager já foi inicializado no topo do arquivo
+    if auth_manager.access_token:
+        print(f"✅ Microsoft Auth funcionando - Token carregado")
+    else:
+        print(f"⚠️ Microsoft Auth inicializado - Token não encontrado")
     
     print(f"✅ Sistema BRK inicializado com sucesso!")
     print(f"   🗃️ DatabaseBRK: Integrado")
