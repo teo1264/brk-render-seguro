@@ -1084,8 +1084,9 @@ class EmailProcessor:
                                         except Exception as e:
                                             print(f"⚠️ Erro salvamento automático: {e}")
                                             pdf_completo['database_salvo'] = False
-                                            pdf_completo['database_erro'] = str(e)                      
-                                    else:
+                                            pdf_completo['database_erro'] = str(e)
+                                    
+                                else:
                                     # Falha na extração - manter dados básicos (COMPATIBILIDADE)
                                     pdf_completo = {
                                         **pdf_info_basico,
@@ -1127,7 +1128,7 @@ class EmailProcessor:
         except Exception as e:
             print(f"❌ Erro extraindo PDFs do email: {e}")
             return []
-
+            
     def log_consolidado_email(self, email_data, pdfs_processados):
         """
         Exibe log consolidado bonito de um email processado.
