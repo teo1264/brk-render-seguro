@@ -15,6 +15,7 @@ import logging
 # Imports dos módulos (que já funcionam)
 from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
+from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico
 
 # Configuração do Flask
 app = Flask(__name__)
@@ -605,15 +606,34 @@ def inicializar_aplicacao():
     
     if auth_manager.access_token:
         print(f"✅ Autenticação funcionando")
-    else:
-        print(f"⚠️ Token não encontrado - sistema aguardando autenticação")
+        
+        # 🆕 CRIAR EmailProcessor
+        processor = EmailProcessor(auth_manager)
+        
+        # 🆕 VERIFICAR DEPENDÊNCIAS DO MONITOR
+        deps = verificar_dependencias_monitor(processor)
+        if deps['dependencias_ok']:
+            print(f"✅ Dependências do monitor validadas")
+            
+            # 🆕 INICIAR MONITOR AUTOMÁTICO
+            monitor = iniciar_monitoramento_automatico(processor)
+            
+            if monitor:
+                print(f"✅ Monitor automático ativo (verifica a cada 10 min)")
+            else:
+                print(f"⚠️ Monitor automático falhou - continuando sem ele")
+        else:
+            print(f"❌ Dependências do monitor faltando:")
+            for obs in deps['observacoes']:
+                print(f"   {obs}")
+            print(f"⚠️ Continuando sem monitor automático")
     
     print(f"✅ Sistema BRK integrado inicializado!")
     print(f"   📧 Processamento de emails ativo")
     print(f"   📁 OneDrive + DatabaseBRK configurado")
     print(f"   🔍 SEEK + detecção duplicatas ativo")
+    print(f"   📊 Monitor automático a cada 10 minutos")  # ← NOVA LINHA
     print(f"   🌐 Interface web completa disponível")
-    print(f"="*60)
     
     return True
 
