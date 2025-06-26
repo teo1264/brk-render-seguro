@@ -374,7 +374,7 @@ class EmailProcessor:
                                     # Validação básica CDC (deve conter hífen e ter tamanho razoável)
                                     if (cdc_limpo and '-' in cdc_limpo and 
                                         6 <= len(cdc_limpo) <= 9 and
-                                        casa_limpa and len(casa_limpa) > 3):
+                                        casa_limpa and len(casa_limpa) >= 3):
                                         
                                         registros.append({
                                             'Casa': casa_limpa,      # Casa de Oração
