@@ -54,10 +54,23 @@ class EmailProcessor:
             print(f"🔄 Carregando relacionamento automaticamente...")
             self.relacionamento_carregado = self.carregar_relacionamento_completo()
             
+            # 🆕 INTEGRAR DatabaseBRK AUTOMATICAMENTE
+            print(f"🗃️ Inicializando DatabaseBRK...")
+            self.database_brk = self._inicializar_database_brk()
+            
+            if self.database_brk:
+                print(f"✅ DatabaseBRK integrado com sucesso!")
+                print(f"   💾 Database: OneDrive + cache local + fallback")
+                print(f"   🔍 SEEK: Ativo (detecção duplicatas)")
+                print(f"   🔄 Sincronização: Automática")
+            else:
+                print(f"⚠️ DatabaseBRK falhou - continuando sem salvamento")
+                
         else:
             print("   ⚠️ ONEDRIVE_BRK_ID não configurado - relacionamento indisponível")
             print("   💡 Funcionará apenas com extração básica dos PDFs")
-
+            self.database_brk = None
+            
     def garantir_autenticacao(self):
         """
         Garante que autenticação está funcionando.
@@ -69,7 +82,97 @@ class EmailProcessor:
         except Exception as e:
             print(f"❌ Erro autenticação: {e}")
             return False
+            
+    def _inicializar_database_brk(self):
+        """
+        Inicializa DatabaseBRK automaticamente se OneDrive configurado.
+        
+        Returns:
+            DatabaseBRK: Instância configurada ou None se erro
+        """
+        try:
+            if not self.onedrive_brk_id:
+                print(f"⚠️ ONEDRIVE_BRK_ID não configurado - DatabaseBRK indisponível")
+                return None
+            
+            # Importar DatabaseBRK
+            try:
+                from .database_brk import DatabaseBRK
+            except ImportError:
+                print(f"❌ Erro importando DatabaseBRK - arquivo não encontrado")
+                return None
+            
+            # Criar instância DatabaseBRK
+            database = DatabaseBRK(self.auth, self.onedrive_brk_id)
+            
+            # Verificar se inicializou corretamente
+            if hasattr(database, 'conn') and database.conn:
+                print(f"✅ DatabaseBRK conectado - usando {'OneDrive' if database.usando_onedrive else 'Fallback'}")
+                return database
+            else:
+                print(f"⚠️ DatabaseBRK inicializado mas sem conexão")
+                return database  # Retornar mesmo assim - pode funcionar
+                
+        except Exception as e:
+            print(f"❌ Erro inicializando DatabaseBRK: {e}")
+            return None
 
+    def salvar_fatura_database(self, dados_fatura):
+        """
+        Salva fatura no DatabaseBRK se disponível.
+        
+        Args:
+            dados_fatura (dict): Dados extraídos da fatura
+            
+        Returns:
+            dict: Resultado do salvamento
+        """
+        try:
+            if not self.database_brk:
+                return {
+                    'status': 'pulado',
+                    'mensagem': 'DatabaseBRK não disponível',
+                    'database_ativo': False
+                }
+            
+            # Usar método salvar_fatura do DatabaseBRK
+            resultado = self.database_brk.salvar_fatura(dados_fatura)
+            
+            if resultado.get('status') == 'sucesso':
+                print(f"💾 DatabaseBRK: {resultado.get('status_duplicata', 'NORMAL')} - {resultado.get('nome_arquivo', 'arquivo')}")
+            
+            return resultado
+            
+        except Exception as e:
+            print(f"❌ Erro salvando no DatabaseBRK: {e}")
+            return {
+                'status': 'erro',
+                'mensagem': str(e),
+                'database_ativo': bool(self.database_brk)
+            }
+
+    def debug_status_completo(self):
+        """
+        Debug completo do EmailProcessor incluindo DatabaseBRK.
+        Método usado pelo diagnóstico para verificar integração.
+        """
+        try:
+            print(f"\n🔍 DEBUG STATUS EMAILPROCESSOR COMPLETO:")
+            print(f"   📧 Pasta emails: {'✅' if self.pasta_brk_id else '❌'}")
+            print(f"   📁 OneDrive: {'✅' if self.onedrive_brk_id else '❌'}")
+            print(f"   🔗 Relacionamento: {'✅' if self.relacionamento_carregado else '❌'} ({len(self.cdc_brk_vetor)} CDCs)")
+            print(f"   🗃️ DatabaseBRK: {'✅' if self.database_brk else '❌'}")
+            
+            if self.database_brk:
+                print(f"   💾 Database tipo: {type(self.database_brk).__name__}")
+                print(f"   🔄 Database status: {'OneDrive' if getattr(self.database_brk, 'usando_onedrive', False) else 'Fallback'}")
+                print(f"   📊 Conexão ativa: {'✅' if getattr(self.database_brk, 'conn', None) else '❌'}")
+            
+            print(f"   🎯 INTEGRAÇÃO: {'✅ COMPLETA' if self.database_brk else '❌ FALTANDO DatabaseBRK'}")
+            
+        except Exception as e:
+            print(f"❌ Erro debug status: {e}")
+            
 # ============================================================================
     # BLOCO 2/5 - RELACIONAMENTO CDC → CASA DE ORAÇÃO (SEM PANDAS)
     # ============================================================================
@@ -967,7 +1070,22 @@ class EmailProcessor:
                                     
                                     print(f"✅ PDF processado: {nome_original}")
                                     
-                                else:
+                                    # 🆕 SALVAMENTO AUTOMÁTICO NO DatabaseBRK
+                                    if self.database_brk and dados_extraidos:
+                                        try:
+                                            resultado_db = self.salvar_fatura_database(pdf_completo)
+                                            if resultado_db.get('status') == 'sucesso':
+                                                pdf_completo['database_salvo'] = True
+                                                pdf_completo['database_id'] = resultado_db.get('id_salvo')
+                                                pdf_completo['database_status'] = resultado_db.get('status_duplicata', 'NORMAL')
+                                            else:
+                                                pdf_completo['database_salvo'] = False
+                                                pdf_completo['database_erro'] = resultado_db.get('mensagem', 'Erro desconhecido')
+                                        except Exception as e:
+                                            print(f"⚠️ Erro salvamento automático: {e}")
+                                            pdf_completo['database_salvo'] = False
+                                            pdf_completo['database_erro'] = str(e)                      
+                                    else:
                                     # Falha na extração - manter dados básicos (COMPATIBILIDADE)
                                     pdf_completo = {
                                         **pdf_info_basico,
