@@ -608,7 +608,7 @@ def inicializar_aplicacao():
         
         # 🆕 CRIAR EmailProcessor
         processor = EmailProcessor(auth_manager)
-         # Diagnóstico de teste (remover após identificar problema)
+        # Diagnóstico de teste (remover após identificar problema)
         from processor.diagnostico_teste import ativar_diagnostico
         ativar_diagnostico(processor)
         # 🆕 VERIFICAR DEPENDÊNCIAS DO MONITOR
