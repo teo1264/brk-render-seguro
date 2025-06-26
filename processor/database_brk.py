@@ -492,20 +492,24 @@ class DatabaseBRK:
                 return ano, mes
             except Exception as e:
                 print(f"⚠️ Erro processando vencimento '{vencimento}': {e}")
-        # ... resto do método com indentação correta   
-    
-    # ✅ FALLBACK: COMPETÊNCIA (se vencimento falhar)
-    if competencia:
-        # Formato: 01/2025, 02/2025, etc.
-        if re.search(r'(\d{2})[/-](\d{4})', competencia):
-            try:
-                match = re.search(r'(\d{2})[/-](\d{4})', competencia)
-                mes, ano = int(match.group(1)), int(match.group(2))
-                print(f"📅 Pasta definida por COMPETÊNCIA (fallback): {competencia} → /{ano}/{mes:02d}/")
-                return ano, mes
-            except Exception as e:
-                print(f"⚠️ Erro processando competência '{competencia}': {e}")
         
+        # ✅ FALLBACK: COMPETÊNCIA (se vencimento falhar)
+        if competencia:
+            # Tentar formato MM/YYYY
+            if '/' in competencia and len(competencia) >= 7:
+                try:
+                    mes, ano = competencia.split('/')
+                    mes, ano = int(mes), int(ano)
+                    print(f"📅 Pasta definida por COMPETÊNCIA: {competencia} → /{ano}/{mes:02d}/")
+                    return ano, mes
+                except Exception as e:
+                    print(f"⚠️ Erro processando competência '{competencia}': {e}")
+        
+        # ✅ FALLBACK FINAL: Data atual
+        from datetime import datetime
+        agora = datetime.now()
+        print(f"📅 Pasta definida por DATA ATUAL (fallback): {agora.year}/{agora.month:02d}")
+        return agora.year, agora.month
         # Formato: Jan/2025, Fev/2025, etc.
         meses_por_nome = {
             'jan': 1, 'janeiro': 1,
