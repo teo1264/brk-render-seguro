@@ -20,7 +20,7 @@ def ativar_diagnostico(email_processor):
     Ativar diagnóstico detalhado no EmailProcessor
     
     Args:
-        email_processor: Instância do EmailProcessor para diagnosticar
+        email_processor: Instância do EmailProcessor para diagnosticar (pode ser chamado 'processor' ou 'email_processor')
     
     Returns:
         bool: True se diagnóstico foi ativado com sucesso
