@@ -893,10 +893,11 @@ class AdminHandler(BaseHTTPRequestHandler):
                         🧪 Teste OneDrive<br>
                         <small>Verificar acesso e descobrir IDs</small>
                     </a>
-                    <a href="/status" class="action-btn">
-                        📊 Status Detalhado<br>
-                        <small>Diagnóstico completo JSON</small>
+                    <a href="https://brk-render-seguro.onrender.com" class="action-btn success" target="_blank">
+                        🌐 Sistema Principal<br>
+                        <small>Interface de produção</small>
                     </a>
+                    </div>   ← ANTES DESTE </div>
                     <a href="/health" class="action-btn success">
                         🔍 Health Check<br>
                         <small>Verificação rápida sistema</small>
