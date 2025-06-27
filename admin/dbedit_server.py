@@ -1334,76 +1334,559 @@ class DBEditHandlerReal(BaseHTTPRequestHandler):
     # ============================================================================
     
     def _render_dbedit_browse_html(self, resultado: Dict[str, Any]):
-        """Renderizar interface BROWSE MODE - Grade estilo planilha com 7 campos"""
-        # NOTA: Por limitação de espaço, implementação completa disponível nos blocos anteriores
-        # Esta é uma versão simplificada para o arquivo final
-        
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html; charset=utf-8')
-        self.end_headers()
-        
-        if resultado["status"] == "error":
-            html = f"""
-            <!DOCTYPE html>
-            <html><head><title>DBEDIT Browse - Erro</title><meta charset="UTF-8"></head>
-            <body style="font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px;">
-                <h1>❌ ERRO DBEDIT BROWSE</h1>
-                <div style="background: #800000; padding: 20px; border: 1px solid #ffffff;">
-                    <h3>{resultado["message"]}</h3>
-                </div>
-                <p><a href="/dbedit" style="color: #00ffff;">← Tentar novamente</a></p>
-            </body></html>
-            """
-            self.wfile.write(html.encode('utf-8'))
-            return
-        
-        # Dados básicos
-        tabela = resultado["tabela"]
-        total_registros = resultado["total_registros"]
-        
-        # HTML simplificado BROWSE (versão completa nos blocos anteriores)
+    """Renderizar interface BROWSE MODE - Grade estilo planilha com 7 campos - VERSÃO COMPLETA"""
+    self.send_response(200)
+    self.send_header('Content-type', 'text/html; charset=utf-8')
+    self.end_headers()
+    
+    if resultado["status"] == "error":
         html = f"""
         <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <title>🗃️ DBEDIT BROWSE - {tabela}</title>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px; }}
-                .grade {{ border: 1px solid #ffffff; background: #000080; }}
-                .linha-selecionada {{ background: #ffff00; color: #000000; }}
-                .cmd-button {{ background: #008000; color: #ffffff; border: 1px solid #ffffff; padding: 5px 10px; margin: 2px; cursor: pointer; }}
-            </style>
-            <script>
-                function editarRegistro(pos) {{
-                    window.location.href = '/dbedit?modo=edit&rec=' + pos;
-                }}
-                function navegarBrowse(cmd) {{
-                    window.location.href = '/dbedit?modo=browse&cmd=' + encodeURIComponent(cmd);
-                }}
-            </script>
-        </head>
-        <body>
-            <h1>🗃️ DBEDIT BROWSE MODE - {tabela.upper()}</h1>
-            <p>📊 Total: {total_registros} registros</p>
-            
-            <div class="grade">
-                <p>🚧 Interface BROWSE simplificada no arquivo final</p>
-                <p>📋 Implementação completa disponível nos blocos anteriores</p>
-                <p>✏️ <a href="/dbedit?modo=edit&rec=1" style="color: #00ffff;">Ir para EDIT MODE</a></p>
+        <html><head><title>DBEDIT Browse - Erro</title><meta charset="UTF-8"></head>
+        <body style="font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px;">
+            <h1>❌ ERRO DBEDIT BROWSE</h1>
+            <div style="background: #800000; padding: 20px; border: 1px solid #ffffff;">
+                <h3>{resultado["message"]}</h3>
             </div>
-            
-            <div>
-                <button class="cmd-button" onclick="navegarBrowse('TOP')">🔝 TOP</button>
-                <button class="cmd-button" onclick="navegarBrowse('BOTTOM')">🔚 BOTTOM</button>
-                <button class="cmd-button" onclick="editarRegistro(1)">✏️ EDIT</button>
-            </div>
-        </body>
-        </html>
+            <p><a href="/dbedit" style="color: #00ffff;">← Tentar novamente</a></p>
+        </body></html>
         """
-        
         self.wfile.write(html.encode('utf-8'))
+        return
     
+    # Preparar dados
+    tabela = resultado["tabela"]
+    registro_selecionado = resultado["registro_selecionado"]
+    total_registros = resultado["total_registros"]
+    window_inicio = resultado["window_inicio"]
+    window_fim = resultado["window_fim"]
+    e_faturas_brk = resultado.get("e_faturas_brk", False)
+    registros = resultado.get("registros", [])
+    
+    # Opções de tabelas
+    tabelas_options = ""
+    for t in resultado["tabelas_disponiveis"]:
+        selected = "selected" if t == tabela else ""
+        tabelas_options += f'<option value="{t}" {selected}>{t}</option>'
+    
+    # Cabeçalho da grade (7 campos)
+    if e_faturas_brk:
+        cabecalho_campos = [
+            ("Reg", "60px", "browse-header-reg"),
+            ("CDC", "100px", "browse-header-cdc"), 
+            ("Casa Oração", "200px", "browse-header-casa"),
+            ("Valor", "120px", "browse-header-valor"),
+            ("Vencimento", "100px", "browse-header-venc"),
+            ("Status", "100px", "browse-header-status"),
+            ("Alerta", "150px", "browse-header-alerta")
+        ]
+    else:
+        # Para outras tabelas, usar campos genéricos
+        campos_browse = resultado.get("campos_browse", [])
+        cabecalho_campos = [(campo.replace("_", " ").title(), "120px", "browse-header-normal") for campo in campos_browse[:7]]
+    
+    # Linhas da grade
+    linhas_html = ""
+    if registros:
+        for registro in registros:
+            posicao = registro["posicao"]
+            e_selecionado = registro["e_selecionado"]
+            campos = registro["campos"]
+            
+            # CSS da linha
+            linha_class = "browse-row-selected" if e_selecionado else "browse-row-normal"
+            seta = "►" if e_selecionado else " "
+            
+            # Montar células da linha
+            celulas = []
+            
+            if e_faturas_brk:
+                # Ordem específica para faturas_brk: Reg, CDC, Casa, Valor, Vencimento, Status, Alerta
+                celulas = [
+                    f'<td class="browse-cell-reg">{seta}{posicao}</td>',
+                    f'<td class="browse-cell-{campos.get("cdc", {}).get("css_class", "normal")}">{campos.get("cdc", {}).get("valor", "N/A")}</td>',
+                    f'<td class="browse-cell-{campos.get("casa_oracao", {}).get("css_class", "normal")}">{campos.get("casa_oracao", {}).get("valor", "N/A")}</td>',
+                    f'<td class="browse-cell-{campos.get("valor", {}).get("css_class", "normal")}">{campos.get("valor", {}).get("valor", "N/A")}</td>',
+                    f'<td class="browse-cell-{campos.get("vencimento", {}).get("css_class", "normal")}">{campos.get("vencimento", {}).get("valor", "N/A")}</td>',
+                    f'<td class="browse-cell-{campos.get("status_duplicata", {}).get("css_class", "normal")}">{campos.get("status_duplicata", {}).get("valor", "N/A")}</td>',
+                    f'<td class="browse-cell-{campos.get("alerta_consumo", {}).get("css_class", "normal")}">{campos.get("alerta_consumo", {}).get("valor", "N/A")}</td>'
+                ]
+            else:
+                # Para outras tabelas
+                celulas.append(f'<td class="browse-cell-reg">{seta}{posicao}</td>')
+                for campo_nome in resultado.get("campos_browse", [])[:6]:  # Máximo 6 campos + reg
+                    valor = campos.get(campo_nome, {}).get("valor", "N/A")
+                    css_class = campos.get(campo_nome, {}).get("css_class", "normal")
+                    celulas.append(f'<td class="browse-cell-{css_class}">{valor}</td>')
+            
+            linhas_html += f'<tr class="{linha_class}" onclick="selecionarLinha({posicao})" ondblclick="editarRegistro({posicao})">{"".join(celulas)}</tr>'
+    else:
+        # Tabela vazia
+        colspan = len(cabecalho_campos)
+        linhas_html = f'<tr><td colspan="{colspan}" style="text-align: center; padding: 30px; color: #ffff00; font-size: 16px;">📭 Nenhum registro encontrado</td></tr>'
+    
+    # Estados dos botões
+    nav = resultado.get("navegacao", {})
+    nav_disabled_top = 'disabled' if nav.get('e_primeiro') else ''
+    nav_disabled_prev = 'disabled' if not nav.get('pode_anterior') else ''
+    nav_disabled_next = 'disabled' if not nav.get('pode_proximo') else ''
+    nav_disabled_bottom = 'disabled' if nav.get('e_ultimo') else ''
+    nav_disabled_pageup = 'disabled' if not nav.get('window_pode_subir') else ''
+    nav_disabled_pagedown = 'disabled' if not nav.get('window_pode_descer') else ''
+    delete_disabled = 'disabled' if total_registros == 0 else ''
+    
+    # HTML completo BROWSE MODE
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <title>🗃️ DBEDIT BROWSE - {tabela} - Reg {registro_selecionado}/{total_registros}</title>
+        <meta charset="UTF-8">
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ 
+                font-family: 'Courier New', 'Lucida Console', monospace;
+                background: #000080;
+                color: #ffffff;
+                font-size: 13px;
+                line-height: 1.1;
+                overflow: hidden;
+            }}
+            
+            .title-bar {{ 
+                background: #0000aa;
+                color: #ffff00;
+                padding: 8px 15px;
+                font-weight: bold;
+                text-align: center;
+                border-bottom: 2px solid #ffffff;
+                font-size: 16px;
+            }}
+            
+            .status-bar {{ 
+                background: #008080;
+                color: #ffffff;
+                padding: 6px 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid #ffffff;
+                font-size: 12px;
+            }}
+            
+            .main-content {{ 
+                height: calc(100vh - 140px);
+                overflow: auto;
+                background: #000080;
+            }}
+            
+            .browse-table {{ 
+                width: 100%;
+                border-collapse: separate;
+                border-spacing: 0;
+                margin: 0;
+            }}
+            
+            .browse-table th {{ 
+                background: #800080;
+                color: #ffffff;
+                padding: 8px 6px;
+                text-align: left;
+                border-right: 1px solid #ffffff;
+                border-bottom: 2px solid #ffffff;
+                font-weight: bold;
+                font-size: 13px;
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            }}
+            
+            .browse-table th:last-child {{ border-right: none; }}
+            
+            .browse-row-normal {{ 
+                background: #000080;
+                cursor: pointer;
+                border-bottom: 1px solid #004080;
+            }}
+            .browse-row-normal:hover {{ background: #004080; }}
+            
+            .browse-row-selected {{ 
+                background: #ffff00;
+                color: #000000;
+                font-weight: bold;
+                cursor: pointer;
+            }}
+            
+            .browse-table td {{ 
+                padding: 4px 6px;
+                border-right: 1px solid rgba(255,255,255,0.3);
+                vertical-align: middle;
+                font-size: 12px;
+            }}
+            
+            .browse-table td:last-child {{ border-right: none; }}
+            
+            .browse-cell-reg {{ 
+                width: 60px;
+                text-align: center;
+                font-weight: bold;
+            }}
+            
+            .browse-cell-browse-cdc {{ 
+                color: #ffff00;
+                font-weight: bold;
+                font-family: monospace;
+            }}
+            
+            .browse-cell-browse-casa {{ 
+                color: #80ff80;
+                font-weight: 600;
+            }}
+            
+            .browse-cell-browse-valor {{ 
+                color: #80ffff;
+                font-weight: bold;
+                text-align: right;
+            }}
+            
+            .browse-cell-browse-status {{ 
+                color: #ff8080;
+                font-weight: bold;
+                text-align: center;
+            }}
+            
+            .browse-cell-browse-alerta {{ 
+                color: #ff4040;
+                font-weight: bold;
+            }}
+            
+            .browse-cell-normal {{ color: #ffffff; }}
+            
+            /* Linhas selecionadas sobrescrevem cores */
+            .browse-row-selected .browse-cell-browse-cdc,
+            .browse-row-selected .browse-cell-browse-casa,
+            .browse-row-selected .browse-cell-browse-valor,
+            .browse-row-selected .browse-cell-browse-status,
+            .browse-row-selected .browse-cell-browse-alerta,
+            .browse-row-selected .browse-cell-normal {{ 
+                color: #000000 !important;
+                font-weight: bold;
+            }}
+            
+            .commands-bar {{ 
+                background: #800000;
+                color: #ffffff;
+                padding: 8px;
+                border-top: 2px solid #ffffff;
+                text-align: center;
+                height: 80px;
+            }}
+            
+            .cmd-button {{ 
+                background: #008000;
+                color: #ffffff;
+                border: 1px solid #ffffff;
+                padding: 5px 10px;
+                margin: 2px;
+                cursor: pointer;
+                font-family: inherit;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            .cmd-button:hover:not(:disabled) {{ background: #00aa00; }}
+            .cmd-button:disabled {{ 
+                background: #666666; 
+                color: #999999; 
+                cursor: not-allowed; 
+            }}
+            
+            .cmd-delete {{ 
+                background: #cc6600 !important;
+                color: #ffffff;
+                font-weight: bold;
+            }}
+            .cmd-delete:hover:not(:disabled) {{ background: #ff8800 !important; }}
+            
+            .cmd-zap-all {{ 
+                background: #cc0000 !important;
+                color: #ffffff;
+                font-weight: bold;
+                border: 2px solid #ffffff !important;
+            }}
+            .cmd-zap-all:hover:not(:disabled) {{ 
+                background: #ff0000 !important;
+                animation: pulse 0.5s ease-in-out;
+            }}
+            
+            .cmd-edit {{ 
+                background: #0066cc !important;
+                color: #ffffff;
+                font-weight: bold;
+            }}
+            .cmd-edit:hover:not(:disabled) {{ background: #0088ff !important; }}
+            
+            @keyframes pulse {{
+                0% {{ transform: scale(1); }}
+                50% {{ transform: scale(1.05); }}
+                100% {{ transform: scale(1); }}
+            }}
+            
+            .cmd-input {{ 
+                background: #000000;
+                color: #ffffff;
+                border: 1px solid #ffffff;
+                padding: 4px 8px;
+                margin: 2px;
+                font-family: inherit;
+                font-size: 11px;
+            }}
+            
+            /* Responsividade para telas menores */
+            @media (max-width: 1200px) {{
+                .browse-table {{ font-size: 11px; }}
+                .browse-table td {{ padding: 3px 4px; }}
+            }}
+        </style>
+        <script>
+            let registroSelecionado = {registro_selecionado};
+            let totalRegistros = {total_registros};
+            
+            function navegarBrowse(cmd) {{
+                const tabela = document.getElementById('tabela').value;
+                const filtro = document.getElementById('filtro').value;
+                const ordem = document.getElementById('ordem').value;
+                
+                const url = `/dbedit?modo=browse&tabela=${{tabela}}&rec=${{registroSelecionado}}&cmd=${{encodeURIComponent(cmd)}}&filtro=${{encodeURIComponent(filtro)}}&order=${{encodeURIComponent(ordem)}}`;
+                window.location.href = url;
+            }}
+            
+            function selecionarLinha(posicao) {{
+                // Navegação rápida: se clicou em linha diferente, vai direto para ela
+                if (posicao !== registroSelecionado) {{
+                    const tabela = document.getElementById('tabela').value;
+                    const filtro = document.getElementById('filtro').value;
+                    const ordem = document.getElementById('ordem').value;
+                    
+                    const url = `/dbedit?modo=browse&tabela=${{tabela}}&rec=${{posicao}}&cmd=GOTO ${{posicao}}&filtro=${{encodeURIComponent(filtro)}}&order=${{encodeURIComponent(ordem)}}`;
+                    window.location.href = url;
+                }}
+            }}
+            
+            function editarRegistro(posicao) {{
+                // TRANSIÇÃO BROWSE → EDIT: Duplo clique ou Enter
+                const tabela = document.getElementById('tabela').value;
+                const filtro = document.getElementById('filtro').value;
+                const ordem = document.getElementById('ordem').value;
+                
+                const url = `/dbedit?modo=edit&tabela=${{tabela}}&rec=${{posicao}}&filtro=${{encodeURIComponent(filtro)}}&order=${{encodeURIComponent(ordem)}}`;
+                window.location.href = url;
+            }}
+            
+            function editarAtual() {{
+                // Wrapper: editar registro selecionado atual
+                editarRegistro(registroSelecionado);
+            }}
+            
+            function deletarRegistroAtual() {{
+                const tabela = document.getElementById('tabela').value;
+                
+                const confirma = confirm(
+                    `🗑️ DELETE RECNO()\\n\\n` +
+                    `Deletar registro ${{registroSelecionado}}/${{totalRegistros}}?\\n` +
+                    `Tabela: ${{tabela}}\\n\\n` +
+                    `⚠️ Esta ação não pode ser desfeita!`
+                );
+                
+                if (confirma) {{
+                    const url = `/delete?tabela=${{encodeURIComponent(tabela)}}&registro=${{registroSelecionado}}&acao=DELETE_RECNO`;
+                    
+                    document.body.style.cursor = 'wait';
+                    const btnDelete = document.querySelector('.cmd-delete');
+                    if (btnDelete) {{
+                        btnDelete.disabled = true;
+                        btnDelete.textContent = '⏳ Deletando...';
+                    }}
+                    
+                    fetch(url, {{ method: 'POST' }})
+                        .then(response => response.json())
+                        .then(data => {{
+                            if (data.status === 'success') {{
+                                const novaPos = data.nova_posicao || 1;
+                                const filtro = document.getElementById('filtro').value;
+                                const ordem = document.getElementById('ordem').value;
+                                
+                                const redirectUrl = `/dbedit?modo=browse&tabela=${{encodeURIComponent(tabela)}}&rec=${{novaPos}}&cmd=SHOW&filtro=${{encodeURIComponent(filtro)}}&order=${{encodeURIComponent(ordem)}}`;
+                                window.location.href = redirectUrl;
+                            }} else {{
+                                alert(`❌ Erro no DELETE:\\n${{data.message}}`);
+                                document.body.style.cursor = 'default';
+                                if (btnDelete) {{
+                                    btnDelete.disabled = false;
+                                    btnDelete.textContent = '🗑️ DELETE';
+                                }}
+                            }}
+                        }});
+                }}
+            }}
+            
+            function zapTodosRegistros() {{
+                const tabela = document.getElementById('tabela').value;
+                
+                const confirma1 = confirm(
+                    `⚡ ZAP ALL - PRIMEIRA CONFIRMAÇÃO\\n\\n` +
+                    `DELETAR TODOS os ${{totalRegistros}} registros?\\n` +
+                    `Tabela: ${{tabela}}\\n\\n` +
+                    `⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL!`
+                );
+                
+                if (!confirma1) return;
+                
+                const confirma2 = confirm(
+                    `⚡ ZAP ALL - CONFIRMAÇÃO FINAL\\n\\n` +
+                    `ÚLTIMA CHANCE!\\n\\n` +
+                    `Deletar TODOS os ${{totalRegistros}} registros?\\n\\n` +
+                    `🚨 IRREVERSÍVEL - ÚLTIMA CONFIRMAÇÃO!`
+                );
+                
+                if (confirma2) {{
+                    const url = `/delete?tabela=${{encodeURIComponent(tabela)}}&acao=ZAP_ALL`;
+                    
+                    document.body.style.cursor = 'wait';
+                    const btnZap = document.querySelector('.cmd-zap-all');
+                    if (btnZap) {{
+                        btnZap.disabled = true;
+                        btnZap.textContent = '💀 APAGANDO TUDO...';
+                    }}
+                    
+                    fetch(url, {{ method: 'POST' }})
+                        .then(response => response.json())
+                        .then(data => {{
+                            if (data.status === 'success') {{
+                                alert(`✅ ZAP ALL executado!\\n\\nRegistros deletados: ${{data.registros_deletados}}`);
+                                window.location.href = '/dbedit?modo=browse&tabela=' + encodeURIComponent(tabela);
+                            }} else {{
+                                alert(`❌ Erro no ZAP ALL:\\n${{data.message}}`);
+                                document.body.style.cursor = 'default';
+                                if (btnZap) {{
+                                    btnZap.disabled = false;
+                                    btnZap.textContent = '⚡ ZAP ALL';
+                                }}
+                            }}
+                        }});
+                }}
+            }}
+            
+            function executarBusca() {{
+                const termo = document.getElementById('busca').value;
+                if (termo.trim()) {{
+                    navegarBrowse(`SEEK ${{termo}}`);
+                }}
+            }}
+            
+            // Navegação por teclado COMPLETA
+            document.addEventListener('keydown', function(e) {{
+                if (!e.target.matches('input, select')) {{
+                    switch(e.key) {{
+                        case 'ArrowUp':
+                            e.preventDefault();
+                            navegarBrowse('UP');
+                            break;
+                        case 'ArrowDown':
+                            e.preventDefault();
+                            navegarBrowse('DOWN');
+                            break;
+                        case 'PageUp':
+                            e.preventDefault();
+                            navegarBrowse('PAGEUP');
+                            break;
+                        case 'PageDown':
+                            e.preventDefault();
+                            navegarBrowse('PAGEDOWN');
+                            break;
+                        case 'Home':
+                            if (e.ctrlKey) {{
+                                e.preventDefault();
+                                navegarBrowse('TOP');
+                            }}
+                            break;
+                        case 'End':
+                            if (e.ctrlKey) {{
+                                e.preventDefault();
+                                navegarBrowse('BOTTOM');
+                            }}
+                            break;
+                        case 'Enter':
+                            e.preventDefault();
+                            editarAtual(); // ← TRANSIÇÃO BROWSE → EDIT
+                            break;
+                        case 'Delete':
+                            e.preventDefault();
+                            deletarRegistroAtual();
+                            break;
+                    }}
+                }}
+            }});
+            
+            console.log("🗃️ DBEDIT BROWSE MODE carregado");
+            console.log(`📊 Registro ${{registroSelecionado}}/${{totalRegistros}}`);
+            console.log("⌨️ Navegação: ↑↓ PageUp/PageDown Ctrl+Home/End ENTER DELETE");
+            console.log("🔄 ENTER = EDIT MODE | ESC (no EDIT) = BROWSE MODE");
+        </script>
+    </head>
+    <body>
+        <div class="title-bar">
+            🗃️ DBEDIT BROWSE MODE - {tabela.upper()} {'(FATURAS BRK)' if e_faturas_brk else ''}
+        </div>
+        
+        <div class="status-bar">
+            <span>📊 {resultado.get('browse_status', 'N/A')}</span>
+            <span>⚡ Window: {window_inicio}-{window_fim} de {total_registros}</span>
+            <span>{'💾 OneDrive' if resultado.get('database_info', {}).get('usando_onedrive') else '💾 Local'}</span>
+            <span>🕐 {resultado['timestamp']}</span>
+        </div>
+        
+        <div class="main-content">
+            <table class="browse-table">
+                <thead>
+                    <tr>
+                        {"".join(f'<th style="width: {largura};">{nome}</th>' for nome, largura, css in cabecalho_campos)}
+                    </tr>
+                </thead>
+                <tbody>
+                    {linhas_html}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="commands-bar">
+            <div>
+                <select id="tabela" onchange="window.location.href='/dbedit?modo=browse&tabela=' + this.value">
+                    {tabelas_options}
+                </select>
+                <input type="text" id="filtro" placeholder="WHERE..." value="{resultado.get('filtro_ativo', '')}">
+                <input type="text" id="ordem" placeholder="ORDER BY..." value="{resultado.get('ordenacao_ativa', '')}">
+            </div>
+            <div>
+                <button class="cmd-button" onclick="navegarBrowse('TOP')" {nav_disabled_top}>🔝 TOP</button>
+                <button class="cmd-button" onclick="navegarBrowse('PAGEUP')" {nav_disabled_pageup}>⬆️ PGUP</button>
+                <button class="cmd-button" onclick="navegarBrowse('UP')" {nav_disabled_prev}>⬅️ UP</button>
+                <button class="cmd-button" onclick="navegarBrowse('DOWN')" {nav_disabled_next}>➡️ DOWN</button>
+                <button class="cmd-button" onclick="navegarBrowse('PAGEDOWN')" {nav_disabled_pagedown}>⬇️ PGDN</button>
+                <button class="cmd-button" onclick="navegarBrowse('BOTTOM')" {nav_disabled_bottom}>🔚 BOTTOM</button>
+                
+                <button class="cmd-button cmd-edit" onclick="editarAtual()" {delete_disabled}>✏️ EDIT</button>
+                <button class="cmd-button cmd-delete" onclick="deletarRegistroAtual()" {delete_disabled}>🗑️ DELETE</button>
+                <button class="cmd-button cmd-zap-all" onclick="zapTodosRegistros()">⚡ ZAP ALL</button>
+                
+                <input type="text" id="busca" placeholder="SEEK..." class="cmd-input">
+                <button class="cmd-button" onclick="executarBusca()">🔍 SEEK</button>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    self.wfile.write(html.encode('utf-8'))
     # ============================================================================
     # ✏️ RENDERIZAÇÃO EDIT MODE - Detalhes campo por campo (SIMPLIFICADO)
     # ============================================================================
