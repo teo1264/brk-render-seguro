@@ -85,15 +85,15 @@ def index():
                             <li>✅ Logs estruturados para Render</li>
                         </ul>
                     </div>
-                    
-                    <h3>🔧 Ações Disponíveis:</h3>
-                    <a href="/diagnostico-pasta" class="button">📊 Diagnóstico Pasta</a>
-                    <a href="/processar-emails-form" class="button">⚙️ Processar Emails</a>
-                    <a href="/test-onedrive" class="button">🧪 Teste OneDrive</a>
-                    <a href="/estatisticas-database" class="button">📈 DatabaseBRK</a>
-                    <a href="/status" class="button">📋 Status JSON</a>
-                    <a href="/logout" class="button" style="background: #dc3545;">🚪 Logout</a>
-                    
+                        <h3>🔧 Ações Disponíveis:</h3>
+                        <a href="/diagnostico-pasta" class="button">📊 Diagnóstico Pasta</a>
+                        <a href="/processar-emails-form" class="button">⚙️ Processar Emails</a>
+                        <a href="/test-onedrive" class="button">🧪 Teste OneDrive</a>
+                        <a href="/estatisticas-database" class="button">📈 DatabaseBRK</a>
+                        <a href="/dbedit" class="button">🗃️ DBEDIT Clipper</a>
+                        <a href="/status" class="button">📋 Status JSON</a>
+                        <a href="/logout" class="button" style="background: #dc3545;">🚪 Logout</a>                
+     
                     <div class="info">
                         <small>📱 Sistema simples e eficiente<br>
                         🔧 Sidney Gubitoso - Tesouraria Administrativa Mauá</small>
@@ -550,6 +550,104 @@ def health_check():
             "timestamp": datetime.now().isoformat()
         }), 500
 
+@app.route('/dbedit')
+def dbedit():
+    """DBEDIT - Navegação database estilo Clipper (integração com admin/)"""
+    try:
+        if not auth_manager.access_token:
+            return redirect('/login')
+        
+        # Parâmetros da URL
+        tabela = request.args.get('tabela', 'faturas_brk')
+        registro_atual = int(request.args.get('rec', '1'))
+        comando = request.args.get('cmd', '')
+        filtro = request.args.get('filtro', '')
+        ordenacao = request.args.get('order', '')
+        formato = request.args.get('formato', 'html')
+        
+        # Usar engine DBEDIT existente
+        from admin.dbedit_server import DBEditEngineBRK
+        
+        engine = DBEditEngineBRK()
+        resultado = engine.navegar_registro_real(tabela, registro_atual, comando, filtro, ordenacao)
+        
+        if formato == 'json':
+            return jsonify(resultado)
+        
+        # Renderizar HTML simples
+        if resultado["status"] == "error":
+            return f"""
+            <!DOCTYPE html>
+            <html><head><title>DBEDIT - Erro</title><meta charset="UTF-8"></head>
+            <body style="font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px;">
+                <div style="background: #800000; padding: 20px; border: 1px solid #ffffff;">
+                    <h1>❌ ERRO DBEDIT</h1>
+                    <h3>{resultado["message"]}</h3>
+                    <p><a href="/" style="color: #00ffff;">← Voltar ao Dashboard</a></p>
+                </div>
+            </body></html>
+            """
+        
+        # HTML básico funcional para DBEDIT
+        tabela = resultado["tabela"]
+        registro_atual = resultado["registro_atual"]
+        total_registros = resultado["total_registros"]
+        
+        # Campos do registro
+        campos_html = ""
+        if resultado.get("registro"):
+            for campo, info in resultado["registro"].items():
+                valor = str(info["valor"])[:100] + "..." if len(str(info["valor"])) > 100 else info["valor"]
+                campos_html += f"<tr><td style='color: #ffff00; padding: 5px;'>{campo}</td><td style='color: #ffffff; padding: 5px;'>{valor}</td></tr>"
+        
+        return f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <title>🗃️ DBEDIT BRK - {tabela} - Rec {registro_atual}/{total_registros}</title>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 0; }}
+                .header {{ background: #0000aa; color: #ffff00; padding: 10px; text-align: center; font-weight: bold; }}
+                .status {{ background: #008080; color: #ffffff; padding: 5px 10px; font-size: 12px; }}
+                .content {{ padding: 20px; }}
+                table {{ width: 100%; border-collapse: collapse; }}
+                td {{ border-bottom: 1px solid #333; padding: 5px; }}
+                .btn {{ background: #008000; color: white; padding: 5px 10px; text-decoration: none; margin: 2px; border: 1px solid #fff; }}
+                .btn:hover {{ background: #00aa00; }}
+            </style>
+        </head>
+        <body>
+            <div class="header">🗃️ DBEDIT BRK - {tabela.upper()}</div>
+            <div class="status">Registro {registro_atual}/{total_registros} - Database Real</div>
+            
+            <div class="content">
+                <table>{campos_html}</table>
+                
+                <div style="margin-top: 20px; text-align: center;">
+                    <a href="/dbedit?tabela={tabela}&rec=1&cmd=TOP" class="btn">🔝 TOP</a>
+                    <a href="/dbedit?tabela={tabela}&rec={max(1, registro_atual-1)}&cmd=PREV" class="btn">⬅️ PREV</a>
+                    <a href="/dbedit?tabela={tabela}&rec={min(total_registros, registro_atual+1)}&cmd=NEXT" class="btn">➡️ NEXT</a>
+                    <a href="/dbedit?tabela={tabela}&rec={total_registros}&cmd=BOTTOM" class="btn">🔚 BOTTOM</a>
+                    <a href="/" class="btn" style="background: #aa0000;">🏠 SAIR</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+    except Exception as e:
+        logger.error(f"Erro no DBEDIT: {e}")
+        return f"""
+        <!DOCTYPE html>
+        <html><head><title>DBEDIT - Erro</title><meta charset="UTF-8"></head>
+        <body style="font-family: monospace; background: #000080; color: #fff; padding: 20px;">
+            <h1>❌ ERRO DBEDIT</h1>
+            <p>Erro: {str(e)}</p>
+            <p><a href="/" style="color: #00ffff;">← Voltar ao Dashboard</a></p>
+        </body></html>
+        """
+
 # ============================================================================
 # TRATAMENTO DE ERROS
 # ============================================================================
@@ -564,8 +662,9 @@ def not_found(error):
             "/", "/login", "/logout", "/status",
             "/diagnostico-pasta", "/processar-emails-novos", 
             "/processar-emails-form", "/test-onedrive", 
-            "/estatisticas-database", "/health"
+            "/estatisticas-database", "/health", "/dbedit"
         ]
+        
     }), 404
 
 @app.errorhandler(500)
