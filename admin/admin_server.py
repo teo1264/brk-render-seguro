@@ -380,49 +380,202 @@ class AdminHandler(BaseHTTPRequestHandler):
                 "message": "Erro interno no teste",
                 "details": str(e)
             }
-    
-    def get_system_status(self) -> Dict[str, Any]:
+
+# ============================================================================
+# 📊 MELHORIA PARA admin/admin_server.py
+# SUBSTITUIR O MÉTODO get_system_status() EXISTENTE
+# ============================================================================
+
+
+     def get_system_status(self) -> Dict[str, Any]:
         """
-        Obter status completo do sistema
+        Obter status completo do sistema COM LISTA DE TODOS OS ENDPOINTS
         
         Returns:
-            Dict[str, Any]: Status detalhado do sistema
+            Dict[str, Any]: Status detalhado + documentação dos endpoints
         """
         try:
-            # Verificar environment variables
+            # Status básico do sistema
             client_id = os.getenv("MICROSOFT_CLIENT_ID")
             pasta_brk_id = os.getenv("PASTA_BRK_ID")
+            onedrive_brk_id = os.getenv("ONEDRIVE_BRK_ID")
             
             # Verificar autenticação
             try:
                 auth = MicrosoftAuth()
                 auth_status = auth.status_autenticacao()
+                auth_ok = bool(auth.access_token)
             except Exception as e:
                 auth_status = {"erro": str(e)}
+                auth_ok = False
             
             # Verificar processamento
             try:
                 processor = EmailProcessor(MicrosoftAuth())
                 processor_status = processor.status_processamento()
+                processor_ok = True
+                total_relacionamentos = len(getattr(processor, 'cdc_brk_vetor', []))
             except Exception as e:
                 processor_status = {"erro": str(e)}
+                processor_ok = False
+                total_relacionamentos = 0
             
+            # NOVA FUNCIONALIDADE: LISTA COMPLETA DE ENDPOINTS
+            endpoints_disponiveis = {
+                "GET": {
+                    "/": {
+                        "descricao": "Homepage administrativa principal",
+                        "funcao": "Interface visual com status geral e botões de ação",
+                        "exemplo": "https://brk-render-seguro.onrender.com:8080/",
+                        "formato": "HTML"
+                    },
+                    "/health": {
+                        "descricao": "Health check rápido do sistema",
+                        "funcao": "Verificação básica se serviço está funcionando",
+                        "exemplo": "https://brk-render-seguro.onrender.com:8080/health",
+                        "formato": "JSON"
+                    },
+                    "/status": {
+                        "descricao": "Status detalhado completo + lista de endpoints",
+                        "funcao": "Diagnóstico completo com toda documentação da API",
+                        "exemplo": "https://brk-render-seguro.onrender.com:8080/status",
+                        "formato": "JSON"
+                    },
+                    "/upload-token": {
+                        "descricao": "Página para upload de token Microsoft",
+                        "funcao": "Interface HTML para carregar token.json de forma segura",
+                        "exemplo": "https://brk-render-seguro.onrender.com:8080/upload-token",
+                        "formato": "HTML"
+                    },
+                    "/test-onedrive": {
+                        "descricao": "Teste de conectividade OneDrive",
+                        "funcao": "Verifica acesso OneDrive e descobre IDs de pastas",
+                        "exemplo": "https://brk-render-seguro.onrender.com:8080/test-onedrive",
+                        "formato": "JSON"
+                    },
+                    "/create-brk-folder": {
+                        "descricao": "Criar/verificar pasta BRK no OneDrive",
+                        "funcao": "Cria estrutura de pastas necessária no OneDrive",
+                        "exemplo": "https://brk-render-seguro.onrender.com:8080/create-brk-folder",
+                        "formato": "JSON"
+                    }
+                },
+                "POST": {
+                    "/upload-token": {
+                        "descricao": "Processar upload de token Microsoft",
+                        "funcao": "Recebe e salva token.json no persistent disk",
+                        "exemplo": "POST com form-data: token_content",
+                        "formato": "HTML"
+                    }
+                }
+            }
+            
+            # ENDPOINTS ADICIONAIS (se DBEDIT estiver implementado)
+            try:
+                # Verificar se DBEDIT está disponível
+                import os
+                dbedit_path = "/opt/render/project/admin/dbedit_server.py"
+                if os.path.exists(dbedit_path):
+                    endpoints_disponiveis["SERVERS"] = {
+                        "DBEDIT (porta 8081)": {
+                            "descricao": "Navegação estilo Clipper no database_brk.db",
+                            "funcao": "Interface DBEDIT para navegar registros da base real",
+                            "exemplo": "http://localhost:8081/dbedit",
+                            "formato": "HTML",
+                            "comandos": "TOP, BOTTOM, SKIP, GOTO, SEEK",
+                            "como_iniciar": "cd admin && python dbedit_server.py --port 8081"
+                        }
+                    }
+            except:
+                pass
+            
+            # INFORMAÇÕES DO HOST ATUAL
+            import socket
+            hostname = socket.gethostname()
+            
+            # URL BASE DINÂMICA
+            base_url = "https://brk-render-seguro.onrender.com:8080"
+            if "localhost" in hostname or "127.0.0.1" in hostname:
+                base_url = "http://localhost:8080"
+            
+            # ESTRUTURA COMPLETA DO STATUS
             return {
                 "timestamp": datetime.now().isoformat(),
                 "service": "brk-monitor-admin",
-                "version": "refatorado-modular",
+                "version": "refatorado-modular-v2.1",
+                "base_url": base_url,
+                "hostname": hostname,
+                
+                # STATUS BÁSICO
                 "config": {
                     "client_id_ok": bool(client_id),
                     "pasta_brk_ok": bool(pasta_brk_id),
-                    "client_id_safe": client_id[:8] + "******" if client_id else "N/A",
-                    "pasta_brk_safe": pasta_brk_id[:10] + "******" if pasta_brk_id else "N/A"
+                    "onedrive_brk_ok": bool(onedrive_brk_id),
+                    "client_id_safe": client_id[:8] + "******" if client_id else "❌ NÃO CONFIGURADO",
+                    "pasta_brk_safe": pasta_brk_id[:10] + "******" if pasta_brk_id else "❌ NÃO CONFIGURADO",
+                    "onedrive_brk_safe": onedrive_brk_id[:15] + "******" if onedrive_brk_id else "❌ NÃO CONFIGURADO"
                 },
-                "autenticacao": auth_status,
-                "processamento": processor_status,
+                
+                # STATUS DOS MÓDULOS
+                "autenticacao": {
+                    **auth_status,
+                    "token_ativo": auth_ok,
+                    "status_resumo": "✅ OK" if auth_ok else "❌ Token inválido"
+                },
+                
+                "processamento": {
+                    **processor_status,
+                    "processor_ok": processor_ok,
+                    "relacionamentos": total_relacionamentos,
+                    "status_resumo": f"✅ OK ({total_relacionamentos} CDCs)" if processor_ok else "❌ Erro"
+                },
+                
                 "estrutura": {
                     "auth_module": "✅ Disponível",
                     "processor_module": "✅ Disponível", 
-                    "admin_module": "✅ Ativo"
+                    "admin_module": "✅ Ativo",
+                    "database_brk": "✅ Integrado" if processor_ok else "❌ Erro"
+                },
+                
+                # 🆕 NOVA SEÇÃO: DOCUMENTAÇÃO COMPLETA DOS ENDPOINTS
+                "endpoints": endpoints_disponiveis,
+                
+                # 🆕 LINKS RÁPIDOS
+                "quick_links": {
+                    "interface_principal": f"{base_url}/",
+                    "health_check": f"{base_url}/health", 
+                    "upload_token": f"{base_url}/upload-token",
+                    "test_onedrive": f"{base_url}/test-onedrive",
+                    "este_status": f"{base_url}/status"
+                },
+                
+                # 🆕 HELP/GUIA DE USO
+                "help": {
+                    "como_usar": "Acesse a interface principal (/) para ver status visual",
+                    "upload_token": "Use /upload-token para configurar autenticação Microsoft",
+                    "testar_onedrive": "Use /test-onedrive para verificar conectividade",
+                    "dbedit": "Execute 'cd admin && python dbedit_server.py' para navegar database",
+                    "documentacao": "Este endpoint (/status) lista todas as funcionalidades"
+                },
+                
+                # 🆕 RESUMO EXECUTIVO
+                "resumo_executivo": {
+                    "status_geral": "🟢 OPERACIONAL" if (client_id and pasta_brk_id and auth_ok) else "🟡 CONFIGURAÇÃO PENDENTE",
+                    "total_endpoints": len(endpoints_disponiveis.get("GET", {})) + len(endpoints_disponiveis.get("POST", {})),
+                    "funcionalidades_ativas": [
+                        "✅ Interface administrativa" if True else "",
+                        "✅ Upload token seguro" if True else "",
+                        "✅ Testes OneDrive" if True else "",
+                        "✅ Processamento emails" if processor_ok else "❌ Processamento emails",
+                        "✅ Relacionamento CDC" if total_relacionamentos > 0 else "⚠️ Relacionamento CDC",
+                        "✅ Database BRK" if processor_ok else "❌ Database BRK"
+                    ],
+                    "proximos_passos": [
+                        "Upload token via /upload-token" if not auth_ok else "",
+                        "Configurar ONEDRIVE_BRK_ID via /test-onedrive" if not onedrive_brk_id else "",
+                        "Testar DBEDIT para navegar dados" if processor_ok else "",
+                        "Sistema pronto para produção!" if (auth_ok and onedrive_brk_id) else ""
+                    ]
                 }
             }
             
@@ -431,8 +584,13 @@ class AdminHandler(BaseHTTPRequestHandler):
                 "timestamp": datetime.now().isoformat(),
                 "service": "brk-monitor-admin",
                 "status": "error",
-                "erro": str(e)
+                "erro": str(e),
+                "endpoints": {
+                    "error": "Erro obtendo lista de endpoints",
+                    "basic_endpoints": ["/", "/health", "/status", "/upload-token"]
+                }
             }
+   
     
     def do_GET(self):
         """Processar requisições GET"""
