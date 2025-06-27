@@ -1003,7 +1003,158 @@ class AdminHandler(BaseHTTPRequestHandler):
                 "details": str(e)
             }
             self.wfile.write(json.dumps(erro_response, indent=2, ensure_ascii=False).encode('utf-8'))
-    
+
+# ============================================================================
+# 📊 MELHORAR TAMBÉM O _handle_system_status PARA EXIBIÇÃO HTML BONITA
+# SUBSTITUIR O MÉTODO _handle_system_status() EXISTENTE
+# ============================================================================
+
+    def _handle_system_status(self):
+        """Status detalhado do sistema com opção HTML ou JSON"""
+        from urllib.parse import urlparse, parse_qs
+        
+        # Verificar se quer HTML ou JSON
+        parsed_url = urlparse(self.path)
+        params = parse_qs(parsed_url.query)
+        formato = params.get('formato', ['json'])[0]
+        
+        status = self.get_system_status()
+        
+        if formato == 'html':
+            self._render_status_html(status)
+        else:
+            # JSON padrão
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps(status, indent=2, ensure_ascii=False).encode('utf-8'))
+
+    def _render_status_html(self, status: Dict[str, Any]):
+        """Renderizar status em HTML bonito"""
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html; charset=utf-8')
+        self.end_headers()
+        
+        # Preparar lista de endpoints
+        endpoints_html = ""
+        if status.get("endpoints"):
+            for metodo, endpoints in status["endpoints"].items():
+                if metodo in ["GET", "POST"]:
+                    endpoints_html += f"<h4>{metodo} Endpoints:</h4><ul>"
+                    for endpoint, info in endpoints.items():
+                        endpoints_html += f"""
+                        <li>
+                            <strong>{endpoint}</strong> - {info['descricao']}<br>
+                            <small>📋 {info['funcao']}</small><br>
+                            <small>🔗 <a href="{info['exemplo']}" target="_blank">{info['exemplo']}</a></small><br>
+                            <small>📄 Formato: {info['formato']}</small>
+                        </li><br>
+                        """
+                    endpoints_html += "</ul>"
+                elif metodo == "SERVERS":
+                    endpoints_html += f"<h4>Servidores Adicionais:</h4><ul>"
+                    for servidor, info in endpoints.items():
+                        endpoints_html += f"""
+                        <li>
+                            <strong>{servidor}</strong> - {info['descricao']}<br>
+                            <small>📋 {info['funcao']}</small><br>
+                            <small>🔗 {info['exemplo']}</small><br>
+                            <small>⌨️ Comandos: {info.get('comandos', 'N/A')}</small><br>
+                            <small>🚀 Iniciar: <code>{info.get('como_iniciar', 'N/A')}</code></small>
+                        </li><br>
+                        """
+                    endpoints_html += "</ul>"
+        
+        # Quick links
+        quick_links_html = ""
+        if status.get("quick_links"):
+            for nome, url in status["quick_links"].items():
+                nome_formatado = nome.replace("_", " ").title()
+                quick_links_html += f'<a href="{url}" target="_blank" style="color: #3498db; margin-right: 15px;">{nome_formatado}</a>'
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <title>📊 Status Detalhado - BRK Monitor</title>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f8f9fa; }}
+                .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+                .status-ok {{ color: #28a745; }}
+                .status-warning {{ color: #ffc107; }}
+                .status-error {{ color: #dc3545; }}
+                .section {{ margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; }}
+                .endpoints {{ background: #e3f2fd; }}
+                h1 {{ color: #2c3e50; }}
+                h2 {{ color: #3498db; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
+                h3 {{ color: #8e44ad; }}
+                pre {{ background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 5px; overflow-x: auto; }}
+                .quick-links {{ background: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>📊 Status Detalhado - BRK Monitor</h1>
+                <p><strong>Timestamp:</strong> {status['timestamp']}</p>
+                <p><strong>Serviço:</strong> {status['service']} v{status.get('version', 'N/A')}</p>
+                <p><strong>URL Base:</strong> <a href="{status['base_url']}" target="_blank">{status['base_url']}</a></p>
+                
+                <div class="quick-links">
+                    <h3>🔗 Links Rápidos:</h3>
+                    {quick_links_html}
+                </div>
+                
+                <div class="section">
+                    <h2>⚙️ Configuração Sistema</h2>
+                    <p>Client ID: <span class="{'status-ok' if status['config']['client_id_ok'] else 'status-error'}">{status['config']['client_id_safe']}</span></p>
+                    <p>Pasta BRK: <span class="{'status-ok' if status['config']['pasta_brk_ok'] else 'status-error'}">{status['config']['pasta_brk_safe']}</span></p>
+                    <p>OneDrive BRK: <span class="{'status-ok' if status['config']['onedrive_brk_ok'] else 'status-warning'}">{status['config']['onedrive_brk_safe']}</span></p>
+                </div>
+                
+                <div class="section">
+                    <h2>🔐 Status Autenticação</h2>
+                    <p>Status: <span class="{'status-ok' if status['autenticacao']['token_ativo'] else 'status-error'}">{status['autenticacao']['status_resumo']}</span></p>
+                </div>
+                
+                <div class="section">
+                    <h2>📧 Status Processamento</h2>
+                    <p>Status: <span class="{'status-ok' if status['processamento']['processor_ok'] else 'status-error'}">{status['processamento']['status_resumo']}</span></p>
+                </div>
+                
+                <div class="section endpoints">
+                    <h2>🌐 Endpoints HTTP Disponíveis (HELP)</h2>
+                    {endpoints_html}
+                </div>
+                
+                <div class="section">
+                    <h2>💡 Help/Guia de Uso</h2>
+                    <ul>
+                        <li><strong>Como usar:</strong> {status['help']['como_usar']}</li>
+                        <li><strong>Upload token:</strong> {status['help']['upload_token']}</li>
+                        <li><strong>Testar OneDrive:</strong> {status['help']['testar_onedrive']}</li>
+                        <li><strong>DBEDIT:</strong> {status['help']['dbedit']}</li>
+                        <li><strong>Documentação:</strong> {status['help']['documentacao']}</li>
+                    </ul>
+                </div>
+                
+                <div class="section">
+                    <h2>📋 Resumo Executivo</h2>
+                    <p><strong>Status Geral:</strong> {status['resumo_executivo']['status_geral']}</p>
+                    <p><strong>Total Endpoints:</strong> {status['resumo_executivo']['total_endpoints']}</p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="/" style="background: #3498db; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">🏠 Voltar à Interface Principal</a>
+                    <a href="/status" style="background: #8e44ad; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin-left: 10px;">📋 Ver JSON</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        self.wfile.write(html.encode('utf-8'))
+
     def _handle_health_check(self):
         """Health check básico"""
         self.send_response(200)
@@ -1021,14 +1172,6 @@ class AdminHandler(BaseHTTPRequestHandler):
         }
         self.wfile.write(json.dumps(health, indent=2, ensure_ascii=False).encode('utf-8'))
     
-    def _handle_system_status(self):
-        """Status detalhado do sistema"""
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json; charset=utf-8')
-        self.end_headers()
-        
-        status = self.get_system_status()
-        self.wfile.write(json.dumps(status, indent=2, ensure_ascii=False).encode('utf-8'))
     
     def _handle_not_found(self):
         """Página não encontrada"""
