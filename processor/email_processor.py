@@ -2002,18 +2002,103 @@ class EmailProcessor:
             return []
 
     def status_processamento(self):
-        """
-        Método de compatibilidade - retorna status básico
-        Compatível com chamadas existentes no app.py
-        """
-        return {
-            "pasta_brk_configurada": bool(self.pasta_brk_id),
-            "pasta_brk_protegida": f"{self.pasta_brk_id[:10]}******" if self.pasta_brk_id else "N/A",
-            "autenticacao_ok": bool(self.auth.access_token),
-            "relacionamento_carregado": self.relacionamento_carregado,
-            "total_relacionamentos": len(self.cdc_brk_vetor)
-        }
+         """
+         Método de compatibilidade - retorna status básico
+         Compatível com chamadas existentes no app.py
+         """
+         return {
+             "pasta_brk_configurada": bool(self.pasta_brk_id),
+             "pasta_brk_protegida": f"{self.pasta_brk_id[:10]}******" if self.pasta_brk_id else "N/A",
+             "autenticacao_ok": bool(self.auth.access_token),
+             "relacionamento_carregado": self.relacionamento_carregado,
+             "total_relacionamentos": len(self.cdc_brk_vetor)
+         }
 
+    # ============================================================================
+    # MÉTODOS DE COMPATIBILIDADE PARA DIAGNÓSTICO
+    # ============================================================================
+    
+    def processar_email_fatura(self, email_data):
+        """
+        Método de compatibilidade para o diagnóstico.
+        Wrapper que chama os métodos existentes.
+        
+        Args:
+            email_data (dict): Dados do email
+            
+        Returns:
+            dict: Resultado do processamento
+        """
+        try:
+            # Usar método existente
+            pdfs_processados = self.extrair_pdfs_do_email(email_data)
+            
+            # Contar sucessos
+            sucessos = len([pdf for pdf in pdfs_processados if pdf.get('dados_extraidos_ok', False)])
+            
+            # Resultado no formato esperado pelo diagnóstico
+            resultado = {
+                'success': len(pdfs_processados) > 0,
+                'pdfs_encontrados': len(pdfs_processados),
+                'pdfs_processados': sucessos,
+                'database_salvo': any(pdf.get('database_salvo', False) for pdf in pdfs_processados),
+                'dados': pdfs_processados
+            }
+            
+            print(f"📧 processar_email_fatura: {sucessos}/{len(pdfs_processados)} PDFs processados")
+            
+            return resultado
+            
+        except Exception as e:
+            print(f"❌ Erro em processar_email_fatura: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'pdfs_encontrados': 0,
+                'pdfs_processados': 0
+            }
+
+    def extrair_dados_fatura(self, email_data):
+        """
+        Método de compatibilidade para extração de dados.
+        Wrapper que chama extrair_pdfs_do_email.
+        
+        Args:
+            email_data (dict): Dados do email
+            
+        Returns:
+            dict: Dados extraídos ou None
+        """
+        try:
+            pdfs_dados = self.extrair_pdfs_do_email(email_data)
+            
+            if pdfs_dados and len(pdfs_dados) > 0:
+                # Retornar dados do primeiro PDF
+                primeiro_pdf = pdfs_dados[0]
+                
+                # Extrair campos principais
+                dados_extraidos = {
+                    'CDC': primeiro_pdf.get('Codigo_Cliente', 'Não encontrado'),
+                    'Casa': primeiro_pdf.get('Casa de Oração', 'Não encontrado'),
+                    'Valor': primeiro_pdf.get('Valor', 'Não encontrado'),
+                    'Vencimento': primeiro_pdf.get('Vencimento', 'Não encontrado'),
+                    'Nota_Fiscal': primeiro_pdf.get('Nota_Fiscal', 'Não encontrado'),
+                    'arquivo': primeiro_pdf.get('filename', 'unknown.pdf'),
+                    'dados_ok': primeiro_pdf.get('dados_extraidos_ok', False)
+                }
+                
+                return dados_extraidos
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro em extrair_dados_fatura: {e}")
+            return None
+
+
+# ============================================================================
+# 🎉 EMAILPROCESSOR COMPLETO SEM PANDAS FINALIZADO!
+   
 # ============================================================================
 # 🎉 EMAILPROCESSOR COMPLETO SEM PANDAS FINALIZADO!
 # (resto do comentário permanece igual...)
