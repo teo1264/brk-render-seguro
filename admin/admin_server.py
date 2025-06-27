@@ -910,6 +910,10 @@ class AdminHandler(BaseHTTPRequestHandler):
                         🌐 Sistema Principal<br>
                         <small>Interface de produção</small>
                     </a>
+                    <a href="http://localhost:8081/dbedit" class="action-btn info" target="_blank">
+                        📊 DBEDIT Clipper<br>
+                    <small>Navegação registro por registro - Database real</small>
+                    </a>
                 </div>
                 
                 <div class="footer">
