@@ -387,7 +387,7 @@ class AdminHandler(BaseHTTPRequestHandler):
 # ============================================================================
 
 
-     def get_system_status(self) -> Dict[str, Any]:
+    def get_system_status(self) -> Dict[str, Any]:
         """
         Obter status completo do sistema COM LISTA DE TODOS OS ENDPOINTS
         
