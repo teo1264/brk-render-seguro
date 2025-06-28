@@ -1,6 +1,6 @@
 # 🏢 Sistema BRK - Controle Inteligente de Faturas (VERSÃO REAL FUNCIONANDO)
 
-Sistema automático para processamento de faturas BRK com **estrutura modular compacta**, monitor automático 24/7, detecção de duplicatas SEEK, organização inteligente no OneDrive e **navegação estilo Clipper** para database.
+Sistema automático para processamento de faturas BRK com **estrutura modular compacta**, monitor automático 24/7, detecção de duplicatas SEEK, organização inteligente no OneDrive, **upload automático de PDFs** e **navegação estilo Clipper** para database.
 
 ## 🌐 **SISTEMA EM PRODUÇÃO**
 
@@ -9,12 +9,20 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 
 ## 🎯 Funcionalidades Ativas em Produção
 
+### ☁️ **Upload Automático OneDrive - NOVA FUNCIONALIDADE**
+- **📁 Estrutura automática**: `/BRK/Faturas/YYYY/MM/` criada automaticamente após database
+- **📄 Nomenclatura padronizada**: Reutiliza `database_brk._gerar_nome_padronizado()` 
+- **🔄 Upload após database**: Automático quando DatabaseBRK salva com sucesso
+- **🏗️ Arquitetura limpa**: Reutiliza `database_brk._extrair_ano_mes()` (zero duplicação código)
+- **📊 Logs detalhados**: Mostra reutilização de funções existentes
+- **🛡️ Fallback robusto**: Database continua funcionando se OneDrive falhar
+
 ### 🗃️ **DatabaseBRK - Core Inteligente do Sistema**
 - **📊 SQLite thread-safe** no OneDrive com estrutura robusta
 - **🔍 Lógica SEEK** estilo Clipper para detecção precisa de duplicatas
 - **⚠️ Classificação inteligente**: NORMAL / DUPLICATA com logs detalhados
 - **📁 Estrutura automática**: `/BRK/Faturas/YYYY/MM/` + backup Render
-- **📝 Nomenclatura consistente** padrão automático
+- **📝 Nomenclatura consistente** padrão automático **REUTILIZADA pelo upload OneDrive**
 - **🔄 Sincronização automática** OneDrive + cache local + fallback
 
 ### 📧 **Processamento Inteligente 100% Funcional**
@@ -25,13 +33,14 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 - **📊 Logs estruturados** Render com dados completos extraídos
 - **🎯 Monitor background** thread-safe sem erros
 
-### 📊 **Monitor Automático 24/7 (EM PRODUÇÃO)**
+### 📊 **Monitor Automático 24/7 (EM PRODUÇÃO + UPLOAD ONEDRIVE)**
 - **⏰ Verificação automática** a cada 10 minutos - **ATIVO**
 - **📈 Estatísticas pasta** BRK em tempo real
 - **🔍 Processamento automático** emails novos sem intervenção
 - **📋 Logs detalhados** Render com dados extraídos completos
 - **🚨 Alertas visuais** consumo elevado com percentuais
 - **🛡️ Thread safety** SQLite para stability máxima
+- **☁️ Upload automático** PDFs para OneDrive após cada processamento
 
 ### 🗃️ **DBEDIT Clipper - Navegação Database Real**
 - **⌨️ Navegação estilo Clipper** registro por registro no database_brk.db
@@ -59,10 +68,10 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 ├── 📧 auth/ - Autenticação Microsoft Thread-Safe
 │   ├── __init__.py
 │   └── microsoft_auth.py (Token management, refresh automático)
-├── 📧 processor/ - Processamento Core SEM PANDAS
+├── 📧 processor/ - Processamento Core SEM PANDAS + UPLOAD ONEDRIVE
 │   ├── __init__.py
-│   ├── email_processor.py (5 blocos completos - extração + relacionamento)
-│   ├── database_brk.py (SQLite thread-safe + OneDrive + SEEK)
+│   ├── email_processor.py (5 blocos completos - extração + relacionamento + 6 métodos upload)
+│   ├── database_brk.py (SQLite thread-safe + OneDrive + SEEK + nomenclatura REUTILIZADA)
 │   ├── monitor_brk.py (Monitor 24/7 background automático)
 │   └── diagnostico_teste.py (Diagnóstico sistema avançado)
 ├── 🔧 admin/ - Interface Administrativa + DBEDIT
@@ -77,7 +86,7 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 └── 🔒 .gitignore (Proteção arquivos sensíveis)
 
 TOTAL: 11 arquivos principais + 4 arquivos configuração
-STATUS: ✅ 100% FUNCIONAL EM PRODUÇÃO
+STATUS: ✅ 100% FUNCIONAL EM PRODUÇÃO + UPLOAD ONEDRIVE AUTOMÁTICO
 ```
 
 ### **📊 Funcionalidades Integradas (não módulos separados)**
@@ -86,9 +95,56 @@ STATUS: ✅ 100% FUNCIONAL EM PRODUÇÃO
 
 - **🔗 Relacionamento CDC → Casa:** Integrado em `processor/email_processor.py`
 - **📄 Extração dados PDF:** Integrado em `processor/email_processor.py` (blocos 3/5)
-- **📁 Renomeação arquivos:** Integrado em `processor/database_brk.py`
+- **📁 Renomeação arquivos:** Integrado em `processor/database_brk.py` **REUTILIZADO pelo upload OneDrive**
+- **📅 Estrutura pastas:** Integrado em `processor/database_brk.py` **REUTILIZADO pelo upload OneDrive**
+- **☁️ Upload OneDrive:** 6 métodos novos em `processor/email_processor.py` **REUTILIZANDO lógicas existentes**
 - **📋 Logs estruturados:** Integrado em cada módulo (prints organizados)
 - **⚙️ Configurações:** Via Environment Variables (não arquivo separado)
+
+## ☁️ **Upload Automático OneDrive - Arquitetura Limpa (IMPLEMENTADO)**
+
+### 🏗️ **Reutilização Inteligente de Código**
+O upload OneDrive segue **boas práticas de programação**, reutilizando funções existentes:
+
+```python
+# ✅ REUTILIZA funções do database_brk.py (zero duplicação):
+ano, mes = self.database_brk._extrair_ano_mes(...)        # Determina pasta ano/mês
+nome = self.database_brk._gerar_nome_padronizado(...)     # Gera nome do arquivo
+
+# 🆕 ADICIONA funcionalidades específicas OneDrive:
+self._garantir_estrutura_pastas_onedrive(...)             # Cria pastas no OneDrive
+self._fazer_upload_pdf_onedrive(...)                      # Upload via Microsoft Graph API
+```
+
+### 📋 **Divisão de Responsabilidades**
+
+| **Arquivo** | **Responsabilidade** | **Funções** |
+|------------|---------------------|-------------|
+| `database_brk.py` | Dados + Nomenclatura | `_extrair_ano_mes()`, `_gerar_nome_padronizado()` |
+| `email_processor.py` | Processamento + Upload | `upload_fatura_onedrive()`, `_criar_pasta_onedrive()` |
+
+### 📁 **Estrutura OneDrive Criada Automaticamente**
+```
+/BRK/
+├── 📊 database_brk.db
+├── 📋 CDC_BRK_CCB.xlsx
+└── 📁 /Faturas/                    ← CRIADA AUTOMATICAMENTE PELO UPLOAD
+    ├── 📁 /2025/
+    │   ├── 📁 /01/ → PDFs Janeiro 2025
+    │   ├── 📁 /02/ → PDFs Fevereiro 2025
+    │   ├── 📁 /06/ → PDFs Junho 2025
+    │   └── 📁 /07/ → PDFs Julho 2025
+    └── 📁 /2024/
+        └── 📁 /12/ → PDFs Dezembro 2024
+```
+
+### 📝 **Padrão de Nomenclatura (Reutilizado do database_brk.py)**
+```
+DD-MM-BRK MM-YYYY - Nome da Casa - vc. DD-MM-YYYY - R$ XXX,XX.pdf
+
+Exemplo:
+27-06-BRK 06-2025 - BR 21-0574 JARDIM BRASÍLIA - vc. 14-07-2025 - R$ 261,06.pdf
+```
 
 ## 🔧 Configuração e Deploy (TESTADO EM PRODUÇÃO)
 
@@ -135,9 +191,10 @@ click==8.1.7
    - ✅ DatabaseBRK SQLite thread-safe
    - ✅ Relacionamento CDC (38 registros carregados)
    - ✅ Monitor automático ativo (verificação 10min)
+   - ✅ **Upload OneDrive integrado e testado**
    - ✅ Validação dependências completa
    - ✅ DBEDIT disponível (ver seção DBEDIT)
-4. **Logs automáticos**: Visíveis no Render com dados extraídos
+4. **Logs automáticos**: Visíveis no Render com dados extraídos **+ upload OneDrive**
 5. **Interface funcional**: Pronta para processamento + navegação database
 
 ### **🔐 Gerenciamento Token (ROBUSTO):**
@@ -146,9 +203,9 @@ click==8.1.7
 - **Fallback gracioso** se token expirar
 - **Logs detalhados** status autenticação
 
-## 📊 **Como Funciona na Prática (LOG REAL PRODUÇÃO)**
+## 📊 **Como Funciona na Prática (LOG REAL PRODUÇÃO + UPLOAD ONEDRIVE)**
 
-### **📧 Monitor Automático (FUNCIONANDO 24/7):**
+### **📧 Monitor Automático (FUNCIONANDO 24/7 + UPLOAD AUTOMÁTICO):**
 
 ```
 🔄 [19:42:04] MONITOR BRK - Verificação automática
@@ -171,14 +228,28 @@ click==8.1.7
   📊 Variação: -22.22% em relação à média
   ✅ Consumo dentro do normal
 
-🔍 SEEK: CDC 92213-27 + Junho/2025 → NOT FOUND() → STATUS: NORMAL
+🔍 SEEK: CDC 92213-27 + Julho/2025 → NOT FOUND() → STATUS: NORMAL
 ✅ Fatura salva no SQLite: ID 1234
 💾 DatabaseBRK: NORMAL - arquivo.pdf
+
+☁️ Iniciando upload OneDrive após database...
+📅 Estrutura: /BRK/Faturas/2025/07/ (usando database_brk._extrair_ano_mes)
+📁 Nome: 10-07-BRK 07-2025 - BR 21-0668 VILA MAGINI - vc. 10-07-2025 - R$ 150,75.pdf (usando database_brk._gerar_nome_padronizado)
+✅ Pasta /BRK/Faturas/ encontrada
+✅ Pasta /2025/ encontrada
+✅ Pasta /07/ encontrada
+📤 Fazendo upload OneDrive: 245680 bytes para 10-07-BRK 07-2025 - BR 21-0668 VILA MAGINI...
+✅ Upload OneDrive concluído: 10-07-BRK 07-2025 - BR 21-0668 VILA MAGINI...
+🔗 URL: https://onedrive.live.com/view?...
+📁 OneDrive: /BRK/Faturas/2025/07/10-07-BRK 07-2025 - BR 21-0668 VILA MAGINI...
+
 🔄 Database sincronizado com OneDrive
 
 ✅ Processamento concluído:
    📧 Emails processados: 1
    📎 PDFs extraídos: 1
+   💾 Database salvos: 1
+   ☁️ OneDrive uploads: 1
 ⏰ Próxima verificação em 10 minutos
 ```
 
@@ -196,8 +267,10 @@ click==8.1.7
 📋 CDC: 92213-27
 🏪 Casa: BR 21-0668 - VILA MAGINI  
 💰 Valor: R$ 150,75
-📅 Competência: Junho/2025
+📅 Competência: Julho/2025
 ⚡ Comando: NEXT → Registro 848/1234
+☁️ OneDrive Upload: ✅ Realizado
+📁 Arquivo OneDrive: 10-07-BRK 07-2025 - BR 21-0668 VILA MAGINI...
 ```
 
 ## 🌐 **Endpoints HTTP Disponíveis (TESTADOS EM PRODUÇÃO)**
@@ -210,7 +283,7 @@ click==8.1.7
 - `GET /status` - Status completo JSON
 
 ### **⚙️ Processamento**
-- `POST /processar-emails-novos` - Processa emails + salvamento automático
+- `POST /processar-emails-novos` - Processa emails + salvamento automático **+ upload OneDrive**
 - `GET /processar-emails-form` - Interface web processamento
 - `GET /diagnostico-pasta` - Diagnóstico pasta BRK + DatabaseBRK
 
@@ -251,7 +324,7 @@ SKIP-5           → Voltar 5 registros
 GOTO 100         → Ir direto para registro 100
 SEEK 92213-27    → Buscar CDC específico
 SEEK "VILA"      → Buscar casa contendo "VILA"
-SEEK "Jun/2025"  → Buscar competência específica
+SEEK "Jul/2025"  → Buscar competência específica
 ```
 
 ### **🎯 Interface Visual:**
@@ -260,10 +333,11 @@ SEEK "Jun/2025"  → Buscar competência específica
 - **🔍 Duplo-clique**: Expandir campo completo
 - **⌨️ Atalhos**: Setas para navegar, Ctrl+Home/End
 - **📱 Responsivo**: Funciona desktop e mobile
+- **☁️ Status Upload**: Indica se PDF foi enviado para OneDrive
 
 ## 🗃️ **Estrutura DatabaseBRK (PRODUÇÃO)**
 
-### **📊 Tabela faturas_brk (THREAD-SAFE - 22 CAMPOS):**
+### **📊 Tabela faturas_brk (THREAD-SAFE - 22+ CAMPOS):**
 ```sql
 -- CAMPOS DE CONTROLE
 id, data_processamento, status_duplicata, observacao
@@ -279,14 +353,16 @@ competencia, valor
 medido_real, faturado, media_6m, porcentagem_consumo, 
 alerta_consumo
 
--- CONTROLE TÉCNICO
-dados_extraidos_ok, relacionamento_usado
+-- CONTROLE TÉCNICO + UPLOAD ONEDRIVE
+dados_extraidos_ok, relacionamento_usado, onedrive_upload,
+onedrive_url, nome_onedrive, onedrive_pasta
 ```
 
 ### **🔍 Índices Performance (OTIMIZADOS):**
 - `idx_cdc_competencia` - Busca SEEK principal (CDC + mês/ano)
 - `idx_status_duplicata` - Filtros por status NORMAL/DUPLICATA
 - `idx_casa_oracao` - Relatórios por igreja específica
+- `idx_data_processamento` - Análises temporais
 - `idx_competencia` - Análises mensais e anuais
 
 ## 🛡️ **Contingência e Robustez (TESTADO)**
@@ -296,6 +372,13 @@ dados_extraidos_ok, relacionamento_usado
 - ✅ Salva temporariamente local (Render persistent storage)
 - ✅ Sincroniza quando OneDrive volta
 - ✅ Zero perda de dados garantida
+- ✅ **Upload continua funcionando** com fallback local
+
+### **☁️ Upload OneDrive Falha:**
+- ✅ Database continua funcionando normalmente
+- ✅ Sistema marca registro como "upload pendente"
+- ✅ Retry automático na próxima verificação
+- ✅ Logs detalhados da falha específica
 
 ### **⚠️ Relacionamento CDC Falha:**
 - ✅ Sistema continua funcionando normalmente
@@ -308,12 +391,14 @@ dados_extraidos_ok, relacionamento_usado
 - ✅ Inicialização SQLite automática + thread safety
 - ✅ Renovação token automática com retry
 - ✅ Retry inteligente em falhas temporárias
+- ✅ **Criação automática estrutura /BRK/Faturas/YYYY/MM/**
 
 ### **📊 Monitor Thread Safety (CORRIGIDO):**
 - ✅ SQLite configurado com `check_same_thread=False`
 - ✅ WAL mode para performance em múltiplas threads
 - ✅ Monitor background estável sem erros thread
 - ✅ Sincronização automática OneDrive funcionando
+- ✅ **Upload OneDrive não bloqueia monitor principal**
 
 ## 🎯 **Diferencial Técnico (VALIDADO)**
 
@@ -329,15 +414,23 @@ dados_extraidos_ok, relacionamento_usado
 - ✅ Compatibilidade com desktop existente
 - ✅ Escalabilidade garantida para milhares registros
 
+### **☁️ Upload OneDrive Automático (IMPLEMENTADO):**
+- ✅ **Reutilização inteligente**: usa `database_brk._extrair_ano_mes()` e `_gerar_nome_padronizado()`
+- ✅ **Zero duplicação**: lógicas ficam onde pertencem
+- ✅ **Arquitetura limpa**: separação clara de responsabilidades
+- ✅ **Integração transparente**: funciona após salvamento database
+- ✅ **Logs explicativos**: mostram qual função está sendo reutilizada
+
 ### **📊 Monitor Automático (24/7 ATIVO):**
 - ✅ Logs estruturados Render com dados extraídos
 - ✅ Verificação contínua sem intervenção humana
 - ✅ Estatísticas pasta tempo real
 - ✅ Processamento transparente + alertas visuais
+- ✅ **Upload OneDrive integrado no ciclo de monitoramento**
 
 ### **📝 Estrutura Modular Compacta (MAINTÍVEL):**
 - ✅ **auth/**: Isolado e reutilizável
-- ✅ **processor/**: Core funcional integrado
+- ✅ **processor/**: Core funcional integrado + upload OneDrive
 - ✅ **admin/**: Interface administrativa + DBEDIT separados
 - ✅ **app.py**: Orquestração limpa
 
@@ -347,10 +440,11 @@ dados_extraidos_ok, relacionamento_usado
 **Sidney Gubitoso** - Auxiliar Tesouraria Administrativa Mauá
 
 ### **🔧 Versão Atual:**
-**Sistema BRK v2.0 Modular** - Estrutura compacta e robusta
+**Sistema BRK v2.1 Upload OneDrive** - Estrutura compacta e robusta + upload automático
 
 ### **📊 Status Produção (Junho 2025):**
 - ✅ **Em produção ativa** no Render
+- ✅ **Upload OneDrive automático** integrado e funcionando
 - ✅ **Monitoramento automático** 24/7 estável
 - ✅ **Backup automático** OneDrive funcionando
 - ✅ **Thread safety** corrigido e validado
@@ -362,39 +456,44 @@ dados_extraidos_ok, relacionamento_usado
 - **📧 Emails monitorados**: Pasta BRK completa
 - **🔍 CDCs conhecidos**: 38 relacionamentos ativos
 - **💾 Database**: SQLite thread-safe + OneDrive sync
+- **☁️ Uploads OneDrive**: Estrutura /BRK/Faturas/YYYY/MM/ automática
 - **⏰ Uptime monitor**: 10 minutos verificação contínua
 - **🚀 Deploy time**: 3 minutos garantidos
 - **🗃️ DBEDIT**: https://brk-render-seguro.onrender.com/dbedit
 - **🌐 URL Produção**: https://brk-render-seguro.onrender.com
 
-## ✅ **Validação Técnica Completa (JUNHO 2025)**
+## ✅ **Validação Técnica Completa (JUNHO 2025 + UPLOAD ONEDRIVE)**
 
 ### **📋 Sistema Auditado e Validado:**
 - ✅ **Variáveis ambiente** consistentes código real
 - ✅ **Estrutura modular** reflete implementação 100%
+- ✅ **Upload OneDrive** implementado com reutilização inteligente de código
 - ✅ **Dependências** atualizadas e funcionais (3min deploy)
 - ✅ **Python 3.11.9** compatibilidade total
 - ✅ **Funcionalidades** documentadas existem e funcionam
 - ✅ **Endpoints** listados implementados e testados
 - ✅ **Thread safety** corrigido e validado
 - ✅ **Monitor 24/7** funcionando em produção
+- ✅ **DBEDIT Clipper** funcional com comandos completos
 
 ### **🔍 Última Validação:**
-- **Data**: 27 Junho 2025
-- **Código base**: Estrutura modular compacta thread-safe
-- **Monitor**: 24/7 ativo processando emails automaticamente
+- **Data**: 28 Junho 2025
+- **Código base**: Estrutura modular compacta thread-safe + upload OneDrive
+- **Monitor**: 24/7 ativo processando emails automaticamente + upload
 - **Database**: SQLite OneDrive + cache + fallback funcionando
+- **Upload OneDrive**: Reutilização `database_brk` functions + estrutura automática
 - **Deploy**: Testado Render - 3 minutos garantidos
 - **Contingência**: Implementada, documentada e testada
 - **Interface**: Upload token + testes + help funcionando
+- **DBEDIT**: Comandos Clipper completos funcionando
 
 ---
 
-**🏆 Sistema BRK - Processamento inteligente de faturas com monitoramento automático 24/7**  
+**🏆 Sistema BRK - Processamento inteligente de faturas com upload automático OneDrive**  
 **🎯 Zero intervenção manual - Máxima precisão - Organização total - Logs contínuos**  
 **🛡️ Thread-safe - Modular compacto - Escalável - Production-ready**
 
 > **Desenvolvido por Sidney Gubitoso** - Auxiliar Tesouraria Administrativa Mauá  
-> **Versão Modular Thread-Safe** - Estrutura compacta e maintível  
+> **Versão Upload OneDrive Thread-Safe** - Estrutura compacta e maintível + upload automático  
 > **Deploy Time:** ⚡ 3 minutos | **Uptime:** 🌐 24/7 | **Compatibilidade:** 🛡️ Python 3.11.9  
 > **URL Produção:** 🌐 https://brk-render-seguro.onrender.com
