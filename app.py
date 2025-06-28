@@ -549,104 +549,81 @@ def health_check():
             "erro": str(e),
             "timestamp": datetime.now().isoformat()
         }), 500
-
 @app.route('/dbedit')
 def dbedit():
-    """DBEDIT - Navegação database estilo Clipper (integração com admin/)"""
+    """DBEDIT - Importação mínima + autenticação Flask"""
+    # ✅ SEGURANÇA: Usa autenticação Flask existente
+    if not auth_manager.access_token:
+        return redirect('/login')
+    
     try:
-        if not auth_manager.access_token:
-            return redirect('/login')
+        # ✅ IMPORTAÇÃO MÍNIMA: Apenas classes necessárias (não duplica código)
+        from admin.dbedit_server import DBEditEngineBRK, DBEditHandlerReal
         
-        # Parâmetros da URL
-        tabela = request.args.get('tabela', 'faturas_brk')
-        registro_atual = int(request.args.get('rec', '1'))
-        comando = request.args.get('cmd', '')
-        filtro = request.args.get('filtro', '')
-        ordenacao = request.args.get('order', '')
-        formato = request.args.get('formato', 'html')
-        
-        # Usar engine DBEDIT existente
-        from admin.dbedit_server import DBEditEngineBRK
-        
+        # ✅ DELEGAÇÃO LIMPA: Engine processa navegação
         engine = DBEditEngineBRK()
-        resultado = engine.navegar_registro_real(tabela, registro_atual, comando, filtro, ordenacao)
+        resultado = engine.navegar_registro_real(
+            request.args.get('tabela', 'faturas_brk'),
+            int(request.args.get('rec', '1')),
+            request.args.get('cmd', ''),
+            request.args.get('filtro', ''),
+            request.args.get('order', '')
+        )
         
-        if formato == 'json':
-            return jsonify(resultado)
+        # ✅ REUTILIZAÇÃO: Usa método HTML existente (zero duplicação)
+        handler = DBEditHandlerReal(None, None, None)
+        handler.send_response = lambda x: None  # Mock Flask response
+        handler.send_header = lambda x, y: None
+        handler.end_headers = lambda: None
         
-        # Renderizar HTML simples
-        if resultado["status"] == "error":
-            return f"""
-            <!DOCTYPE html>
-            <html><head><title>DBEDIT - Erro</title><meta charset="UTF-8"></head>
-            <body style="font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px;">
-                <div style="background: #800000; padding: 20px; border: 1px solid #ffffff;">
-                    <h1>❌ ERRO DBEDIT</h1>
-                    <h3>{resultado["message"]}</h3>
-                    <p><a href="/" style="color: #00ffff;">← Voltar ao Dashboard</a></p>
-                </div>
-            </body></html>
-            """
+        # Capturar HTML do método existente
+        import io
+        from contextlib import redirect_stdout
         
-        # HTML básico funcional para DBEDIT
-        tabela = resultado["tabela"]
-        registro_atual = resultado["registro_atual"]
-        total_registros = resultado["total_registros"]
+        html_buffer = io.StringIO()
+        handler.wfile = io.BytesIO()
         
-        # Campos do registro
-        campos_html = ""
-        if resultado.get("registro"):
-            for campo, info in resultado["registro"].items():
-                valor = str(info["valor"])[:100] + "..." if len(str(info["valor"])) > 100 else info["valor"]
-                campos_html += f"<tr><td style='color: #ffff00; padding: 5px;'>{campo}</td><td style='color: #ffffff; padding: 5px;'>{valor}</td></tr>"
+        # Chamar método existente
+        handler._render_dbedit_real_html(resultado)
         
-        return f"""
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <title>🗃️ DBEDIT BRK - {tabela} - Rec {registro_atual}/{total_registros}</title>
-            <meta charset="UTF-8">
-            <style>
-                body {{ font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 0; }}
-                .header {{ background: #0000aa; color: #ffff00; padding: 10px; text-align: center; font-weight: bold; }}
-                .status {{ background: #008080; color: #ffffff; padding: 5px 10px; font-size: 12px; }}
-                .content {{ padding: 20px; }}
-                table {{ width: 100%; border-collapse: collapse; }}
-                td {{ border-bottom: 1px solid #333; padding: 5px; }}
-                .btn {{ background: #008000; color: white; padding: 5px 10px; text-decoration: none; margin: 2px; border: 1px solid #fff; }}
-                .btn:hover {{ background: #00aa00; }}
-            </style>
-        </head>
-        <body>
-            <div class="header">🗃️ DBEDIT BRK - {tabela.upper()}</div>
-            <div class="status">Registro {registro_atual}/{total_registros} - Database Real</div>
-            
-            <div class="content">
-                <table>{campos_html}</table>
-                
-                <div style="margin-top: 20px; text-align: center;">
-                    <a href="/dbedit?tabela={tabela}&rec=1&cmd=TOP" class="btn">🔝 TOP</a>
-                    <a href="/dbedit?tabela={tabela}&rec={max(1, registro_atual-1)}&cmd=PREV" class="btn">⬅️ PREV</a>
-                    <a href="/dbedit?tabela={tabela}&rec={min(total_registros, registro_atual+1)}&cmd=NEXT" class="btn">➡️ NEXT</a>
-                    <a href="/dbedit?tabela={tabela}&rec={total_registros}&cmd=BOTTOM" class="btn">🔚 BOTTOM</a>
-                    <a href="/" class="btn" style="background: #aa0000;">🏠 SAIR</a>
-                </div>
-            </div>
-        </body>
-        </html>
-        """
+        # Extrair HTML gerado
+        html_content = handler.wfile.getvalue().decode('utf-8')
+        return html_content
         
     except Exception as e:
-        logger.error(f"Erro no DBEDIT: {e}")
-        return f"""
-        <!DOCTYPE html>
-        <html><head><title>DBEDIT - Erro</title><meta charset="UTF-8"></head>
-        <body style="font-family: monospace; background: #000080; color: #fff; padding: 20px;">
-            <h1>❌ ERRO DBEDIT</h1>
-            <p>Erro: {str(e)}</p>
-            <p><a href="/" style="color: #00ffff;">← Voltar ao Dashboard</a></p>
-        </body></html>
-        """
+        logger.error(f"Erro DBEDIT: {e}")
+        return f"Erro DBEDIT: {e}", 500
+
+@app.route('/delete')  
+def delete_handler():
+    """DELETE - Delegação mínima com autenticação Flask"""
+    # ✅ SEGURANÇA: Autenticação obrigatória
+    if not auth_manager.access_token:
+        return redirect('/login')
+    
+    try:
+        # ✅ DELEGAÇÃO TOTAL: Usa handler existente
+        from admin.dbedit_server import DBEditHandlerReal
+        import io
+        
+        # Mock do handler para Flask
+        handler = DBEditHandlerReal(None, None, None)
+        handler.path = f"/delete?{request.query_string.decode()}"
+        handler.send_response = lambda x: None
+        handler.send_header = lambda x, y: None  
+        handler.end_headers = lambda: None
+        handler.wfile = io.BytesIO()
+        
+        # Executar método DELETE existente
+        handler._handle_delete_real()
+        
+        # Retornar resultado
+        html_content = handler.wfile.getvalue().decode('utf-8')
+        return html_content
+        
+    except Exception as e:
+        logger.error(f"Erro DELETE: {e}")
+        return f"Erro DELETE: {e}", 500
 
 # ============================================================================
 # TRATAMENTO DE ERROS
