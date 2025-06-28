@@ -62,7 +62,7 @@ class DatabaseBRK:
         self.usando_fallback = False
         
         print(f"🗃️ DatabaseBRK inicializado:")
-        print(f"   📁 OneDrive: {onedrive_brk_id[:15]}******")
+        print(f"   📁 Pasta OneDrive /BRK/: configurada")
         print(f"   💾 Database: {self.db_filename} (OneDrive + cache)")
         print(f"   🔄 Fallback: Render disk")
         
@@ -128,7 +128,7 @@ class DatabaseBRK:
                 for arquivo in arquivos:
                     if arquivo.get('name') == self.db_filename:
                         self.db_onedrive_id = arquivo['id']
-                        print(f"📊 Database OneDrive encontrado: {arquivo['name']} (ID: {arquivo['id'][:10]}...)")
+                        print(f"📊 Database OneDrive encontrado: {arquivo['name']} (ID: configurado)")
                         return True
                 
                 print(f"📊 Database não encontrado no OneDrive /BRK/")
