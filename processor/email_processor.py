@@ -1215,93 +1215,93 @@ class EmailProcessor:
             print(f"❌ Erro no log consolidado: {e}")
 
     def preparar_dados_para_database(self, pdf_data):
-    """
-    ✅ CORREÇÃO: Prepara dados extraídos para salvamento no database.
-    PROBLEMA CORRIGIDO: Mapeamento incorreto de campos entre extração e database.
+        """
+        ✅ CORREÇÃO: Prepara dados extraídos para salvamento no database.
+        PROBLEMA CORRIGIDO: Mapeamento incorreto de campos entre extração e database.
+        
+        ANTES: Campos extraídos tinham nomes diferentes dos esperados pelo database
+        AGORA: Mapeamento correto garantindo que todos os dados sejam salvos
+        
+        Args:
+            pdf_data (Dict): Dados do PDF processado
+            
+        Returns:
+            Dict: Dados formatados corretamente para database
+        """
+        try:
+            print(f"🔧 Mapeando dados para database...")
+            
+            # ✅ MAPEAMENTO CORRETO - Converter nomes de campos da extração para database
+            dados_completos = {
+                # ==================== CAMPOS DE CONTROLE ====================
+                'email_id': pdf_data.get('email_id', ''),
+                'nome_arquivo_original': pdf_data.get('filename', pdf_data.get('nome_arquivo', 'arquivo_desconhecido.pdf')),
+                'hash_arquivo': pdf_data.get('hash_arquivo', ''),
+                
+                # ==================== CAMPOS PRINCIPAIS - MAPEAMENTO CORRIGIDO ====================
+                # ✅ CORREÇÃO: 'Codigo_Cliente' → 'cdc'
+                'cdc': pdf_data.get('Codigo_Cliente', 'Não encontrado'),
+                
+                # ✅ CORREÇÃO: 'Nota_Fiscal' → 'nota_fiscal'  
+                'nota_fiscal': pdf_data.get('Nota_Fiscal', 'Não encontrado'),
+                
+                # ✅ CORREÇÃO: 'Casa de Oração' → 'casa_oracao'
+                'casa_oracao': pdf_data.get('Casa de Oração', 'Não encontrado'),
+                
+                # ✅ CORREÇÃO: 'Data_Emissao' → 'data_emissao'
+                'data_emissao': pdf_data.get('Data_Emissao', 'Não encontrado'),
+                
+                # ✅ CORREÇÃO: 'Vencimento' → 'vencimento'
+                'vencimento': pdf_data.get('Vencimento', 'Não encontrado'),
+                
+                # ✅ CORREÇÃO: 'Competencia' → 'competencia'
+                'competencia': pdf_data.get('Competencia', 'Não encontrado'),
+                
+                # ✅ CORREÇÃO: 'Valor' → 'valor'
+                'valor': pdf_data.get('Valor', 'Não encontrado'),
+                
+                # ==================== CAMPOS DE CONSUMO ====================
+                'medido_real': pdf_data.get('Medido_Real'),
+                'faturado': pdf_data.get('Faturado'),
+                'media_6m': pdf_data.get('Média 6M'),
+                'porcentagem_consumo': pdf_data.get('Porcentagem Consumo', ''),
+                'alerta_consumo': pdf_data.get('Alerta de Consumo', ''),
+                
+                # ==================== FLAGS DE CONTROLE ====================
+                'dados_extraidos_ok': pdf_data.get('dados_extraidos_ok', False),
+                'relacionamento_usado': pdf_data.get('relacionamento_usado', False)
+            }
+            
+            # 🔍 LOG DE VERIFICAÇÃO - Para auditoria
+            print(f"   📋 Mapeamento realizado:")
+            print(f"      🏢 CDC: {pdf_data.get('Codigo_Cliente')} → {dados_completos['cdc']}")
+            print(f"      📋 Nota: {pdf_data.get('Nota_Fiscal')} → {dados_completos['nota_fiscal']}")
+            print(f"      🏪 Casa: {pdf_data.get('Casa de Oração')} → {dados_completos['casa_oracao']}")
+            print(f"      💰 Valor: {pdf_data.get('Valor')} → {dados_completos['valor']}")
+            print(f"      📅 Venc: {pdf_data.get('Vencimento')} → {dados_completos['vencimento']}")
+            print(f"      📆 Comp: {pdf_data.get('Competencia')} → {dados_completos['competencia']}")
+            
+            # ✅ VALIDAÇÃO: Verificar se campos principais foram mapeados
+            campos_principais = ['cdc', 'nota_fiscal', 'casa_oracao', 'valor', 'vencimento', 'competencia']
+            campos_ok = 0
+            
+            for campo in campos_principais:
+                valor = dados_completos.get(campo, 'Não encontrado')
+                if valor and valor != 'Não encontrado':
+                    campos_ok += 1
+            
+            print(f"   ✅ Campos principais mapeados: {campos_ok}/{len(campos_principais)}")
+            
+            if campos_ok == 0:
+                print(f"   ⚠️ AVISO: Nenhum campo principal foi mapeado - verificar dados de entrada")
+                
+            return dados_completos
+            
+        except Exception as e:
+            print(f"❌ Erro preparando dados para database: {e}")
+            print(f"   📊 Dados recebidos: {list(pdf_data.keys()) if pdf_data else 'None'}")
+            return None
     
-    ANTES: Campos extraídos tinham nomes diferentes dos esperados pelo database
-    AGORA: Mapeamento correto garantindo que todos os dados sejam salvos
-    
-    Args:
-        pdf_data (Dict): Dados do PDF processado
-        
-    Returns:
-        Dict: Dados formatados corretamente para database
-    """
-    try:
-        print(f"🔧 Mapeando dados para database...")
-        
-        # ✅ MAPEAMENTO CORRETO - Converter nomes de campos da extração para database
-        dados_completos = {
-            # ==================== CAMPOS DE CONTROLE ====================
-            'email_id': pdf_data.get('email_id', ''),
-            'nome_arquivo_original': pdf_data.get('filename', pdf_data.get('nome_arquivo', 'arquivo_desconhecido.pdf')),
-            'hash_arquivo': pdf_data.get('hash_arquivo', ''),
-            
-            # ==================== CAMPOS PRINCIPAIS - MAPEAMENTO CORRIGIDO ====================
-            # ✅ CORREÇÃO: 'Codigo_Cliente' → 'cdc'
-            'cdc': pdf_data.get('Codigo_Cliente', 'Não encontrado'),
-            
-            # ✅ CORREÇÃO: 'Nota_Fiscal' → 'nota_fiscal'  
-            'nota_fiscal': pdf_data.get('Nota_Fiscal', 'Não encontrado'),
-            
-            # ✅ CORREÇÃO: 'Casa de Oração' → 'casa_oracao'
-            'casa_oracao': pdf_data.get('Casa de Oração', 'Não encontrado'),
-            
-            # ✅ CORREÇÃO: 'Data_Emissao' → 'data_emissao'
-            'data_emissao': pdf_data.get('Data_Emissao', 'Não encontrado'),
-            
-            # ✅ CORREÇÃO: 'Vencimento' → 'vencimento'
-            'vencimento': pdf_data.get('Vencimento', 'Não encontrado'),
-            
-            # ✅ CORREÇÃO: 'Competencia' → 'competencia'
-            'competencia': pdf_data.get('Competencia', 'Não encontrado'),
-            
-            # ✅ CORREÇÃO: 'Valor' → 'valor'
-            'valor': pdf_data.get('Valor', 'Não encontrado'),
-            
-            # ==================== CAMPOS DE CONSUMO ====================
-            'medido_real': pdf_data.get('Medido_Real'),
-            'faturado': pdf_data.get('Faturado'),
-            'media_6m': pdf_data.get('Média 6M'),
-            'porcentagem_consumo': pdf_data.get('Porcentagem Consumo', ''),
-            'alerta_consumo': pdf_data.get('Alerta de Consumo', ''),
-            
-            # ==================== FLAGS DE CONTROLE ====================
-            'dados_extraidos_ok': pdf_data.get('dados_extraidos_ok', False),
-            'relacionamento_usado': pdf_data.get('relacionamento_usado', False)
-        }
-        
-        # 🔍 LOG DE VERIFICAÇÃO - Para auditoria
-        print(f"   📋 Mapeamento realizado:")
-        print(f"      🏢 CDC: {pdf_data.get('Codigo_Cliente')} → {dados_completos['cdc']}")
-        print(f"      📋 Nota: {pdf_data.get('Nota_Fiscal')} → {dados_completos['nota_fiscal']}")
-        print(f"      🏪 Casa: {pdf_data.get('Casa de Oração')} → {dados_completos['casa_oracao']}")
-        print(f"      💰 Valor: {pdf_data.get('Valor')} → {dados_completos['valor']}")
-        print(f"      📅 Venc: {pdf_data.get('Vencimento')} → {dados_completos['vencimento']}")
-        print(f"      📆 Comp: {pdf_data.get('Competencia')} → {dados_completos['competencia']}")
-        
-        # ✅ VALIDAÇÃO: Verificar se campos principais foram mapeados
-        campos_principais = ['cdc', 'nota_fiscal', 'casa_oracao', 'valor', 'vencimento', 'competencia']
-        campos_ok = 0
-        
-        for campo in campos_principais:
-            valor = dados_completos.get(campo, 'Não encontrado')
-            if valor and valor != 'Não encontrado':
-                campos_ok += 1
-        
-        print(f"   ✅ Campos principais mapeados: {campos_ok}/{len(campos_principais)}")
-        
-        if campos_ok == 0:
-            print(f"   ⚠️ AVISO: Nenhum campo principal foi mapeado - verificar dados de entrada")
-            
-        return dados_completos
-        
-    except Exception as e:
-        print(f"❌ Erro preparando dados para database: {e}")
-        print(f"   📊 Dados recebidos: {list(pdf_data.keys()) if pdf_data else 'None'}")
-        return None
-        
     def status_processamento_completo(self):
         """
         Retorna status completo do processador incluindo novas funcionalidades.
