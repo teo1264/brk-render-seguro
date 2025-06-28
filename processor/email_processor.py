@@ -44,10 +44,10 @@ class EmailProcessor:
             raise ValueError("❌ PASTA_BRK_ID não configurado!")
             
         print(f"📧 Email Processor inicializado (SEM pandas)")
-        print(f"   📧 Pasta emails BRK: {self.pasta_brk_id[:10]}****** (emails)")
-        
+        print(f"   📧 Pasta emails BRK: configurada")
+        print(f"   📁 Pasta OneDrive /BRK/: configurada")
         if self.onedrive_brk_id:
-            print(f"   📁 Pasta OneDrive /BRK/: {self.onedrive_brk_id[:15]}****** (arquivos)")
+            
             print(f"   📄 Planilha relacionamento: CDC_BRK_CCB.xlsx (nesta pasta)")
             
             # CARREGAR RELACIONAMENTO AUTOMATICAMENTE NA INICIALIZAÇÃO
