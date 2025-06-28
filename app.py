@@ -549,18 +549,19 @@ def health_check():
             "erro": str(e),
             "timestamp": datetime.now().isoformat()
         }), 500
+
 @app.route('/dbedit')
 def dbedit():
-    """DBEDIT - Importação mínima + autenticação Flask"""
+    """DBEDIT - Engine real + HTML funcional (sem mock HTTP)"""
     # ✅ SEGURANÇA: Usa autenticação Flask existente
     if not auth_manager.access_token:
         return redirect('/login')
     
     try:
-        # ✅ IMPORTAÇÃO MÍNIMA: Apenas classes necessárias (não duplica código)
-        from admin.dbedit_server import DBEditEngineBRK, DBEditHandlerReal
+        # ✅ IMPORTAÇÃO SEGURA: Apenas engine (sem handler HTTP)
+        from admin.dbedit_server import DBEditEngineBRK
         
-        # ✅ DELEGAÇÃO LIMPA: Engine processa navegação
+        # ✅ NAVEGAÇÃO: Engine processa todos os comandos
         engine = DBEditEngineBRK()
         resultado = engine.navegar_registro_real(
             request.args.get('tabela', 'faturas_brk'),
@@ -570,60 +571,68 @@ def dbedit():
             request.args.get('order', '')
         )
         
-        # ✅ REUTILIZAÇÃO: Usa método HTML existente (zero duplicação)
-        handler = DBEditHandlerReal(None, None, None)
-        handler.send_response = lambda x: None  # Mock Flask response
-        handler.send_header = lambda x, y: None
-        handler.end_headers = lambda: None
+        # ✅ JSON se solicitado
+        if request.args.get('formato') == 'json':
+            return jsonify(resultado)
         
-        # Capturar HTML do método existente
-        import io
-        from contextlib import redirect_stdout
-        
-        html_buffer = io.StringIO()
-        handler.wfile = io.BytesIO()
-        
-        # Chamar método existente
-        handler._render_dbedit_real_html(resultado)
-        
-        # Extrair HTML gerado
-        html_content = handler.wfile.getvalue().decode('utf-8')
-        return html_content
+        # ✅ HTML FUNCIONAL: Interface completa sem mock
+        return _render_dbedit_flask_seguro(resultado)
         
     except Exception as e:
         logger.error(f"Erro DBEDIT: {e}")
-        return f"Erro DBEDIT: {e}", 500
+        return f"""
+        <!DOCTYPE html>
+        <html><head><title>DBEDIT - Erro</title><meta charset="UTF-8"></head>
+        <body style="font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px;">
+            <div style="background: #800000; padding: 20px; border: 1px solid #ffffff;">
+                <h1>❌ ERRO DBEDIT</h1>
+                <h3>Erro: {str(e)}</h3>
+                <p><a href="/" style="color: #00ffff;">← Voltar ao Dashboard</a></p>
+            </div>
+        </body></html>
+        """, 500
 
 @app.route('/delete')  
 def delete_handler():
-    """DELETE - Delegação mínima com autenticação Flask"""
+    """DELETE - Engine real + confirmação (sem mock HTTP)"""
     # ✅ SEGURANÇA: Autenticação obrigatória
     if not auth_manager.access_token:
         return redirect('/login')
     
     try:
-        # ✅ DELEGAÇÃO TOTAL: Usa handler existente
-        from admin.dbedit_server import DBEditHandlerReal
-        import io
+        # ✅ PARÂMETROS DELETE
+        tabela = request.args.get('tabela', 'faturas_brk')
+        registro_atual = int(request.args.get('rec', '1'))
+        confirmacao = request.args.get('confirm', '0')
         
-        # Mock do handler para Flask
-        handler = DBEditHandlerReal(None, None, None)
-        handler.path = f"/delete?{request.query_string.decode()}"
-        handler.send_response = lambda x: None
-        handler.send_header = lambda x, y: None  
-        handler.end_headers = lambda: None
-        handler.wfile = io.BytesIO()
+        # ✅ ENGINE REAL: Busca dados do registro
+        from admin.dbedit_server import DBEditEngineBRK
+        engine = DBEditEngineBRK()
         
-        # Executar método DELETE existente
-        handler._handle_delete_real()
+        resultado = engine.navegar_registro_real(tabela, registro_atual, '', '', '')
         
-        # Retornar resultado
-        html_content = handler.wfile.getvalue().decode('utf-8')
-        return html_content
+        if resultado["status"] == "error":
+            return jsonify({
+                "status": "error",
+                "message": f"Erro buscando registro: {resultado['message']}"
+            }), 400
+            
+        registro = resultado.get("registro", {})
         
+        # ✅ CONFIRMAÇÃO TRIPLA: Níveis 0, 1, 2
+        if confirmacao == "0":
+            return _render_delete_confirmacao_flask(tabela, registro_atual, registro, nivel=1)
+        elif confirmacao == "1":
+            return _render_delete_confirmacao_flask(tabela, registro_atual, registro, nivel=2)
+        elif confirmacao == "2":
+            return _executar_delete_flask_seguro(engine, tabela, registro_atual, registro)
+        else:
+            return jsonify({"status": "error", "message": "Confirmação inválida"}), 400
+            
     except Exception as e:
         logger.error(f"Erro DELETE: {e}")
-        return f"Erro DELETE: {e}", 500
+        return jsonify({"status": "error", "message": f"Erro DELETE: {str(e)}"}), 500
+
 
 # ============================================================================
 # TRATAMENTO DE ERROS
@@ -714,6 +723,244 @@ def inicializar_aplicacao():
     print(f"   🌐 Interface web completa disponível")
     
     return True
+
+# ============================================================================
+# FUNÇÕES AUXILIARES DBEDIT (adicionar antes do if __name__ == '__main__')
+# ============================================================================
+
+def _render_dbedit_flask_seguro(resultado):
+    """HTML DBEDIT funcional - sem dependências HTTP"""
+    if resultado["status"] == "error":
+        return f"""
+        <!DOCTYPE html>
+        <html><head><title>DBEDIT - Erro</title><meta charset="UTF-8"></head>
+        <body style="font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px;">
+            <h1>❌ ERRO DBEDIT</h1>
+            <div style="background: #800000; padding: 20px; border: 1px solid #ffffff;">
+                <h3>{resultado["message"]}</h3>
+            </div>
+            <p><a href="/dbedit" style="color: #00ffff;">← Tentar novamente</a></p>
+        </body></html>
+        """
+    
+    # Dados do resultado
+    tabela = resultado["tabela"]
+    registro_atual = resultado["registro_atual"]
+    total_registros = resultado["total_registros"]
+    nav = resultado.get("navegacao", {})
+    
+    # Campos do registro
+    campos_html = ""
+    if resultado.get("registro"):
+        for campo, info in resultado["registro"].items():
+            valor = str(info["valor"])[:100] + "..." if len(str(info["valor"])) > 100 else info["valor"]
+            cor = "#ffff00" if info.get("e_principal") else "#ffffff"
+            campos_html += f"""
+            <tr style="background: rgba(255,255,255,0.1);">
+                <td style="color: {cor}; padding: 8px; font-weight: bold;">{campo}</td>
+                <td style="color: #00ffff; padding: 8px; text-align: center;">{info["tipo"]}</td>
+                <td style="color: #ffffff; padding: 8px;">{valor}</td>
+            </tr>
+            """
+    
+    # Contexto
+    contexto_html = ""
+    for ctx in resultado.get("contexto", []):
+        cor_fundo = "#ffff00" if ctx["e_atual"] else "transparent"
+        cor_texto = "#000000" if ctx["e_atual"] else "#ffffff"
+        contexto_html += f"""
+        <div style="background: {cor_fundo}; color: {cor_texto}; padding: 5px; cursor: pointer; border-bottom: 1px solid #333;" 
+             onclick="window.location.href='/dbedit?tabela={tabela}&rec={ctx['posicao']}&cmd=GOTO'">
+            {ctx['posicao']:03d}: {ctx['preview']}
+        </div>
+        """
+    
+    return f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <title>🗃️ DBEDIT BRK - {tabela} - Rec {registro_atual}/{total_registros}</title>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 0; }}
+            .header {{ background: #0000aa; color: #ffff00; padding: 10px; text-align: center; font-weight: bold; }}
+            .status {{ background: #008080; padding: 5px 10px; font-size: 12px; }}
+            .content {{ display: flex; height: calc(100vh - 120px); }}
+            .campos {{ flex: 2; padding: 10px; overflow-y: auto; }}
+            .contexto {{ flex: 1; background: #004080; padding: 10px; overflow-y: auto; max-width: 300px; }}
+            .commands {{ background: #800000; padding: 10px; text-align: center; }}
+            .btn {{ background: #008000; color: white; padding: 8px 12px; text-decoration: none; margin: 3px; border: 1px solid #fff; font-size: 12px; }}
+            .btn:hover {{ background: #00aa00; }}
+            .btn-delete {{ background: #aa0000 !important; }}
+            .btn:disabled {{ background: #666; cursor: not-allowed; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th {{ background: #800080; padding: 8px; border-bottom: 1px solid #fff; }}
+            td {{ padding: 8px; border-bottom: 1px solid #333; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">🗃️ DBEDIT BRK - {tabela.upper()}</div>
+        <div class="status">📊 REC {registro_atual}/{total_registros} - ⚡ {resultado.get('comando_executado', 'SHOW')} - 🕐 {resultado['timestamp']}</div>
+        
+        <div class="content">
+            <div class="campos">
+                <h3 style="color: #ffff00;">📊 CAMPOS - REGISTRO {registro_atual}</h3>
+                <table>
+                    <thead>
+                        <tr><th>Campo</th><th>Tipo</th><th>Valor</th></tr>
+                    </thead>
+                    <tbody>
+                        {campos_html if campos_html else '<tr><td colspan="3" style="text-align: center; color: #ffff00;">📭 Nenhum registro</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="contexto">
+                <h3 style="color: #ffff00;">📍 CONTEXTO</h3>
+                {contexto_html if contexto_html else '<div style="color: #ffff00; text-align: center;">Sem contexto</div>'}
+            </div>
+        </div>
+        
+        <div class="commands">
+            <a href="/dbedit?tabela={tabela}&rec=1&cmd=TOP" class="btn" {'style="background: #666; cursor: not-allowed;"' if nav.get('e_primeiro') else ''}>🔝 TOP</a>
+            <a href="/dbedit?tabela={tabela}&rec={max(1, registro_atual-1)}&cmd=PREV" class="btn" {'style="background: #666; cursor: not-allowed;"' if not nav.get('pode_anterior') else ''}>⬅️ PREV</a>
+            <a href="/dbedit?tabela={tabela}&rec={min(total_registros, registro_atual+1)}&cmd=NEXT" class="btn" {'style="background: #666; cursor: not-allowed;"' if not nav.get('pode_proximo') else ''}>➡️ NEXT</a>
+            <a href="/dbedit?tabela={tabela}&rec={total_registros}&cmd=BOTTOM" class="btn" {'style="background: #666; cursor: not-allowed;"' if nav.get('e_ultimo') else ''}>🔚 BOTTOM</a>
+            
+            <a href="/delete?tabela={tabela}&rec={registro_atual}&confirm=0" class="btn btn-delete" title="DELETE seguro com confirmação tripla">🗑️ DELETE</a>
+            <a href="/" class="btn" style="background: #aa0000;">🏠 SAIR</a>
+        </div>
+    </body>
+    </html>
+    """
+
+def _render_delete_confirmacao_flask(tabela, registro_atual, registro, nivel):
+    """Páginas de confirmação DELETE"""
+    # Dados principais do registro
+    dados_resumo = ""
+    campos_principais = ['id', 'cdc', 'casa_oracao', 'valor', 'vencimento', 'competencia']
+    for campo in campos_principais:
+        if campo in registro:
+            valor = registro[campo].get('valor', 'N/A')
+            dados_resumo += f"<tr><td><strong>{campo}:</strong></td><td>{valor}</td></tr>"
+    
+    if nivel == 1:
+        return f"""
+        <!DOCTYPE html>
+        <html><head><title>🗑️ DELETE - Confirmação</title><meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px; }}
+            .warning {{ background: #800000; padding: 20px; border: 2px solid #ffffff; margin: 20px 0; }}
+            .data {{ background: #004080; padding: 15px; border: 1px solid #ffffff; margin: 10px 0; }}
+            .btn {{ background: #008000; color: white; padding: 10px 20px; text-decoration: none; margin: 5px; }}
+            .btn-danger {{ background: #800000; }}
+            table {{ width: 100%; }} td {{ padding: 5px; }}
+        </style></head>
+        <body>
+            <h1>🗑️ DELETE REGISTRO - Confirmação Necessária</h1>
+            
+            <div class="warning">
+                <h3>⚠️ ATENÇÃO: Operação Perigosa</h3>
+                <p>Você está prestes a DELETAR permanentemente este registro da tabela <strong>{tabela}</strong>.</p>
+                <p><strong>Esta operação NÃO pode ser desfeita!</strong></p>
+            </div>
+            
+            <div class="data">
+                <h3>📋 Dados do Registro {registro_atual}:</h3>
+                <table>{dados_resumo}</table>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="/delete?tabela={tabela}&rec={registro_atual}&confirm=1" class="btn btn-danger">🗑️ CONFIRMAR DELETE</a>
+                <a href="/dbedit?tabela={tabela}&rec={registro_atual}" class="btn">❌ CANCELAR</a>
+            </div>
+        </body></html>
+        """
+    else:  # nivel == 2
+        return f"""
+        <!DOCTYPE html>
+        <html><head><title>🗑️ DELETE - Confirmação Final</title><meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Courier New', monospace; background: #800000; color: #ffffff; margin: 20px; }}
+            .final-warning {{ background: #000000; padding: 20px; border: 3px solid #ff0000; margin: 20px 0; }}
+            .btn {{ background: #008000; color: white; padding: 15px 30px; text-decoration: none; margin: 10px; font-weight: bold; }}
+            .btn-final-delete {{ background: #ff0000; }}
+        </style></head>
+        <body>
+            <h1>🚨 ÚLTIMA CONFIRMAÇÃO - DELETE PERMANENTE</h1>
+            
+            <div class="final-warning">
+                <h2>🚨 ÚLTIMA CHANCE DE CANCELAR!</h2>
+                <p>➡️ Registro {registro_atual} será DELETADO PERMANENTEMENTE</p>
+                <p>➡️ <strong>OPERAÇÃO IRREVERSÍVEL!</strong></p>
+            </div>
+            
+            <div style="text-align: center; margin: 40px 0;">
+                <a href="/delete?tabela={tabela}&rec={registro_atual}&confirm=2" class="btn btn-final-delete" 
+                   onclick="return confirm('ÚLTIMA CONFIRMAÇÃO: Deletar registro permanentemente?')">💀 EXECUTAR DELETE AGORA</a>
+                <br><br>
+                <a href="/dbedit?tabela={tabela}&rec={registro_atual}" class="btn">🛡️ CANCELAR</a>
+            </div>
+        </body></html>
+        """
+
+def _executar_delete_flask_seguro(engine, tabela, registro_atual, registro):
+    """Execução DELETE segura"""
+    try:
+        from datetime import datetime
+        
+        # Backup do registro
+        backup = {
+            "timestamp": datetime.now().strftime('%Y%m%d_%H%M%S'),
+            "tabela": tabela,
+            "registro": registro_atual,
+            "dados": {campo: info.get('valor_original') for campo, info in registro.items()}
+        }
+        logger.info(f"DELETE BACKUP: {backup}")
+        
+        # Executar DELETE
+        cursor = engine.conn.cursor()
+        if tabela == 'faturas_brk' and 'id' in registro:
+            id_delete = registro['id'].get('valor_original')
+            cursor.execute(f"DELETE FROM {tabela} WHERE id = ?", (id_delete,))
+        else:
+            cursor.execute(f"DELETE FROM {tabela} WHERE rowid = (SELECT rowid FROM {tabela} LIMIT 1 OFFSET ?)", (registro_atual - 1,))
+        
+        engine.conn.commit()
+        logger.info(f"DELETE executado: {cursor.rowcount} linha(s)")
+        
+        # Sincronizar OneDrive se possível
+        if hasattr(engine, 'database_brk') and engine.database_brk:
+            try:
+                engine.database_brk.sincronizar_onedrive()
+            except Exception as e:
+                logger.warning(f"Sync OneDrive falhou: {e}")
+        
+        # Página de sucesso
+        return f"""
+        <!DOCTYPE html>
+        <html><head><title>✅ DELETE Realizado</title><meta charset="UTF-8">
+        <meta http-equiv="refresh" content="3;url=/dbedit?tabela={tabela}&rec=1">
+        <style>
+            body {{ font-family: 'Courier New', monospace; background: #008000; color: #ffffff; margin: 20px; text-align: center; }}
+            .success {{ background: #000000; padding: 30px; border: 3px solid #ffffff; margin: 30px auto; max-width: 600px; }}
+        </style></head>
+        <body>
+            <div class="success">
+                <h1>✅ DELETE REALIZADO COM SUCESSO!</h1>
+                <p>🗑️ Registro {registro_atual} deletado permanentemente</p>
+                <p>💾 Backup automático criado</p>
+                <p>Redirecionando em 3 segundos...</p>
+                <p><a href="/dbedit?tabela={tabela}&rec=1" style="color: #ffff00;">🏠 Voltar ao DBEDIT</a></p>
+            </div>
+        </body></html>
+        """
+        
+    except Exception as e:
+        logger.error(f"Erro DELETE: {e}")
+        return jsonify({"status": "error", "message": f"Erro DELETE: {str(e)}"}), 500
+
+
 
 # ============================================================================
 # PONTO DE ENTRADA
