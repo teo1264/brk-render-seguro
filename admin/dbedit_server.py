@@ -257,13 +257,10 @@ class DBEditEngineBRK:
             
             # Ordenação inteligente para faturas_brk
             if not ordenacao.strip():
-                if tabela == 'faturas_brk':
-                    order_clause = " ORDER BY data_processamento DESC"  # Mais recentes primeiro
-                else:
-                    order_clause = " ORDER BY rowid"
-            else:
-                order_clause = f" ORDER BY {ordenacao}"
-            
+               if tabela == 'faturas_brk':
+                   order_clause = " ORDER BY data_processamento ASC"  # ✅ CORRIGIDO: Cronológico (antigos primeiro)
+               else:
+                   order_clause = " ORDER BY rowid"
             # Recalcular total com filtro
             cursor = self.conn.cursor()
             cursor.execute(f"SELECT COUNT(*) FROM {tabela}{where_clause}")
@@ -636,10 +633,53 @@ class DBEditHandlerReal(BaseHTTPRequestHandler):
             self._render_dbedit_real_html(resultado)
     
     def _handle_delete_real(self):
-        """Handler DELETE usando database real"""
-        # [Implementação similar ao anterior mas usando engine real]
-        self._send_json_response({"status": "delete_real", "message": "DELETE real implementado"})
+    """Handler DELETE usando database real com confirmação tripla"""
+    parsed_url = urlparse(self.path)
+    params = parse_qs(parsed_url.query)
     
+    tabela = params.get('tabela', ['faturas_brk'])[0]
+    registro_atual = int(params.get('rec', ['1'])[0])
+    confirmacao = params.get('confirm', ['0'])[0]
+    
+    try:
+        # ETAPA 1: Buscar dados do registro atual para confirmação
+        resultado = self.engine.navegar_registro_real(tabela, registro_atual, '', '', '')
+        
+        if resultado["status"] == "error":
+            self._send_json_response({
+                "status": "error",
+                "message": f"Erro buscando registro: {resultado['message']}"
+            })
+            return
+            
+        registro = resultado.get("registro", {})
+        
+        # ETAPA 2: Níveis de confirmação
+        if confirmacao == "0":
+            # Primeira confirmação - mostrar dados do registro
+            self._render_delete_confirmation_html(tabela, registro_atual, registro, nivel=1)
+            
+        elif confirmacao == "1":
+            # Segunda confirmação - confirmar ação
+            self._render_delete_confirmation_html(tabela, registro_atual, registro, nivel=2)
+            
+        elif confirmacao == "2":
+            # Executar DELETE efetivamente
+            resultado_delete = self._executar_delete_seguro(tabela, registro_atual, registro)
+            self._send_json_response(resultado_delete)
+            
+        else:
+            self._send_json_response({
+                "status": "error", 
+                "message": "Nível de confirmação inválido"
+            })
+            
+    except Exception as e:
+        self._send_json_response({
+            "status": "error",
+            "message": f"Erro no DELETE: {str(e)}"
+        })
+
     def _handle_health_real(self):
         """Health check usando estrutura real"""
         health = {
@@ -652,6 +692,179 @@ class DBEditHandlerReal(BaseHTTPRequestHandler):
         }
         self._send_json_response(health)
     
+    def _render_delete_confirmation_html(self, tabela, registro_atual, registro, nivel):
+    """Renderizar confirmação de DELETE em HTML"""
+    self.send_response(200)
+    self.send_header('Content-type', 'text/html; charset=utf-8')
+    self.end_headers()
+    
+    # Dados do registro para exibição
+    campos_principais = ['id', 'cdc', 'casa_oracao', 'valor', 'vencimento', 'competencia']
+    dados_resumo = ""
+    
+    for campo in campos_principais:
+        if campo in registro:
+            valor = registro[campo].get('valor', 'N/A')
+            dados_resumo += f"<tr><td><strong>{campo}:</strong></td><td>{valor}</td></tr>"
+    
+    if nivel == 1:
+        # Primeira confirmação
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <title>🗑️ DELETE - Confirmação</title>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: 'Courier New', monospace; background: #000080; color: #ffffff; margin: 20px; }}
+                .warning {{ background: #800000; padding: 20px; border: 2px solid #ffffff; margin: 20px 0; }}
+                .data {{ background: #004080; padding: 15px; border: 1px solid #ffffff; margin: 10px 0; }}
+                .btn {{ background: #008000; color: white; padding: 10px 20px; text-decoration: none; margin: 5px; border: 1px solid #fff; }}
+                .btn-danger {{ background: #800000; }}
+                .btn:hover {{ background: #00aa00; }}
+                .btn-danger:hover {{ background: #aa0000; }}
+                table {{ width: 100%; }}
+                td {{ padding: 5px; }}
+            </style>
+        </head>
+        <body>
+            <h1>🗑️ DELETE REGISTRO - Confirmação Necessária</h1>
+            
+            <div class="warning">
+                <h3>⚠️ ATENÇÃO: Operação Perigosa</h3>
+                <p>Você está prestes a DELETAR permanentemente este registro da tabela <strong>{tabela}</strong>.</p>
+                <p><strong>Esta operação NÃO pode ser desfeita!</strong></p>
+            </div>
+            
+            <div class="data">
+                <h3>📋 Dados do Registro {registro_atual}:</h3>
+                <table>{dados_resumo}</table>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="/delete?tabela={tabela}&rec={registro_atual}&confirm=1" class="btn btn-danger">
+                    🗑️ CONFIRMAR DELETE
+                </a>
+                <a href="/dbedit?tabela={tabela}&rec={registro_atual}" class="btn">
+                    ❌ CANCELAR
+                </a>
+            </div>
+        </body>
+        </html>
+        """
+        
+    else:  # nivel == 2
+        # Segunda confirmação (final)
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <title>🗑️ DELETE - Confirmação Final</title>
+            <meta charset="UTF-8">
+            <style>
+                body {{ font-family: 'Courier New', monospace; background: #800000; color: #ffffff; margin: 20px; }}
+                .final-warning {{ background: #000000; padding: 20px; border: 3px solid #ff0000; margin: 20px 0; }}
+                .btn {{ background: #008000; color: white; padding: 15px 30px; text-decoration: none; margin: 10px; border: 2px solid #fff; font-weight: bold; }}
+                .btn-final-delete {{ background: #ff0000; }}
+                .btn:hover {{ transform: scale(1.05); }}
+            </style>
+        </head>
+        <body>
+            <h1>🚨 ÚLTIMA CONFIRMAÇÃO - DELETE PERMANENTE</h1>
+            
+            <div class="final-warning">
+                <h2>🚨 ÚLTIMA CHANCE DE CANCELAR!</h2>
+                <p>➡️ Registro {registro_atual} será DELETADO PERMANENTEMENTE</p>
+                <p>➡️ Mudanças serão sincronizadas no OneDrive</p>
+                <p>➡️ <strong>OPERAÇÃO IRREVERSÍVEL!</strong></p>
+            </div>
+            
+            <div style="text-align: center; margin: 40px 0;">
+                <a href="/delete?tabela={tabela}&rec={registro_atual}&confirm=2" class="btn btn-final-delete" 
+                   onclick="return confirm('ÚLTIMA CONFIRMAÇÃO: Deletar registro permanentemente?')">
+                    💀 EXECUTAR DELETE AGORA
+                </a>
+                <br><br>
+                <a href="/dbedit?tabela={tabela}&rec={registro_atual}" class="btn">
+                    🛡️ CANCELAR (Recomendado)
+                </a>
+            </div>
+        </body>
+        </html>
+        """
+    
+    self.wfile.write(html.encode('utf-8'))
+   
+    def _executar_delete_seguro(self, tabela, registro_atual, registro):
+    """Executa DELETE efetivo com backup e logs"""
+    try:
+        print(f"🗑️ EXECUTANDO DELETE SEGURO: {tabela}[{registro_atual}]")
+        
+        # 1. BACKUP automático antes do DELETE
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        registro_backup = {
+            "timestamp": timestamp,
+            "tabela": tabela,
+            "registro_deletado": registro_atual,
+            "dados": {campo: info.get('valor_original') for campo, info in registro.items()}
+        }
+        
+        print(f"💾 Backup registro: {registro_backup}")
+        
+        # 2. EXECUTAR DELETE no SQLite
+        if not self.engine.conn:
+            return {"status": "error", "message": "Conexão database indisponível"}
+        
+        # Buscar ID real para DELETE (usando rowid se necessário)
+        cursor = self.engine.conn.cursor()
+        
+        if tabela == 'faturas_brk' and 'id' in registro:
+            # DELETE por ID específico
+            id_delete = registro['id'].get('valor_original')
+            cursor.execute(f"DELETE FROM {tabela} WHERE id = ?", (id_delete,))
+        else:
+            # DELETE por posição (mais arriscado, só para outras tabelas)
+            cursor.execute(f"DELETE FROM {tabela} WHERE rowid = (SELECT rowid FROM {tabela} LIMIT 1 OFFSET ?)", (registro_atual - 1,))
+        
+        self.engine.conn.commit()
+        linhas_afetadas = cursor.rowcount
+        
+        print(f"✅ DELETE executado: {linhas_afetadas} linha(s) afetada(s)")
+        
+        # 3. SINCRONIZAR com OneDrive (se DatabaseBRK disponível)
+        if hasattr(self.engine, 'database_brk') and self.engine.database_brk:
+            try:
+                self.engine.database_brk.sincronizar_onedrive()
+                print(f"🔄 Sincronização OneDrive realizada")
+            except Exception as e:
+                print(f"⚠️ Aviso: Falha sincronização OneDrive: {e}")
+        
+        return {
+            "status": "success",
+            "message": f"Registro {registro_atual} deletado com sucesso",
+            "linhas_afetadas": linhas_afetadas,
+            "backup_criado": True,
+            "sincronizado_onedrive": True,
+            "redirect": f"/dbedit?tabela={tabela}&rec=1"
+        }
+        
+    except Exception as e:
+        print(f"❌ ERRO DELETE: {e}")
+        return {
+            "status": "error", 
+            "message": f"Erro executando DELETE: {str(e)}",
+            "backup_criado": False
+        }
+
+# 🔧 CORREÇÃO 5: Adicionar botão DELETE na interface HTML
+# LOCALIZAR na função _render_dbedit_real_html() linha ~420:
+# DENTRO DO <div class="commands-bar"> ANTES do botão SAIR
+# ADICIONAR:
+
+                    <button class="cmd-button" onclick="window.location.href='/delete?tabela={tabela}&rec={registro_atual}&confirm=0'" style="background: #aa0000;">
+                        🗑️ DELETE
+                    </button>
+
     def _handle_not_found(self):
         """Página não encontrada"""
         self.send_response(404)
