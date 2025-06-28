@@ -1006,6 +1006,8 @@ class EmailProcessor:
         """
         MÉTODO PRINCIPAL compatível com app.py existente.
         
+        ✅ VERSÃO COMPLETA COM UPLOAD ONEDRIVE INTEGRADO
+        
         Agora usa a nova funcionalidade de extração completa,
         mas mantém interface TOTALMENTE compatível com código existente.
         
@@ -1080,7 +1082,7 @@ class EmailProcessor:
                                     
                                     print(f"✅ PDF processado: {nome_original}")
                                     
-                                    # 🆕 SALVAMENTO AUTOMÁTICO NO DatabaseBRK
+                                    # 🆕 SALVAMENTO AUTOMÁTICO NO DatabaseBRK + UPLOAD ONEDRIVE
                                     if self.database_brk and dados_extraidos:
                                         try:
                                             resultado_db = self.salvar_fatura_database(pdf_completo)
@@ -1088,9 +1090,33 @@ class EmailProcessor:
                                                 pdf_completo['database_salvo'] = True
                                                 pdf_completo['database_id'] = resultado_db.get('id_salvo')
                                                 pdf_completo['database_status'] = resultado_db.get('status_duplicata', 'NORMAL')
+                                                
+                                                # ✅ UPLOAD ONEDRIVE - ELEGANTE (reutiliza DatabaseBRK)
+                                                try:
+                                                    print(f"☁️ Iniciando upload OneDrive após database...")
+                                                    # Usar dados já mapeados para database
+                                                    dados_mapeados = self.preparar_dados_para_database(pdf_completo)
+                                                    resultado_upload = self.upload_fatura_onedrive(pdf_bytes, dados_mapeados)
+                                                    
+                                                    if resultado_upload.get('status') == 'sucesso':
+                                                        pdf_completo['onedrive_upload'] = True
+                                                        pdf_completo['onedrive_url'] = resultado_upload.get('url_arquivo')
+                                                        pdf_completo['onedrive_pasta'] = resultado_upload.get('pasta_path')
+                                                        pdf_completo['nome_onedrive'] = resultado_upload.get('nome_arquivo')
+                                                        print(f"📁 OneDrive: {resultado_upload.get('pasta_path')}{resultado_upload.get('nome_arquivo')}")
+                                                    else:
+                                                        pdf_completo['onedrive_upload'] = False
+                                                        pdf_completo['onedrive_erro'] = resultado_upload.get('mensagem')
+                                                        print(f"⚠️ Upload OneDrive falhou: {resultado_upload.get('mensagem')}")
+                                                        
+                                                except Exception as e:
+                                                    print(f"⚠️ Erro upload OneDrive: {e}")
+                                                    pdf_completo['onedrive_upload'] = False
+                                                    pdf_completo['onedrive_erro'] = str(e)
                                             else:
                                                 pdf_completo['database_salvo'] = False
                                                 pdf_completo['database_erro'] = resultado_db.get('mensagem', 'Erro desconhecido')
+                                                print(f"⚠️ Database falhou - pulando upload OneDrive")
                                         except Exception as e:
                                             print(f"⚠️ Erro salvamento automático: {e}")
                                             pdf_completo['database_salvo'] = False
@@ -1132,13 +1158,13 @@ class EmailProcessor:
                 print(f"   ✅ PDFs processados: {pdfs_processados}")
                 print(f"   📋 Relacionamento: {'✅ Usado' if relacionamento_ok else '❌ Indisponível'}")
                 print(f"   🔄 Extração avançada: {'✅ Ativa' if pdfs_processados > 0 else '❌ Falhou'}")
+                print(f"   ☁️ Upload OneDrive: {'✅ Integrado' if self.database_brk else '❌ DatabaseBRK indisponível'}")
                 
             return pdfs_com_dados
             
         except Exception as e:
             print(f"❌ Erro extraindo PDFs do email: {e}")
-            return []
-            
+            return []        
     def log_consolidado_email(self, email_data, pdfs_processados):
         """
         Exibe log consolidado bonito de um email processado.
