@@ -40,8 +40,8 @@ ONEDRIVE_BRK_ID = os.getenv('ONEDRIVE_BRK_ID')
 os.environ['PYTHONUNBUFFERED'] = '1'
 
 print("🚀 Sistema BRK integrado com processor/ iniciado")
-print(f"   📧 Pasta emails: {PASTA_BRK_ID[:10] if PASTA_BRK_ID else 'N/A'}******")
-print(f"   📁 OneDrive BRK: {ONEDRIVE_BRK_ID[:15] if ONEDRIVE_BRK_ID else 'N/A'}******")
+print(f"   📧 Pasta emails: {'configurada' if PASTA_BRK_ID else 'não configurada'}")
+print(f"   📁 OneDrive BRK: {'configurada' if ONEDRIVE_BRK_ID else 'não configurada'}")
 print(f"   🗃️ DatabaseBRK: {'Configurado' if ONEDRIVE_BRK_ID else 'Pendente'}")
 print(f"   🔍 SEEK + Duplicatas: Ativo")
 
