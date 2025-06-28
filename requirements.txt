@@ -23,3 +23,6 @@ click==8.1.7
 
 # Para logs e debugging
 gunicorn==23.0.0
+
+# 🔐 ETAPA 2: Criptografia para tokens
+cryptography==41.0.7
