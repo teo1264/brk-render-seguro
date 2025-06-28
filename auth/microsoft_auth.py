@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Dict, Optional
 import hashlib
 from datetime import datetime
-
+import base64
+from cryptography.fernet import Fernet
 
 class MicrosoftAuth:
     """
@@ -54,6 +55,44 @@ class MicrosoftAuth:
         print(f"   Client ID: {self.client_id[:8]}****** (protegido)")
         print(f"   Tenant: {self.tenant_id}")
         print(f"   Token: {'✅ OK' if tokens_ok else '❌ Faltando'}")
+
+    def _get_encryption_key(self):
+        """Obter ou gerar chave de criptografia"""
+        key_file = "/opt/render/project/storage/.encryption_key"
+        try:
+            if os.path.exists(key_file):
+                with open(key_file, 'rb') as f:
+                    return f.read()
+            
+            key = Fernet.generate_key()
+            with open(key_file, 'wb') as f:
+                f.write(key)
+            os.chmod(key_file, 0o600)
+            return key
+        except Exception:
+            # Fallback: gerar chave determinística
+            unique_data = f"{self.client_id}{os.getenv('RENDER_SERVICE_ID', 'fallback')}"
+            return base64.urlsafe_b64encode(hashlib.sha256(unique_data.encode()).digest())
+
+    def _encrypt_token_data(self, token_data):
+        """Criptografar dados do token"""
+        try:
+            key = self._get_encryption_key()
+            cipher = Fernet(key)
+            json_data = json.dumps(token_data).encode('utf-8')
+            return cipher.encrypt(json_data)
+        except Exception:
+            return None
+
+    def _decrypt_token_data(self, encrypted_data):
+        """Descriptografar dados do token"""
+        try:
+            key = self._get_encryption_key()
+            cipher = Fernet(key)
+            decrypted_data = cipher.decrypt(encrypted_data)
+            return json.loads(decrypted_data.decode('utf-8'))
+        except Exception:
+            return None
     
     def carregar_token(self) -> bool:
         """
@@ -76,15 +115,23 @@ class MicrosoftAuth:
     
     def _carregar_do_arquivo(self, filepath: str) -> bool:
         """
-        Carregar token de arquivo específico
-        
-        Args:
-            filepath (str): Caminho para arquivo token.json
-            
-        Returns:
-            bool: True se carregamento bem-sucedido
+        Carregar token de arquivo específico (com suporte a criptografia)
         """
         try:
+            # 🔐 NOVA LÓGICA: Tentar carregar arquivo criptografado primeiro
+            encrypted_file = filepath.replace('.json', '.enc')
+            if os.path.exists(encrypted_file):
+                with open(encrypted_file, 'rb') as f:
+                    encrypted_data = f.read()
+                token_data = self._decrypt_token_data(encrypted_data)
+                if token_data:
+                    self.access_token = token_data.get('access_token')
+                    self.refresh_token = token_data.get('refresh_token')
+                    if self.access_token and self.refresh_token:
+                        print(f"🔒 Token CRIPTOGRAFADO carregado de: {encrypted_file}")
+                        return True
+            
+            # Fallback: carregar arquivo JSON original
             with open(filepath, 'r') as f:
                 token_data = json.load(f)
             
@@ -103,14 +150,12 @@ class MicrosoftAuth:
             return False
         except Exception as e:
             print(f"❌ Erro carregando {filepath}: {e}")
-            return False
+            return False            
+     
     
     def salvar_token_persistent(self) -> bool:
         """
-        Salvar token no persistent disk com proteção de segurança
-        
-        Returns:
-            bool: True se salvamento bem-sucedido
+        Salvar token no persistent disk com proteção de segurança E CRIPTOGRAFIA
         """
         try:
             # 🔒 PROTEÇÃO: Proteger diretório
@@ -129,18 +174,29 @@ class MicrosoftAuth:
                 'client_hash': hashlib.sha256(self.client_id.encode()).hexdigest()[:8]
             }
             
-            with open(self.token_file_persistent, 'w') as f:
-                json.dump(token_data, f, indent=2)
+            # 🔐 NOVA LÓGICA: Tentar salvar criptografado primeiro
+            encrypted_data = self._encrypt_token_data(token_data)
+            if encrypted_data:
+                encrypted_file = self.token_file_persistent.replace('.json', '.enc')
+                with open(encrypted_file, 'wb') as f:
+                    f.write(encrypted_data)
+                os.chmod(encrypted_file, 0o600)
+                # Remover arquivo antigo não criptografado se existir
+                if os.path.exists(self.token_file_persistent):
+                    os.remove(self.token_file_persistent)
+                print(f"🔒 Token salvo CRIPTOGRAFADO: {encrypted_file}")
+            else:
+                # Fallback: salvar sem criptografia
+                with open(self.token_file_persistent, 'w') as f:
+                    json.dump(token_data, f, indent=2)
+                os.chmod(self.token_file_persistent, 0o600)
+                print(f"💾 Token salvo com proteção: {self.token_file_persistent}")
             
-            # 🔒 PROTEÇÃO: Proteger arquivo
-            os.chmod(self.token_file_persistent, 0o600)  # Apenas proprietário
-            
-            print(f"💾 Token salvo com proteção: {self.token_file_persistent}")
             return True
         except Exception as e:
             print(f"❌ Erro salvando token protegido: {e}")
             return False
-        
+            
     def atualizar_token(self) -> bool:
         """
         Renovar access_token usando refresh_token
