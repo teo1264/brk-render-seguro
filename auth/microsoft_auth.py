@@ -52,7 +52,7 @@ class MicrosoftAuth:
         tokens_ok = self.carregar_token()
         
         print(f"🔐 Microsoft Auth inicializado")
-        print(f"   Client ID: {self.client_id[:8]}****** (protegido)")
+        print(f"   Client ID: configurado e protegido")
         print(f"   Tenant: {self.tenant_id}")
         print(f"   Token: {'✅ OK' if tokens_ok else '❌ Faltando'}")
 
