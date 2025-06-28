@@ -105,37 +105,41 @@ class MicrosoftAuth:
             print(f"❌ Erro carregando {filepath}: {e}")
             return False
     
-   # 🔒 MODIFICAR o método salvar_token_persistent():
-    # 🔒 MODIFICAR o método salvar_token_persistent():
-def salvar_token_persistent(self) -> bool:
-    try:
-        # 🔒 NOVA: Proteger diretório
-        token_dir = os.path.dirname(self.token_file_persistent)
-        os.makedirs(token_dir, exist_ok=True)
-        os.chmod(token_dir, 0o700)  # ← ADICIONAR
+    def salvar_token_persistent(self) -> bool:
+        """
+        Salvar token no persistent disk com proteção de segurança
         
-        token_data = {
-            'access_token': self.access_token,
-            'refresh_token': self.refresh_token,
-            'expires_in': 3600,
-            'token_type': 'Bearer',
-            'scope': 'https://graph.microsoft.com/.default offline_access',
-            # 🔒 NOVOS metadados:
-            'saved_at': datetime.now().isoformat(),
-            'client_hash': hashlib.sha256(self.client_id.encode()).hexdigest()[:8]
-        }
-        
-        with open(self.token_file_persistent, 'w') as f:
-            json.dump(token_data, f, indent=2)
-        
-        # 🔒 NOVA: Proteger arquivo
-        os.chmod(self.token_file_persistent, 0o600)  # ← ADICIONAR
-        
-        print(f"💾 Token salvo com proteção: {self.token_file_persistent}")
-        return True
-    except Exception as e:
-        print(f"❌ Erro salvando token protegido: {e}")
-        return False
+        Returns:
+            bool: True se salvamento bem-sucedido
+        """
+        try:
+            # 🔒 PROTEÇÃO: Proteger diretório
+            token_dir = os.path.dirname(self.token_file_persistent)
+            os.makedirs(token_dir, exist_ok=True)
+            os.chmod(token_dir, 0o700)  # Apenas proprietário
+            
+            token_data = {
+                'access_token': self.access_token,
+                'refresh_token': self.refresh_token,
+                'expires_in': 3600,
+                'token_type': 'Bearer',
+                'scope': 'https://graph.microsoft.com/.default offline_access',
+                # 🔒 Metadados de segurança:
+                'saved_at': datetime.now().isoformat(),
+                'client_hash': hashlib.sha256(self.client_id.encode()).hexdigest()[:8]
+            }
+            
+            with open(self.token_file_persistent, 'w') as f:
+                json.dump(token_data, f, indent=2)
+            
+            # 🔒 PROTEÇÃO: Proteger arquivo
+            os.chmod(self.token_file_persistent, 0o600)  # Apenas proprietário
+            
+            print(f"💾 Token salvo com proteção: {self.token_file_persistent}")
+            return True
+        except Exception as e:
+            print(f"❌ Erro salvando token protegido: {e}")
+            return False
         
     def atualizar_token(self) -> bool:
         """
