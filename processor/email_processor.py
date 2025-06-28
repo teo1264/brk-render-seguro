@@ -2134,7 +2134,326 @@ class EmailProcessor:
             print(f"❌ Erro em extrair_dados_fatura: {e}")
             return None
 
+# ============================================================================
+# BLOCO COMPLETO 1/2 - MÉTODOS UPLOAD ONEDRIVE
+# LOCALIZAÇÃO: Adicionar no FINAL da classe EmailProcessor 
+# LINHA: ~1350 (antes do comentário final # ============================================================================)
+# ============================================================================
 
+    def upload_fatura_onedrive(self, pdf_bytes, dados_fatura):
+        """
+        Upload de fatura PDF para OneDrive com estrutura /BRK/Faturas/YYYY/MM/
+        
+        🔧 ARQUITETURA: Este método reutiliza funções do database_brk.py para evitar duplicação:
+           - database_brk._extrair_ano_mes() → Determina ano/mês da pasta
+           - database_brk._gerar_nome_padronizado() → Gera nome do arquivo
+        
+        📁 ESTRUTURA CRIADA: /BRK/Faturas/YYYY/MM/nome-padronizado.pdf
+        
+        Args:
+            pdf_bytes (bytes): Conteúdo do PDF
+            dados_fatura (dict): Dados extraídos da fatura (já mapeados pelo preparar_dados_para_database)
+            
+        Returns:
+            dict: Resultado do upload {'status': 'sucesso/erro', 'mensagem': '...', 'url_arquivo': '...'}
+        """
+        try:
+            if not self.onedrive_brk_id:
+                return {
+                    'status': 'erro',
+                    'mensagem': 'ONEDRIVE_BRK_ID não configurado',
+                    'url_arquivo': None
+                }
+            
+            print(f"☁️ Upload OneDrive: {dados_fatura.get('nome_arquivo_original', 'arquivo.pdf')}")
+            
+            # ✅ REUTILIZAÇÃO: Verificar se DatabaseBRK está disponível
+            # Precisamos do DatabaseBRK para reutilizar suas funções de data e nomenclatura
+            if not self.database_brk:
+                return {
+                    'status': 'erro',
+                    'mensagem': 'DatabaseBRK não disponível para gerar nome/estrutura',
+                    'url_arquivo': None
+                }
+            
+            # 🔧 REUTILIZAÇÃO 1: Usar função existente _extrair_ano_mes() do database_brk.py
+            # Esta função já extrai ano/mês corretamente de competência ou vencimento
+            # LOCALIZAÇÃO: database_brk.py linha ~500
+            ano, mes = self.database_brk._extrair_ano_mes(dados_fatura.get('competencia', ''), dados_fatura.get('vencimento', ''))
+            print(f"📅 Estrutura: /BRK/Faturas/{ano}/{mes:02d}/ (usando database_brk._extrair_ano_mes)")
+            
+            # 🔧 REUTILIZAÇÃO 2: Usar função existente _gerar_nome_padronizado() do database_brk.py  
+            # Esta função já gera nomes no padrão: "DD-MM-BRK MM-YYYY - Casa - vc. DD-MM-YYYY - R$ XXX.pdf"
+            # LOCALIZAÇÃO: database_brk.py linha ~520
+            nome_padronizado = self.database_brk._gerar_nome_padronizado(dados_fatura)
+            print(f"📁 Nome: {nome_padronizado} (usando database_brk._gerar_nome_padronizado)")
+            
+            # 🆕 NOVA FUNCIONALIDADE: Criar estrutura de pastas OneDrive (específica para upload)
+            # Esta é a única lógica nova - criar pastas /BRK/Faturas/YYYY/MM/ no OneDrive
+            pasta_final_id = self._garantir_estrutura_pastas_onedrive(ano, mes)
+            if not pasta_final_id:
+                return {
+                    'status': 'erro',
+                    'mensagem': 'Falha criando estrutura de pastas OneDrive',
+                    'url_arquivo': None
+                }
+            
+            # 🆕 NOVA FUNCIONALIDADE: Upload do PDF para OneDrive (específica para upload)
+            # Esta é a segunda lógica nova - fazer upload via Microsoft Graph API
+            resultado_upload = self._fazer_upload_pdf_onedrive(pdf_bytes, nome_padronizado, pasta_final_id)
+            
+            if resultado_upload.get('status') == 'sucesso':
+                print(f"✅ Upload concluído: {nome_padronizado}")
+                return {
+                    'status': 'sucesso',
+                    'mensagem': f'PDF enviado para /BRK/Faturas/{ano}/{mes:02d}/',
+                    'url_arquivo': resultado_upload.get('url_arquivo'),
+                    'nome_arquivo': nome_padronizado,
+                    'pasta_path': f'/BRK/Faturas/{ano}/{mes:02d}/'
+                }
+            else:
+                return {
+                    'status': 'erro',
+                    'mensagem': f"Falha upload: {resultado_upload.get('mensagem', 'Erro desconhecido')}",
+                    'url_arquivo': None
+                }
+                
+        except Exception as e:
+            print(f"❌ Erro upload OneDrive: {e}")
+            return {
+                'status': 'erro',
+                'mensagem': str(e),
+                'url_arquivo': None
+            }
+
+    def _garantir_estrutura_pastas_onedrive(self, ano, mes):
+        """
+        🆕 FUNCIONALIDADE NOVA: Garante estrutura /BRK/Faturas/YYYY/MM/ no OneDrive.
+        
+        Esta é uma funcionalidade específica para OneDrive que NÃO EXISTE no database_brk.py.
+        Responsável apenas por criar a estrutura de pastas via Microsoft Graph API.
+        
+        🔧 INTEGRAÇÃO: Usa ano/mês fornecidos pelo database_brk._extrair_ano_mes()
+        📁 ESTRUTURA: Cria hierarquia /BRK/Faturas/YYYY/MM/ conforme necessário
+        
+        Args:
+            ano (int): Ano para estrutura (vem do database_brk._extrair_ano_mes)
+            mes (int): Mês para estrutura (vem do database_brk._extrair_ano_mes)
+            
+        Returns:
+            str: ID da pasta final (/MM/) para upload ou None se erro
+        """
+        try:
+            headers = self.auth.obter_headers_autenticados()
+            if not headers:
+                print(f"❌ Headers autenticação indisponíveis")
+                return None
+            
+            # 1. Verificar/criar pasta /BRK/Faturas/ (raiz das faturas)
+            pasta_faturas_id = self._garantir_pasta_faturas()
+            if not pasta_faturas_id:
+                return None
+            
+            # 2. Verificar/criar pasta /YYYY/ (ano da fatura)
+            pasta_ano_id = self._garantir_pasta_filho(pasta_faturas_id, str(ano), headers)
+            if not pasta_ano_id:
+                return None
+            
+            # 3. Verificar/criar pasta /MM/ (mês da fatura)
+            pasta_mes_id = self._garantir_pasta_filho(pasta_ano_id, f"{mes:02d}", headers)
+            if not pasta_mes_id:
+                return None
+            
+            print(f"📁 Estrutura OneDrive garantida: /BRK/Faturas/{ano}/{mes:02d}/")
+            return pasta_mes_id
+            
+        except Exception as e:
+            print(f"❌ Erro garantindo estrutura OneDrive: {e}")
+            return None
+
+    def _garantir_pasta_faturas(self):
+        """
+        🆕 FUNCIONALIDADE NOVA: Verifica/cria pasta /BRK/Faturas/ no OneDrive.
+        
+        Esta função é específica para OneDrive e NÃO EXISTE no database_brk.py.
+        Responsável por garantir que a pasta raiz "Faturas" existe dentro de /BRK/.
+        
+        📁 LOCALIZAÇÃO: Dentro da pasta /BRK/ (ONEDRIVE_BRK_ID)
+        🔧 MÉTODO: Microsoft Graph API para listar/criar pastas
+        
+        Returns:
+            str: ID da pasta /BRK/Faturas/ ou None se erro
+        """
+        try:
+            headers = self.auth.obter_headers_autenticados()
+            
+            # Buscar pasta Faturas dentro de /BRK/
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{self.onedrive_brk_id}/children"
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                itens = response.json().get('value', [])
+                
+                # Procurar pasta Faturas existente
+                for item in itens:
+                    if item.get('name', '').lower() == 'faturas' and 'folder' in item:
+                        print(f"✅ Pasta /BRK/Faturas/ encontrada (ID: {item['id'][:10]}...)")
+                        return item['id']
+                
+                # Pasta não existe - criar nova
+                print(f"📁 Criando pasta /BRK/Faturas/ (não existia)...")
+                return self._criar_pasta_onedrive(self.onedrive_brk_id, "Faturas", headers)
+            else:
+                print(f"❌ Erro acessando OneDrive /BRK/: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro verificando pasta /BRK/Faturas/: {e}")
+            return None
+
+    def _garantir_pasta_filho(self, pasta_pai_id, nome_pasta, headers):
+        """
+        🆕 FUNCIONALIDADE NOVA: Verifica/cria pasta filho genérica no OneDrive.
+        
+        Função auxiliar reutilizável para criar qualquer subpasta (ano/mês).
+        Específica para OneDrive - NÃO EXISTE no database_brk.py.
+        
+        🔧 USO: Chamada para criar pastas /YYYY/ e /MM/
+        📁 FUNCIONALIDADE: Verifica se existe, senão cria nova
+        
+        Args:
+            pasta_pai_id (str): ID da pasta pai no OneDrive
+            nome_pasta (str): Nome da pasta a criar/verificar (ex: "2025", "06")
+            headers (dict): Headers autenticados Microsoft Graph
+            
+        Returns:
+            str: ID da pasta filho ou None se erro
+        """
+        try:
+            # Buscar filhos da pasta pai
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_pai_id}/children"
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                itens = response.json().get('value', [])
+                
+                # Procurar pasta específica
+                for item in itens:
+                    if item.get('name') == nome_pasta and 'folder' in item:
+                        print(f"✅ Pasta /{nome_pasta}/ encontrada (ID: {item['id'][:10]}...)")
+                        return item['id']
+                
+                # Pasta não existe - criar
+                print(f"📁 Criando pasta /{nome_pasta}/ (não existia)...")
+                return self._criar_pasta_onedrive(pasta_pai_id, nome_pasta, headers)
+            else:
+                print(f"❌ Erro acessando pasta pai: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro verificando pasta /{nome_pasta}/: {e}")
+            return None
+
+    def _criar_pasta_onedrive(self, pasta_pai_id, nome_pasta, headers):
+        """
+        🆕 FUNCIONALIDADE NOVA: Cria pasta no OneDrive via Microsoft Graph API.
+        
+        Função de baixo nível para criação de pastas OneDrive.
+        Específica para OneDrive - NÃO EXISTE no database_brk.py.
+        
+        🔧 API: Microsoft Graph - POST /drive/items/{pai}/children
+        📁 CONFLITO: Rename automático se já existir
+        
+        Args:
+            pasta_pai_id (str): ID da pasta pai no OneDrive
+            nome_pasta (str): Nome da nova pasta
+            headers (dict): Headers autenticados Microsoft Graph
+            
+        Returns:
+            str: ID da nova pasta ou None se erro
+        """
+        try:
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_pai_id}/children"
+            
+            data = {
+                "name": nome_pasta,
+                "folder": {},
+                "@microsoft.graph.conflictBehavior": "rename"  # Renomeia se já existir
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            
+            if response.status_code == 201:
+                nova_pasta = response.json()
+                pasta_id = nova_pasta['id']
+                print(f"✅ Pasta OneDrive criada: {nome_pasta} (ID: {pasta_id[:10]}...)")
+                return pasta_id
+            else:
+                print(f"❌ Erro criando pasta OneDrive {nome_pasta}: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro criando pasta OneDrive {nome_pasta}: {e}")
+            return None
+
+    def _fazer_upload_pdf_onedrive(self, pdf_bytes, nome_arquivo, pasta_id):
+        """
+        🆕 FUNCIONALIDADE NOVA: Upload de PDF para OneDrive via Microsoft Graph API.
+        
+        Função de baixo nível para upload de arquivos OneDrive.
+        Específica para OneDrive - NÃO EXISTE no database_brk.py.
+        
+        🔧 API: Microsoft Graph - PUT /drive/items/{pasta}:/{arquivo}:/content
+        📄 ARQUIVO: Usa nome gerado pelo database_brk._gerar_nome_padronizado()
+        📁 DESTINO: Pasta final /BRK/Faturas/YYYY/MM/
+        
+        Args:
+            pdf_bytes (bytes): Conteúdo binário do PDF
+            nome_arquivo (str): Nome do arquivo (vem do database_brk._gerar_nome_padronizado)
+            pasta_id (str): ID da pasta de destino no OneDrive
+            
+        Returns:
+            dict: {'status': 'sucesso/erro', 'mensagem': '...', 'url_arquivo': '...'}
+        """
+        try:
+            headers = self.auth.obter_headers_autenticados()
+            headers['Content-Type'] = 'application/pdf'
+            
+            # URL para upload direto via Microsoft Graph API
+            nome_encodado = requests.utils.quote(nome_arquivo)
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_id}:/{nome_encodado}:/content"
+            
+            print(f"📤 Fazendo upload OneDrive: {len(pdf_bytes)} bytes para {nome_arquivo[:50]}...")
+            
+            response = requests.put(url, headers=headers, data=pdf_bytes, timeout=120)
+            
+            if response.status_code in [200, 201]:
+                arquivo_info = response.json()
+                print(f"✅ Upload OneDrive concluído: {arquivo_info['name']}")
+                print(f"🔗 URL: {arquivo_info.get('webUrl', 'N/A')[:60]}...")
+                
+                return {
+                    'status': 'sucesso',
+                    'mensagem': 'Upload OneDrive realizado com sucesso',
+                    'url_arquivo': arquivo_info.get('webUrl', ''),
+                    'arquivo_id': arquivo_info['id'],
+                    'tamanho': arquivo_info.get('size', 0)
+                }
+            else:
+                print(f"❌ Erro upload OneDrive: HTTP {response.status_code}")
+                return {
+                    'status': 'erro',
+                    'mensagem': f'HTTP {response.status_code} - Falha upload OneDrive',
+                    'url_arquivo': None
+                }
+                
+        except Exception as e:
+            print(f"❌ Erro fazendo upload OneDrive: {e}")
+            return {
+                'status': 'erro',
+                'mensagem': f'Exceção upload OneDrive: {str(e)}',
+                'url_arquivo': None
+            }
 # ============================================================================
 # 🎉 EMAILPROCESSOR COMPLETO SEM PANDAS FINALIZADO!
    
