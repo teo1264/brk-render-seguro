@@ -969,21 +969,6 @@ def _executar_delete_flask_seguro(engine, tabela, registro_atual, registro):
 # ADICIONAR apenas 2 linhas no topo + 2 rotas simples no final
 # ============================================================================
 
-# ============================================================================
-# 1. ADICIONAR NO TOPO DO APP.PY (após outros imports)
-# ============================================================================
-
-# ADICIONAR estas 2 linhas após imports existentes:
-try:
-    from processor.reconstituicao_brk import executar_reconstituicao_simples, obter_estatisticas_pre_reconstituicao, gerar_interface_web_simples, gerar_resultado_final
-    RECONSTITUICAO_DISPONIVEL = True
-except ImportError:
-    RECONSTITUICAO_DISPONIVEL = False
-
-# ============================================================================
-# 2. ADICIONAR NO FINAL DO APP.PY (antes do if __name__ == '__main__')
-# ============================================================================
-
 @app.route('/reconstituicao-brk')
 def reconstituicao_brk():
     """
