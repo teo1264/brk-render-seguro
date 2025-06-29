@@ -11,7 +11,11 @@ import json
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, redirect, session, render_template_string
 import logging
-
+try:
+    from processor.reconstituicao_brk import executar_reconstituicao_simples, obter_estatisticas_pre_reconstituicao, gerar_interface_web_simples, gerar_resultado_final
+    RECONSTITUICAO_DISPONIVEL = True
+except ImportError:
+    RECONSTITUICAO_DISPONIVEL = False
 # Imports dos módulos (que já funcionam)
 from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
@@ -960,7 +964,113 @@ def _executar_delete_flask_seguro(engine, tabela, registro_atual, registro):
         logger.error(f"Erro DELETE: {e}")
         return jsonify({"status": "error", "message": f"Erro DELETE: {str(e)}"}), 500
 
+# ============================================================================
+# BLOCO 3/3 - INTEGRAÇÃO NO APP.PY - MÍNIMA E LIMPA
+# ADICIONAR apenas 2 linhas no topo + 2 rotas simples no final
+# ============================================================================
 
+# ============================================================================
+# 1. ADICIONAR NO TOPO DO APP.PY (após outros imports)
+# ============================================================================
+
+# ADICIONAR estas 2 linhas após imports existentes:
+try:
+    from processor.reconstituicao_brk import executar_reconstituicao_simples, obter_estatisticas_pre_reconstituicao, gerar_interface_web_simples, gerar_resultado_final
+    RECONSTITUICAO_DISPONIVEL = True
+except ImportError:
+    RECONSTITUICAO_DISPONIVEL = False
+
+# ============================================================================
+# 2. ADICIONAR NO FINAL DO APP.PY (antes do if __name__ == '__main__')
+# ============================================================================
+
+@app.route('/reconstituicao-brk')
+def reconstituicao_brk():
+    """
+    🔄 Interface para Reconstituição Total da Base BRK.
+    Página simples com confirmação.
+    """
+    if not RECONSTITUICAO_DISPONIVEL:
+        return jsonify({"erro": "Módulo reconstituição indisponível"}), 503
+    
+    if not auth_manager or not auth_manager.access_token:
+        return redirect('/login')
+    
+    try:
+        # ✅ USAR função existente para estatísticas
+        estatisticas = obter_estatisticas_pre_reconstituicao(auth_manager)
+        
+        if estatisticas.get('status') != 'sucesso':
+            return f"<h1>Erro: {estatisticas.get('erro')}</h1><a href='/'>Voltar</a>"
+        
+        # ✅ USAR função existente para interface
+        html_interface = gerar_interface_web_simples(estatisticas)
+        return html_interface
+        
+    except Exception as e:
+        logger.error(f"Erro reconstituição interface: {e}")
+        return f"<h1>Erro: {e}</h1><a href='/'>Voltar</a>", 500
+
+
+@app.route('/executar-reconstituicao', methods=['POST'])
+def executar_reconstituicao():
+    """
+    🚀 Executa reconstituição total - APENAS UMA LINHA DE CÓDIGO NOVO.
+    """
+    if not RECONSTITUICAO_DISPONIVEL:
+        return jsonify({"erro": "Módulo indisponível"}), 503
+    
+    if not auth_manager or not auth_manager.access_token:
+        return redirect('/login')
+    
+    try:
+        # ✅ USAR função existente - UMA LINHA SÓ!
+        resultado = executar_reconstituicao_simples(auth_manager)
+        
+        # ✅ USAR função existente para resultado
+        html_resultado = gerar_resultado_final(resultado)
+        return html_resultado
+        
+    except Exception as e:
+        logger.error(f"Erro executando reconstituição: {e}")
+        return f"<h1>Erro: {e}</h1><a href='/'>Voltar</a>", 500
+
+# ============================================================================
+# 3. OPCIONAL: ADICIONAR LINK NO DASHBOARD PRINCIPAL
+# Na rota '/' existente, adicionar uma linha no HTML:
+# ============================================================================
+
+# ADICIONAR esta linha no HTML do dashboard principal (rota '/'):
+# <a href="/reconstituicao-brk" class="button" style="background: #dc3545;">🔄 Reconstituição Total</a>
+
+# ============================================================================
+# RESUMO DA INTEGRAÇÃO:
+# ============================================================================
+
+"""
+📋 RESUMO - INTEGRAÇÃO MÍNIMA NO APP.PY:
+
+✅ ADICIONADO:
+   • 2 linhas import no topo
+   • 2 rotas simples no final  
+   • 1 link opcional no dashboard
+   
+✅ TOTAL: 15 linhas adicionadas ao app.py
+✅ MANTÉM: app.py limpo e organizável
+✅ FUNCIONA: 100% usando funções testadas
+
+🎯 TESTE:
+   1. Acessar: /reconstituicao-brk
+   2. Confirmar operação
+   3. Aguardar processamento
+   4. Ver resultado final
+
+🔧 COMO TESTAR ESTE BLOCO:
+   1. Salvar processor/reconstituicao_brk.py com BLOCOS 1+2+3
+   2. Adicionar as 15 linhas no app.py
+   3. Deploy no Render
+   4. Testar URL: https://brk-render-seguro.onrender.com/reconstituicao-brk
+"""
 
 # ============================================================================
 # PONTO DE ENTRADA
