@@ -1089,7 +1089,39 @@ def _renderizar_inicializacao_sucesso(resultado):
     
     return html
 
-
+@app.route('/executar-reconstituicao', methods=['POST'])
+def executar_reconstituicao():
+    """Rota POST para executar reconstituição em lotes"""
+    if not RECONSTITUICAO_DISPONIVEL:
+        return jsonify({"erro": "Módulo reconstituição indisponível"}), 503
+    
+    if not auth_manager.access_token:
+        return redirect('/login')
+    
+    try:
+        acao = request.form.get('acao')
+        
+        if acao == 'inicializar':
+            resultado = inicializar_reconstituicao_primeira_vez(auth_manager)
+            if resultado.get('status') == 'sucesso':
+                return gerar_interface_web_lotes({}, inicializacao=resultado)
+            else:
+                return f"<h1>Erro: {resultado.get('mensagem')}</h1><a href='/reconstituicao-brk'>Voltar</a>", 500
+                
+        elif acao == 'continuar':
+            offset = int(request.form.get('offset', 0))
+            resultado = executar_reconstituicao_lote(auth_manager, offset)
+            
+            if resultado.get('finalizado'):
+                return gerar_resultado_final_lotes(resultado)
+            else:
+                return gerar_interface_web_lotes({}, progresso=resultado)
+        else:
+            return jsonify({"erro": "Ação inválida"}), 400
+            
+    except Exception as e:
+        logger.error(f"Erro executar reconstituição: {e}")
+        return f"<h1>Erro: {e}</h1><a href='/reconstituicao-brk'>Voltar</a>", 500
 # ============================================================================
 # 3. OPCIONAL: ADICIONAR LINK NO DASHBOARD PRINCIPAL
 # Na rota '/' existente, adicionar uma linha no HTML:
