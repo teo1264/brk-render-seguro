@@ -3,12 +3,12 @@
 """
 📁 ARQUIVO: processor/reconstituicao_brk.py
 💾 ONDE SALVAR: brk-monitor-seguro/processor/reconstituicao_brk.py
-📦 FUNÇÃO: Reconstituição Total da Base BRK - MVP SIMPLES
-🔧 DESCRIÇÃO: REUTILIZA 100% funcionalidades existentes
+📦 FUNÇÃO: Reconstituição Total da Base BRK - PROCESSAMENTO EM LOTES
+🔧 DESCRIÇÃO: RESOLVE TIMEOUT - processa 10 emails por vez
 👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
 
-🎯 MVP: Reconstrói base usando funções que JÁ FUNCIONAM
-♻️ REUTILIZAÇÃO TOTAL - ZERO código novo
+🎯 MODIFICAÇÃO: Processa em lotes pequenos para evitar timeout Render
+♻️ REUTILIZAÇÃO TOTAL - usa funções existentes com limite
 """
 
 import os
@@ -28,25 +28,26 @@ except ImportError:
     from auth.microsoft_auth import MicrosoftAuth
 
 
-def reconstituir_base_brk_completa(auth_manager):
+def reconstituir_base_brk_lotes(auth_manager, offset=0, limit_lote=10):
     """
-    🔄 MVP: Reconstituição Total usando funções existentes.
+    🔄 NOVO: Reconstituição em lotes pequenos para evitar timeout.
     
-    ESTRATÉGIA: REUTILIZAR tudo que já está testado e funcionando
+    ESTRATÉGIA: Processar apenas 10 emails por vez, reutilizando funções existentes
     
     Args:
         auth_manager: MicrosoftAuth instance
+        offset (int): A partir de qual email começar (default: 0)
+        limit_lote (int): Quantos emails processar (default: 10)
         
     Returns:
-        dict: Resultado da operação
+        dict: Resultado do lote + progresso total
     """
     try:
-        print(f"\n🔄 RECONSTITUIÇÃO TOTAL DA BASE BRK")
+        print(f"\n🔄 RECONSTITUIÇÃO BRK - LOTE {(offset//limit_lote) + 1}")
         print(f"="*50)
-        print(f"⚡ MVP: Usando funções existentes e testadas")
+        print(f"📊 Processando emails {offset + 1} a {offset + limit_lote}")
         
         # ✅ REUTILIZAR: EmailProcessor já testado
-        print(f"📧 Inicializando EmailProcessor...")
         processor = EmailProcessor(auth_manager)
         
         if not processor.database_brk:
@@ -55,28 +56,10 @@ def reconstituir_base_brk_completa(auth_manager):
                 'mensagem': 'DatabaseBRK não disponível'
             }
         
-        print(f"✅ EmailProcessor + DatabaseBRK carregados")
-        
-        # ETAPA 1: Backup usando função existente
-        print(f"\n1️⃣ BACKUP AUTOMÁTICO...")
-        backup_ok = processor.database_brk.forcar_sincronizacao_completa()
-        if backup_ok:
-            print(f"✅ Backup OneDrive realizado")
-        else:
-            print(f"⚠️ Backup falhou - continuando...")
-        
-        # ETAPA 2: Reset da tabela usando conexão existente
-        print(f"\n2️⃣ RESETANDO TABELA...")
-        if not _resetar_tabela_existente(processor.database_brk):
-            return {
-                'status': 'erro',
-                'mensagem': 'Falha no reset da tabela'
-            }
-        
-        # ETAPA 3: Buscar TODOS os emails usando função existente
-        print(f"\n3️⃣ BUSCANDO TODOS OS EMAILS...")
-        # ✅ REUTILIZAR: buscar_emails_novos() com período grande
-        todos_emails = processor.buscar_emails_novos(9999)  # ~27 anos
+        # ETAPA 1: Buscar APENAS alguns emails usando função existente
+        print(f"\n1️⃣ BUSCANDO EMAILS DO LOTE...")
+        # ✅ REUTILIZAR: buscar_emails_novos() mas com período limitado
+        todos_emails = processor.buscar_emails_novos(9999)  # Buscar todos primeiro
         
         if not todos_emails:
             return {
@@ -84,32 +67,57 @@ def reconstituir_base_brk_completa(auth_manager):
                 'mensagem': 'Nenhum email encontrado'
             }
         
-        print(f"📧 {len(todos_emails):,} emails encontrados")
+        # 🆕 APLICAR LIMITE DE LOTE
+        total_emails = len(todos_emails)
+        emails_lote = todos_emails[offset:offset + limit_lote]
+        emails_restantes = max(0, total_emails - (offset + limit_lote))
         
-        # ETAPA 4: Processar usando função existente
-        print(f"\n4️⃣ PROCESSANDO TODOS OS EMAILS...")
-        resultado_processamento = _processar_todos_emails(processor, todos_emails)
+        print(f"📧 Total na pasta: {total_emails:,} emails")
+        print(f"📋 Lote atual: {len(emails_lote)} emails")
+        print(f"⏳ Restantes: {emails_restantes:,} emails")
         
-        # ETAPA 5: Sincronização final
-        print(f"\n5️⃣ SINCRONIZAÇÃO FINAL...")
-        sync_final = processor.database_brk.forcar_sincronizacao_completa()
+        if not emails_lote:
+            return {
+                'status': 'sucesso',
+                'mensagem': 'Todos os emails já foram processados',
+                'emails_processados': 0,
+                'pdfs_extraidos': 0,
+                'faturas_salvas': 0,
+                'total_emails': total_emails,
+                'offset_atual': offset,
+                'emails_restantes': 0,
+                'finalizado': True
+            }
         
-        # Resultado final
+        # ETAPA 2: Processar lote usando função existente
+        print(f"\n2️⃣ PROCESSANDO LOTE DE {len(emails_lote)} EMAILS...")
+        resultado_lote = _processar_lote_emails(processor, emails_lote)
+        
+        # ETAPA 3: Resultado do lote
         resultado_final = {
             'status': 'sucesso',
-            'mensagem': 'Reconstituição concluída',
-            'emails_processados': resultado_processamento['emails_processados'],
-            'pdfs_extraidos': resultado_processamento['pdfs_extraidos'],
-            'faturas_salvas': resultado_processamento['faturas_salvas'],
-            'backup_inicial': backup_ok,
-            'sync_final': sync_final,
+            'mensagem': f'Lote processado: {len(emails_lote)} emails',
+            'emails_processados': resultado_lote['emails_processados'],
+            'pdfs_extraidos': resultado_lote['pdfs_extraidos'],
+            'faturas_salvas': resultado_lote['faturas_salvas'],
+            'duplicatas_detectadas': resultado_lote.get('duplicatas_detectadas', 0),
+            'erros': resultado_lote.get('erros', 0),
+            # 📊 PROGRESSO TOTAL
+            'total_emails': total_emails,
+            'offset_atual': offset,
+            'proximo_offset': offset + limit_lote if emails_restantes > 0 else None,
+            'emails_restantes': emails_restantes,
+            'finalizado': emails_restantes == 0,
+            'progresso_pct': ((offset + len(emails_lote)) / total_emails) * 100,
             'timestamp': datetime.now().isoformat()
         }
         
-        print(f"\n✅ RECONSTITUIÇÃO CONCLUÍDA!")
-        print(f"   📧 Emails: {resultado_final['emails_processados']:,}")
-        print(f"   📎 PDFs: {resultado_final['pdfs_extraidos']:,}")  
-        print(f"   💾 Faturas: {resultado_final['faturas_salvas']:,}")
+        print(f"\n✅ LOTE CONCLUÍDO!")
+        print(f"   📧 Emails processados: {resultado_final['emails_processados']}")
+        print(f"   📎 PDFs extraídos: {resultado_final['pdfs_extraidos']}")  
+        print(f"   💾 Faturas salvas: {resultado_final['faturas_salvas']}")
+        print(f"   📊 Progresso total: {resultado_final['progresso_pct']:.1f}%")
+        print(f"   ⏳ Restam: {emails_restantes:,} emails")
         print(f"="*50)
         
         return resultado_final
@@ -118,13 +126,96 @@ def reconstituir_base_brk_completa(auth_manager):
         print(f"❌ ERRO: {e}")
         return {
             'status': 'erro',
-            'mensagem': str(e)
+            'mensagem': str(e),
+            'offset_atual': offset
+        }
+
+
+def _processar_lote_emails(processor, emails_lote):
+    """
+    ✅ REUTILIZAR: Processar lote usando extrair_pdfs_do_email() existente.
+    
+    MODIFICAÇÃO: Apenas processa lista menor de emails (10 max)
+    
+    Args:
+        processor: EmailProcessor instance (já testado)
+        emails_lote: Lista pequena de emails (máximo 10)
+        
+    Returns:
+        dict: Estatísticas do lote
+    """
+    try:
+        total_lote = len(emails_lote)
+        print(f"📧 Processando lote de {total_lote} emails...")
+        
+        # Contadores
+        emails_processados = 0
+        pdfs_extraidos = 0
+        faturas_salvas = 0
+        duplicatas_detectadas = 0
+        erros = 0
+        
+        for i, email in enumerate(emails_lote, 1):
+            try:
+                email_subject = email.get('subject', 'Sem assunto')[:30]
+                
+                # ✅ REUTILIZAR: extrair_pdfs_do_email() completo
+                # Esta função JÁ faz tudo: extrai, processa, salva database, upload OneDrive
+                pdfs_dados = processor.extrair_pdfs_do_email(email)
+                
+                if pdfs_dados:
+                    emails_processados += 1
+                    pdfs_extraidos += len(pdfs_dados)
+                    
+                    # Contar salvamentos e duplicatas
+                    for pdf in pdfs_dados:
+                        if pdf.get('database_salvo', False):
+                            faturas_salvas += 1
+                            
+                            if pdf.get('database_status') == 'DUPLICATA':
+                                duplicatas_detectadas += 1
+                
+                # Log de progresso detalhado (lote pequeno)
+                print(f"📊 {i}/{total_lote} - {email_subject}")
+                
+            except Exception as e:
+                erros += 1
+                print(f"❌ Erro email {i}: {e}")
+                continue
+        
+        # Resultado do lote
+        resultado = {
+            'emails_processados': emails_processados,
+            'pdfs_extraidos': pdfs_extraidos, 
+            'faturas_salvas': faturas_salvas,
+            'duplicatas_detectadas': duplicatas_detectadas,
+            'erros': erros
+        }
+        
+        print(f"\n📊 LOTE PROCESSADO:")
+        print(f"   ✅ Emails processados: {emails_processados}")
+        print(f"   📎 PDFs extraídos: {pdfs_extraidos}")
+        print(f"   💾 Faturas salvas: {faturas_salvas}")
+        print(f"   🔄 Duplicatas: {duplicatas_detectadas}")
+        print(f"   ❌ Erros: {erros}")
+        
+        return resultado
+        
+    except Exception as e:
+        print(f"❌ Erro no processamento do lote: {e}")
+        return {
+            'emails_processados': 0,
+            'pdfs_extraidos': 0,
+            'faturas_salvas': 0,
+            'duplicatas_detectadas': 0,
+            'erros': 1
         }
 
 
 def _resetar_tabela_existente(database_brk):
     """
     ✅ REUTILIZAR: Conexão do DatabaseBRK para reset.
+    MANTÉM FUNÇÃO ORIGINAL sem modificações.
     """
     try:
         if not database_brk.conn:
@@ -160,26 +251,99 @@ def _resetar_tabela_existente(database_brk):
         return False
 
 
-# ============================================================================
-# FUNÇÕES PARA APP.PY (interface simples)
-# ============================================================================
-
-def executar_reconstituicao_simples(auth_manager):
+def inicializar_reconstituicao_primeira_vez(auth_manager):
     """
-    Função simples para chamada do app.py.
+    🆕 FUNÇÃO NOVA: Inicializa reconstituição (apenas primeira vez).
+    
+    - Reset da tabela
+    - Backup OneDrive  
+    - Retorna estatísticas iniciais
     
     Args:
         auth_manager: MicrosoftAuth instance
         
     Returns:
-        dict: Resultado da operação
+        dict: Status da inicialização
     """
-    return reconstituir_base_brk_completa(auth_manager)
+    try:
+        print(f"\n🔄 INICIALIZANDO RECONSTITUIÇÃO TOTAL")
+        print(f"="*50)
+        
+        # ✅ REUTILIZAR: EmailProcessor já testado
+        processor = EmailProcessor(auth_manager)
+        
+        if not processor.database_brk:
+            return {
+                'status': 'erro',
+                'mensagem': 'DatabaseBRK não disponível'
+            }
+        
+        # ETAPA 1: Backup usando função existente
+        print(f"1️⃣ BACKUP AUTOMÁTICO...")
+        backup_ok = processor.database_brk.forcar_sincronizacao_completa()
+        if backup_ok:
+            print(f"✅ Backup OneDrive realizado")
+        else:
+            print(f"⚠️ Backup falhou - continuando...")
+        
+        # ETAPA 2: Reset da tabela usando conexão existente
+        print(f"2️⃣ RESETANDO TABELA...")
+        if not _resetar_tabela_existente(processor.database_brk):
+            return {
+                'status': 'erro',
+                'mensagem': 'Falha no reset da tabela'
+            }
+        
+        # ETAPA 3: Contar emails totais
+        print(f"3️⃣ CONTANDO EMAILS TOTAIS...")
+        todos_emails = processor.buscar_emails_novos(9999)
+        total_emails = len(todos_emails)
+        
+        print(f"✅ INICIALIZAÇÃO CONCLUÍDA!")
+        print(f"   📧 Total de emails encontrados: {total_emails:,}")
+        print(f"   📊 Lotes necessários: {(total_emails + 9) // 10}")  # Arredondar para cima
+        print(f"="*50)
+        
+        return {
+            'status': 'sucesso',
+            'mensagem': 'Reconstituição inicializada',
+            'total_emails': total_emails,
+            'backup_realizado': backup_ok,
+            'lotes_necessarios': (total_emails + 9) // 10,
+            'emails_por_lote': 10,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        print(f"❌ ERRO na inicialização: {e}")
+        return {
+            'status': 'erro',
+            'mensagem': str(e)
+        }
+
+
+# ============================================================================
+# FUNÇÕES PARA APP.PY (interface em lotes)
+# ============================================================================
+
+def executar_reconstituicao_lote(auth_manager, offset=0, limit_lote=10):
+    """
+    🆕 FUNÇÃO NOVA: Executa um lote da reconstituição.
+    
+    Args:
+        auth_manager: MicrosoftAuth instance
+        offset (int): Posição inicial
+        limit_lote (int): Quantidade por lote
+        
+    Returns:
+        dict: Resultado do lote + progresso
+    """
+    return reconstituir_base_brk_lotes(auth_manager, offset, limit_lote)
 
 
 def obter_estatisticas_pre_reconstituicao(auth_manager):
     """
-    Obter estatísticas antes da reconstituição.
+    ✅ MANTÉM FUNÇÃO ORIGINAL sem modificações.
     
     Args:
         auth_manager: MicrosoftAuth instance
@@ -209,116 +373,32 @@ def obter_estatisticas_pre_reconstituicao(auth_manager):
             'erro': str(e)
         }
 
-# ============================================================================
-# BLOCO 2/3 - PROCESSAMENTO DE EMAILS
-# ADICIONAR no processor/reconstituicao_brk.py após BLOCO 1
-# ============================================================================
 
-def _processar_todos_emails(processor, emails_lista):
+def gerar_interface_web_lotes(estatisticas, progresso=None):
     """
-    ✅ REUTILIZAR: extrair_pdfs_do_email() para processar cada email.
-    
-    Args:
-        processor: EmailProcessor instance (já testado)
-        emails_lista: Lista de emails da busca
-        
-    Returns:
-        dict: Estatísticas do processamento
-    """
-    try:
-        total_emails = len(emails_lista)
-        print(f"📧 Processando {total_emails:,} emails...")
-        
-        # Contadores
-        emails_processados = 0
-        pdfs_extraidos = 0
-        faturas_salvas = 0
-        duplicatas_detectadas = 0
-        erros = 0
-        
-        for i, email in enumerate(emails_lista, 1):
-            try:
-                email_subject = email.get('subject', 'Sem assunto')[:30]
-                
-                # ✅ REUTILIZAR: extrair_pdfs_do_email() completo
-                # Esta função JÁ faz tudo: extrai, processa, salva database, upload OneDrive
-                pdfs_dados = processor.extrair_pdfs_do_email(email)
-                
-                if pdfs_dados:
-                    emails_processados += 1
-                    pdfs_extraidos += len(pdfs_dados)
-                    
-                    # Contar salvamentos e duplicatas
-                    for pdf in pdfs_dados:
-                        if pdf.get('database_salvo', False):
-                            faturas_salvas += 1
-                            
-                            if pdf.get('database_status') == 'DUPLICATA':
-                                duplicatas_detectadas += 1
-                
-                # Log de progresso a cada 100 emails
-                if i % 100 == 0 or i <= 10 or i == total_emails:
-                    progresso_pct = (i / total_emails) * 100
-                    print(f"📊 {i:,}/{total_emails:,} ({progresso_pct:.1f}%) - {email_subject}")
-                
-            except Exception as e:
-                erros += 1
-                if erros <= 5:  # Log apenas primeiros erros
-                    print(f"❌ Erro email {i}: {e}")
-                continue
-        
-        # Resultado do processamento
-        resultado = {
-            'emails_processados': emails_processados,
-            'pdfs_extraidos': pdfs_extraidos, 
-            'faturas_salvas': faturas_salvas,
-            'duplicatas_detectadas': duplicatas_detectadas,
-            'erros': erros
-        }
-        
-        print(f"\n📊 PROCESSAMENTO CONCLUÍDO:")
-        print(f"   ✅ Emails processados: {emails_processados:,}")
-        print(f"   📎 PDFs extraídos: {pdfs_extraidos:,}")
-        print(f"   💾 Faturas salvas: {faturas_salvas:,}")
-        print(f"   🔄 Duplicatas: {duplicatas_detectadas:,}")
-        print(f"   ❌ Erros: {erros:,}")
-        
-        return resultado
-        
-    except Exception as e:
-        print(f"❌ Erro no processamento geral: {e}")
-        return {
-            'emails_processados': 0,
-            'pdfs_extraidos': 0,
-            'faturas_salvas': 0,
-            'duplicatas_detectadas': 0,
-            'erros': 1
-        }
-
-
-# ============================================================================
-# FUNÇÕES DE INTERFACE WEB SIMPLES (opcional)
-# ============================================================================
-
-def gerar_interface_web_simples(estatisticas):
-    """
-    Interface web simples para reconstituição.
+    🆕 INTERFACE NOVA: Interface web para processamento em lotes.
     
     Args:
         estatisticas (dict): Estatísticas do sistema
+        progresso (dict): Progresso atual (se existir)
         
     Returns:
-        str: HTML da interface
+        str: HTML da interface em lotes
     """
     
     pasta_stats = estatisticas.get('pasta_brk', {})
     db_stats = estatisticas.get('database_atual', {})
     
+    # Se há progresso, mostrar interface de continuação
+    if progresso and not progresso.get('finalizado', False):
+        return _gerar_interface_continuacao(progresso)
+    
+    # Interface inicial
     html = f"""
     <!DOCTYPE html>
     <html lang="pt-BR">
     <head>
-        <title>🔄 Reconstituição BRK - MVP</title>
+        <title>🔄 Reconstituição BRK - Em Lotes</title>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
@@ -335,14 +415,14 @@ def gerar_interface_web_simples(estatisticas):
                 border-radius: 10px; 
                 box-shadow: 0 5px 15px rgba(0,0,0,0.1); 
             }}
-            .warning {{ 
-                background: #fff3cd; 
-                border: 1px solid #ffeaa7; 
-                color: #856404; 
+            .info {{ 
+                background: #e3f2fd; 
+                border: 1px solid #2196f3; 
+                color: #1565c0; 
                 padding: 20px; 
                 border-radius: 8px; 
                 margin: 20px 0; 
-                border-left: 5px solid #f39c12; 
+                border-left: 5px solid #2196f3; 
             }}
             .stats {{ 
                 display: grid; 
@@ -357,7 +437,7 @@ def gerar_interface_web_simples(estatisticas):
                 text-align: center; 
             }}
             .button {{ 
-                background: #dc3545; 
+                background: #2196f3; 
                 color: white; 
                 padding: 15px 30px; 
                 border: none; 
@@ -368,24 +448,23 @@ def gerar_interface_web_simples(estatisticas):
                 text-decoration: none; 
                 display: inline-block; 
             }}
-            .button:hover {{ background: #c82333; }}
+            .button:hover {{ background: #1976d2; }}
             .button-secondary {{ background: #6c757d; }}
-            .button:disabled {{ background: #aaa; cursor: not-allowed; }}
         </style>
     </head>
     <body>
         <div class="container">
-            <h1>🔄 Reconstituição Total da Base BRK</h1>
-            <p>Sistema MVP usando funções existentes testadas</p>
+            <h1>🔄 Reconstituição BRK - Processamento em Lotes</h1>
+            <p>Sistema otimizado para evitar timeout do Render</p>
             
-            <div class="warning">
-                <h3>⚠️ OPERAÇÃO CRÍTICA</h3>
-                <p><strong>Esta operação irá:</strong></p>
+            <div class="info">
+                <h3>💡 COMO FUNCIONA:</h3>
                 <ul>
-                    <li>🗑️ ZERAR completamente a base atual</li>
-                    <li>📧 Reprocessar TODOS os emails históricos</li>
-                    <li>💾 Reconstruir base com dados atualizados</li>
-                    <li>⏱️ Pode demorar horas dependendo do volume</li>
+                    <li>📋 Processa <strong>10 emails por vez</strong> (evita timeout)</li>
+                    <li>⏱️ Cada lote demora ~10-15 segundos</li>
+                    <li>🔄 Clique "Processar Próximo Lote" para continuar</li>
+                    <li>📊 Progresso salvo automaticamente</li>
+                    <li>✅ Para de ~250 emails = ~25 cliques</li>
                 </ul>
             </div>
             
@@ -404,9 +483,10 @@ def gerar_interface_web_simples(estatisticas):
             </div>
             
             <div style="text-align: center; margin: 30px 0;">
-                <form method="post" action="/executar-reconstituicao" onsubmit="return confirmarOperacao()">
-                    <button type="submit" class="button" id="btnExecutar">
-                        🚀 EXECUTAR RECONSTITUIÇÃO
+                <form method="post" action="/executar-reconstituicao" onsubmit="return confirmarInicializacao()">
+                    <input type="hidden" name="acao" value="inicializar">
+                    <button type="submit" class="button" id="btnInicializar">
+                        🚀 INICIALIZAR RECONSTITUIÇÃO
                     </button>
                 </form>
                 <a href="/" class="button button-secondary">🏠 Voltar ao Dashboard</a>
@@ -414,17 +494,14 @@ def gerar_interface_web_simples(estatisticas):
         </div>
         
         <script>
-            function confirmarOperacao() {{
-                const confirmacao1 = confirm('ATENÇÃO: Esta operação irá ZERAR toda a base atual.\\n\\nDeseja continuar?');
-                if (!confirmacao1) return false;
+            function confirmarInicializacao() {{
+                const confirmacao = confirm('ATENÇÃO: Esta operação irá ZERAR a base atual e reprocessar todos os emails.\\n\\nIniciar processamento em lotes?');
+                if (!confirmacao) return false;
                 
-                const confirmacao2 = confirm('ÚLTIMA CONFIRMAÇÃO:\\n\\nTem certeza que deseja executar a reconstituição total?');
-                if (!confirmacao2) return false;
-                
-                // Desabilitar botão e mostrar progresso
-                const btn = document.getElementById('btnExecutar');
+                // Mostrar progresso
+                const btn = document.getElementById('btnInicializar');
                 btn.disabled = true;
-                btn.innerHTML = '⏳ EXECUTANDO... (NÃO FECHE A PÁGINA)';
+                btn.innerHTML = '⏳ INICIALIZANDO... (backup + reset)';
                 
                 return true;
             }}
@@ -436,31 +513,115 @@ def gerar_interface_web_simples(estatisticas):
     return html
 
 
-def gerar_resultado_final(resultado):
+def _gerar_interface_continuacao(progresso):
     """
-    Página de resultado da reconstituição.
+    🆕 INTERFACE DE CONTINUAÇÃO: Mostra progresso e botão continuar.
     
     Args:
-        resultado (dict): Resultado da operação
+        progresso (dict): Dados do progresso atual
         
     Returns:
-        str: HTML do resultado
+        str: HTML da interface de continuação
     """
     
-    if resultado.get('status') == 'sucesso':
+    progresso_pct = progresso.get('progresso_pct', 0)
+    emails_restantes = progresso.get('emails_restantes', 0)
+    proximo_offset = progresso.get('proximo_offset', 0)
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <title>🔄 Reconstituição BRK - Lote Concluído</title>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial; margin: 40px; background: #f5f5f5; }}
+            .container {{ max-width: 700px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }}
+            .success {{ background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+            .progress {{ background: #e9ecef; height: 30px; border-radius: 15px; overflow: hidden; margin: 20px 0; }}
+            .progress-bar {{ background: #28a745; height: 100%; width: {progresso_pct}%; transition: width 0.5s; }}
+            .button {{ background: #28a745; color: white; padding: 15px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 10px 5px; text-decoration: none; display: inline-block; }}
+            .button:hover {{ background: #218838; }}
+            .button-secondary {{ background: #6c757d; }}
+            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }}
+            .stat-card {{ background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>✅ Lote Processado com Sucesso!</h1>
+            
+            <div class="success">
+                <h3>📊 Resultado do Lote:</h3>
+                <p><strong>Emails processados:</strong> {progresso.get('emails_processados', 0)}</p>
+                <p><strong>PDFs extraídos:</strong> {progresso.get('pdfs_extraidos', 0)}</p>
+                <p><strong>Faturas salvas:</strong> {progresso.get('faturas_salvas', 0)}</p>
+            </div>
+            
+            <h3>📈 Progresso Total:</h3>
+            <div class="progress">
+                <div class="progress-bar"></div>
+            </div>
+            <p style="text-align: center;"><strong>{progresso_pct:.1f}% concluído</strong></p>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <h4>📧 Restantes</h4>
+                    <p><strong>{emails_restantes:,}</strong> emails</p>
+                </div>
+                <div class="stat-card">
+                    <h4>📋 Lotes</h4>
+                    <p><strong>~{(emails_restantes + 9) // 10}</strong> restantes</p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <form method="post" action="/executar-reconstituicao">
+                    <input type="hidden" name="acao" value="continuar">
+                    <input type="hidden" name="offset" value="{proximo_offset}">
+                    <button type="submit" class="button">
+                        🚀 PROCESSAR PRÓXIMOS 10 EMAILS
+                    </button>
+                </form>
+                <a href="/" class="button button-secondary">🏠 Pausar e Voltar</a>
+            </div>
+            
+            <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                <small><strong>💡 Dica:</strong> Deixe esta página aberta e continue clicando "Processar Próximos 10" até finalizar.</small>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
+
+def gerar_resultado_final_lotes(resultado):
+    """
+    🆕 RESULTADO FINAL: Página quando termina todos os lotes.
+    
+    Args:
+        resultado (dict): Resultado final da reconstituição
+        
+    Returns:
+        str: HTML do resultado final
+    """
+    
+    if resultado.get('finalizado', False):
         cor = '#28a745'
         emoji = '✅'
         titulo = 'RECONSTITUIÇÃO CONCLUÍDA!'
     else:
         cor = '#dc3545'
         emoji = '❌' 
-        titulo = 'OPERAÇÃO FALHOU'
+        titulo = 'RECONSTITUIÇÃO INTERROMPIDA'
     
     html = f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>{emoji} Resultado - Reconstituição BRK</title>
+        <title>{emoji} Reconstituição BRK - Finalizada</title>
         <meta charset="UTF-8">
         <style>
             body {{ font-family: Arial; margin: 40px; text-align: center; background: #f5f5f5; }}
@@ -477,8 +638,9 @@ def gerar_resultado_final(resultado):
             </div>
             
             <div class="stats">
-                <h3>📊 Resultado da Operação:</h3>
+                <h3>📊 Resultado Final:</h3>
                 <p><strong>Status:</strong> {resultado.get('status', 'desconhecido').title()}</p>
+                <p><strong>Progresso:</strong> {resultado.get('progresso_pct', 0):.1f}%</p>
                 <p><strong>Emails processados:</strong> {resultado.get('emails_processados', 0):,}</p>
                 <p><strong>PDFs extraídos:</strong> {resultado.get('pdfs_extraidos', 0):,}</p>
                 <p><strong>Faturas salvas:</strong> {resultado.get('faturas_salvas', 0):,}</p>
@@ -495,3 +657,23 @@ def gerar_resultado_final(resultado):
     """
     
     return html
+
+
+# ============================================================================
+# FUNÇÕES DE COMPATIBILIDADE (manter originais funcionando)
+# ============================================================================
+
+def executar_reconstituicao_simples(auth_manager):
+    """
+    ✅ COMPATIBILIDADE: Mantém função original para não quebrar código existente.
+    Agora redireciona para versão em lotes.
+    """
+    return reconstituir_base_brk_lotes(auth_manager, offset=0, limit_lote=10)
+
+
+def gerar_interface_web_simples(estatisticas):
+    """
+    ✅ COMPATIBILIDADE: Mantém função original.
+    Agora redireciona para versão em lotes.
+    """
+    return gerar_interface_web_lotes(estatisticas)
