@@ -287,7 +287,7 @@ class ExcelGeneratorBRK:
             raise
     
     def _buscar_faturas_prontas(self, mes, ano):
-        """BUSCAR DADOS NORMAIS da tabela faturas_brk (função original)"""
+        """BUSCAR DADOS NORMAIS da tabela faturas_brk"""
         try:
             # Usar DatabaseBRK existente (sistema já configurado)
             from processor.database_brk import DatabaseBRK
@@ -370,8 +370,7 @@ class ExcelGeneratorBRK:
             
         except Exception as e:
             logger.warning(f"Erro buscando outros status: {e}")
-            return []car_faturas_prontas({status}): {e}")
-            raise
+            return []
     
     def _carregar_base_onedrive(self):
         """Carregar CDC_BRK_CCB.xlsx do OneDrive"""
@@ -542,44 +541,6 @@ class ExcelGeneratorBRK:
             
         except Exception as e:
             logger.error(f"Erro _gerar_excel_com_controle: {e}")
-            raise
-        """Gerar Excel formatado com seção adicional para outros status"""
-        try:
-            wb = openpyxl.Workbook()
-            ws = wb.active
-            ws.title = f"BRK {self.mes_nomes[mes]} {ano}"
-            
-            linha_atual = 1
-            
-            # SEÇÃO PRINCIPAL: APENAS NORMAIS
-            # Título principal
-            linha_atual = self._adicionar_titulo_principal(ws, linha_atual, mes, ano)
-            
-            # Seção PIA (NORMAIS)
-            linha_atual = self._adicionar_secao_pia(ws, linha_atual, dados_pia)
-            
-            # Seção Casas agrupadas por vencimento (NORMAIS)
-            linha_atual = self._adicionar_secao_casas(ws, linha_atual, dados_casas)
-            
-            # Totais finais (NORMAIS)
-            linha_atual = self._adicionar_totais_finais(ws, linha_atual, dados_pia, dados_casas)
-            
-            # SEÇÃO ADICIONAL: OUTROS STATUS (se existirem)
-            if faturas_outros_status:
-                linha_atual = self._adicionar_secao_outros_status(ws, linha_atual + 3, faturas_outros_status)
-            
-            # Formatação geral
-            self._aplicar_formatacao_geral(ws)
-            
-            # Salvar em bytes
-            excel_buffer = io.BytesIO()
-            wb.save(excel_buffer)
-            excel_buffer.seek(0)
-            
-            return excel_buffer.read()
-            
-        except Exception as e:
-            logger.error(f"Erro _gerar_excel_formatado_completo: {e}")
             raise
     
     def _adicionar_titulo_principal(self, ws, linha, mes, ano):
@@ -762,7 +723,7 @@ class ExcelGeneratorBRK:
         ws[f"G{linha}"].font = Font(bold=True, size=12, color="FFFFFF")
         ws[f"G{linha}"].fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
         
-        return linha + 1  # Retornar próxima linha
+        return linha + 1
     
     def _aplicar_formatacao_geral(self, ws):
         """Formatação geral com todas as colunas"""
@@ -836,94 +797,6 @@ class ExcelGeneratorBRK:
             linha += 1
         
         return linha
-        """Adicionar seção final com outros status (DUPLICATA, CUIDADO, etc.)"""
-        linha = linha_inicial
-        
-        # Cabeçalho da seção de controle
-        ws.merge_cells(f"A{linha}:L{linha}")
-        ws[f"A{linha}"] = "=== CONTROLE: FATURAS COM STATUS ESPECIAL ==="
-        ws[f"A{linha}"].font = Font(bold=True, color="FFFFFF")
-        ws[f"A{linha}"].fill = PatternFill(start_color="FF6600", end_color="FF6600", fill_type="solid")  # Laranja
-        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
-        linha += 1
-        
-        # Explicação
-        ws.merge_cells(f"A{linha}:L{linha}")
-        ws[f"A{linha}"] = "⚠️ Faturas abaixo NÃO estão incluídas nos totais acima - Apenas para controle"
-        ws[f"A{linha}"].font = Font(bold=True, italic=True, color="FF6600")
-        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
-        linha += 2
-        
-        # Agrupar por status
-        faturas_por_status = defaultdict(list)
-        for fatura in faturas_outros_status:
-            status = fatura.get("status_duplicata", "INDEFINIDO")
-            faturas_por_status[status].append(fatura)
-        
-        # Para cada status
-        for status in sorted(faturas_por_status.keys()):
-            faturas_status = faturas_por_status[status]
-            
-            # Cabeçalho do status
-            ws.merge_cells(f"A{linha}:L{linha}")
-            cor_status = self._obter_cor_status(status)
-            ws[f"A{linha}"] = f"STATUS: {status} ({len(faturas_status)} faturas)"
-            ws[f"A{linha}"].font = Font(bold=True, color=cor_status)
-            linha += 1
-            
-            # Headers
-            headers = ["CDC", "Casa de Oração", "Competência", "Data Emissão", "Vencimento", "Nota Fiscal", "Valor", "Medido Real", "Faturado", "Média 6M", "% Consumo", "Status"]
-            for col, header in enumerate(headers, 1):
-                ws.cell(row=linha, column=col, value=header)
-                ws.cell(row=linha, column=col).font = Font(bold=True, size=9)
-                ws.cell(row=linha, column=col).fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
-            linha += 1
-            
-            # Dados das faturas
-            for fatura in faturas_status:
-                ws[f"A{linha}"] = fatura.get("cdc", "")
-                ws[f"B{linha}"] = fatura.get("casa_oracao", "")
-                ws[f"C{linha}"] = fatura.get("competencia", "")
-                ws[f"D{linha}"] = fatura.get("data_emissao", "")
-                ws[f"E{linha}"] = fatura.get("vencimento", "")
-                ws[f"F{linha}"] = fatura.get("nota_fiscal", "")
-                ws[f"G{linha}"] = fatura.get("valor", "")
-                ws[f"H{linha}"] = fatura.get("medido_real", "")
-                ws[f"I{linha}"] = fatura.get("faturado", "")
-                ws[f"J{linha}"] = fatura.get("media_6m", "")
-                ws[f"K{linha}"] = fatura.get("porcentagem_consumo", "")
-                ws[f"L{linha}"] = fatura.get("status_duplicata", "")
-                
-                # Colorir linha conforme status
-                for col in range(1, 13):  # A-L
-                    cell = ws.cell(row=linha, column=col)
-                    if status == "DUPLICATA":
-                        cell.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")  # Amarelo claro
-                    elif status == "CUIDADO":
-                        cell.fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")  # Vermelho claro
-                
-                linha += 1
-            
-            linha += 1  # Espaço entre status
-        
-        # Resumo final da seção
-        ws.merge_cells(f"A{linha}:L{linha}")
-        total_outros = len(faturas_outros_status)
-        ws[f"A{linha}"] = f"📊 TOTAL REGISTROS DE CONTROLE: {total_outros} faturas (não computadas nos totais)"
-        ws[f"A{linha}"].font = Font(bold=True, color="FF6600")
-        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
-        
-        return linha + 1
-    
-    def _obter_cor_status(self, status):
-        """Retorna cor para cada tipo de status"""
-        cores = {
-            "DUPLICATA": "FF8C00",  # Laranja
-            "CUIDADO": "DC143C",    # Vermelho
-            "PENDENTE": "4682B4",   # Azul
-            "ERRO": "8B0000",       # Vermelho escuro
-        }
-        return cores.get(status, "666666")  # Cinza padrão
     
     def _salvar_onedrive_background(self, excel_bytes, mes, ano):
         """Salvar no OneDrive de forma síncrona"""
