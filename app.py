@@ -11,18 +11,19 @@ import json
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, redirect, session, render_template_string
 import logging
+# Imports dos módulos (que já funcionam)
 try:
+    import processor.reconstituicao_brk as reconst
     from processor.reconstituicao_brk import (
-        executar_reconstituicao_simples, obter_estatisticas_pre_reconstituicao, 
-        gerar_interface_web_simples, gerar_resultado_final,
-        executar_reconstituicao_lote, inicializar_reconstituicao_primeira_vez,
-        gerar_interface_web_lotes, gerar_resultado_final_lotes
+        obter_estatisticas_pre_reconstituicao,
+        gerar_interface_web_lotes, gerar_resultado_final_lotes,
+        executar_reconstituicao_lote, inicializar_reconstituicao_primeira_vez
     )
     RECONSTITUICAO_DISPONIVEL = True
-except ImportError:
-    RECONSTITUICAO_DISPONIVEL = False
-# Imports dos módulos (que já funcionam)
-from auth.microsoft_auth import MicrosoftAuth
+    print("✅ RECONSTITUIÇÃO: Importação bem-sucedida")
+except ImportError as e:
+    print(f"❌ RECONSTITUIÇÃO: Erro import: {e}")
+    RECONSTITUICAO_DISPONIVEL = Falsefrom auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
 from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico
 # NOVO: Import scheduler BRK
