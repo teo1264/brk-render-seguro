@@ -1,6 +1,6 @@
-# 🏢 Sistema BRK - Controle Inteligente de Faturas (VERSÃO COMPLETA FUNCIONANDO + ALERTAS)
+# 🏢 Sistema BRK - Controle Inteligente de Faturas (VERSÃO REAL FUNCIONANDO)
 
-Sistema automático para processamento de faturas BRK com **estrutura modular compacta**, monitor automático 24/7, detecção de duplicatas SEEK, organização inteligente no OneDrive, **upload automático de PDFs**, **navegação estilo Clipper** para database, **gerador automático de planilhas Excel**, **reconstituição total da base** e **alertas automáticos Telegram Bot**.
+Sistema automático para processamento de faturas BRK com **estrutura modular compacta**, monitor automático 24/7, detecção de duplicatas SEEK, organização inteligente no OneDrive, **upload automático de PDFs**, **navegação estilo Clipper** para database, **gerador automático de planilhas Excel** e **reconstituição total da base**.
 
 ## 🌐 **SISTEMA EM PRODUÇÃO**
 
@@ -13,27 +13,16 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 
 ### 📊 **Gerador Planilhas Excel BRK - FUNCIONALIDADE PRINCIPAL**
 - **📋 Interface web completa**: Seleção mês/ano + geração automática
-- **📁 Estrutura completa organizada**: PRINCIPAL (PIA + CASAS nos totais) + CONTROLE (auditoria) + ALERTAS (automação)
+- **📁 Estrutura organizada**: PRINCIPAL (PIA + CASAS nos totais) + CONTROLE (auditoria manual)
 - **🏦 Separação bancária**: PIA (Conta A) + Casas de Oração (Conta B)  
 - **📅 Agrupamento inteligente**: Casas organizadas por vencimento
 - **🔍 Detecção automática**: Casas faltantes baseadas em CDC_BRK_CCB.xlsx (entram nos totais)
 - **💾 Download + OneDrive**: Usuário baixa + salva automaticamente no OneDrive
-- **⚠️ Seção de controle**: Faturas DUPLICATA/CUIDADO separadas (auditoria manual)
+- **⚠️ Seção de controle**: Faturas DUPLICATA/CUIDADO separadas (auditoria manual - não entram nos totais)
 - **📊 12 campos completos**: CDC, Casa, Competência, Data Emissão, Vencimento, Nota Fiscal, Valor, Medido Real, Faturado, Média 6M, % Consumo, Alerta Consumo
-
-### 🤖 **Alertas Telegram Bot - FUNCIONALIDADE CRÍTICA (EM DESENVOLVIMENTO)**
-- **🚨 Alertas consumo ALTO**: Notificação automática quando detectado consumo acima da média
-- **💰 Alertas valor ANÔMALO**: Notificação quando valor muito diferente da média histórica
-- **❌ Alertas duplicatas**: Notificação imediata quando sistema detecta DUPLICATA
-- **⚠️ Alertas problemas**: Notificação quando faturas ficam com status CUIDADO/ERRO
-- **📊 Alertas casas faltantes**: Notificação quando casas não enviam fatura no prazo
-- **🔄 Relatórios periódicos**: Resumos automáticos diários/semanais/mensais
-- **👥 Múltiplos destinatários**: Alertas direcionados (tesouraria, administração, etc.)
-- **🎯 Filtros inteligentes**: Apenas alertas realmente importantes (evita spam)
 
 ### ⏰ **Scheduler Automático BRK - JOBS PROGRAMADOS**
 - **📅 Job diário 06:00h**: Gera planilha Excel mês atual automaticamente
-- **🤖 Job alertas 08:00h**: Verifica situações críticas + envia alertas Telegram
 - **☁️ Upload OneDrive automático**: Planilhas salvas em `/BRK/Faturas/YYYY/MM/`
 - **🔄 Thread separada**: Não interfere no monitor principal
 - **📋 Status disponível**: Endpoint `/status-scheduler-brk` para acompanhamento
@@ -72,13 +61,12 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 - **📊 Logs estruturados** Render com dados completos extraídos
 - **🎯 Monitor background** thread-safe sem erros
 
-### 📊 **Monitor Automático 24/7 (EM PRODUÇÃO + UPLOAD ONEDRIVE + ALERTAS)**
+### 📊 **Monitor Automático 24/7 (EM PRODUÇÃO + UPLOAD ONEDRIVE)**
 - **⏰ Verificação automática** a cada 10 minutos - **ATIVO**
 - **📈 Estatísticas pasta** BRK em tempo real
 - **🔍 Processamento automático** emails novos sem intervenção
 - **📋 Logs detalhados** Render com dados extraídos completos
 - **🚨 Alertas visuais** consumo elevado com percentuais
-- **🤖 Trigger alertas Telegram** situações críticas detectadas
 - **🛡️ Thread safety** SQLite para stability máxima
 - **☁️ Upload automático** PDFs para OneDrive após cada processamento
 
@@ -101,12 +89,11 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 - **📚 Help/Status automático**: Documentação completa de todos endpoints
 - **🔗 Quick Links**: Acesso rápido a todas funcionalidades
 - **📊 Gerador Excel**: Interface dedicada para planilhas mensais
-- **🤖 Configuração Bot**: Interface para configurar alertas Telegram
 
-## 🚀 **Arquitetura Real (VALIDADA EM PRODUÇÃO + ALERTAS)**
+## 🚀 **Arquitetura Real (VALIDADA EM PRODUÇÃO)**
 
 ```
-🏢 Sistema BRK (ESTRUTURA COMPLETA COM ALERTAS - JULHO 2025)
+🏢 Sistema BRK (ESTRUTURA COMPLETA - JULHO 2025)
 ├── 📧 auth/ - Autenticação Microsoft Thread-Safe
 │   ├── __init__.py
 │   └── microsoft_auth.py (Token management, refresh automático)
@@ -115,24 +102,23 @@ Sistema automático para processamento de faturas BRK com **estrutura modular co
 │   ├── email_processor.py (5 blocos completos - extração + relacionamento + 6 métodos upload)
 │   ├── database_brk.py (SQLite thread-safe + OneDrive + SEEK + nomenclatura REUTILIZADA)
 │   ├── monitor_brk.py (Monitor 24/7 background automático)
-│   ├── excel_brk.py (Gerador planilhas Excel + job 06:00h)
-│   ├── scheduler_brk.py (Scheduler automático jobs programados)
-│   ├── reconstituicao_brk.py (Reconstituição total base BRK)
-│   ├── telegram_bot.py (Alertas automáticos Telegram) ← EM DESENVOLVIMENTO
+│   ├── excel_brk.py (Gerador planilhas Excel + job 06:00h) ← IMPLEMENTADO
+│   ├── scheduler_brk.py (Scheduler automático jobs programados) ← IMPLEMENTADO
+│   ├── reconstituicao_brk.py (Reconstituição total base BRK) ← IMPLEMENTADO
 │   └── diagnostico_teste.py (Diagnóstico sistema avançado)
 ├── 🔧 admin/ - Interface Administrativa + DBEDIT
 │   ├── __init__.py
 │   ├── admin_server.py (Interface web + upload token + help completo)
 │   └── dbedit_server.py (DBEDIT Clipper navegação database)
-├── 🌐 app.py (Orquestração Flask + monitor + scheduler + reconstituição + bot integrados)
+├── 🌐 app.py (Orquestração Flask + monitor + scheduler + reconstituição integrados)
 ├── ⚙️ requirements.txt (Dependências completas - Deploy 3min)
 ├── 📋 render.yaml (Deploy automático validado)
 ├── 📝 README.md (Esta documentação)
 ├── 🐍 runtime.txt (Python 3.11.9)
 └── 🔒 .gitignore (Proteção arquivos sensíveis)
 
-TOTAL: 16 arquivos principais + 4 arquivos configuração
-STATUS: ✅ 100% FUNCIONAL EM PRODUÇÃO + ALERTAS TELEGRAM EM DESENVOLVIMENTO
+TOTAL: 15 arquivos principais + 4 arquivos configuração
+STATUS: ✅ 100% FUNCIONAL EM PRODUÇÃO - TODAS FUNCIONALIDADES IMPLEMENTADAS
 ```
 
 ### **📊 Funcionalidades Integradas (não módulos separados)**
@@ -147,7 +133,6 @@ STATUS: ✅ 100% FUNCIONAL EM PRODUÇÃO + ALERTAS TELEGRAM EM DESENVOLVIMENTO
 - **📊 Gerador Excel:** Módulo dedicado `processor/excel_brk.py` **REUTILIZANDO database_brk functions**
 - **⏰ Scheduler:** Módulo dedicado `processor/scheduler_brk.py` com thread separada
 - **🔄 Reconstituição:** Módulo dedicado `processor/reconstituicao_brk.py` **REUTILIZANDO infraestrutura existente**
-- **🤖 Alertas Telegram:** Módulo dedicado `processor/telegram_bot.py` **REUTILIZANDO dados DatabaseBRK** ← **EM DESENVOLVIMENTO**
 - **📋 Logs estruturados:** Integrado em cada módulo (prints organizados)
 - **⚙️ Configurações:** Via Environment Variables (não arquivo separado)
 
@@ -178,7 +163,6 @@ self._salvar_onedrive_background(excel_bytes, mes, ano)
 | **PIA (Conta A)** | Faturas NORMAL + FALTANTE (filtro PIA) | ✅ **SIM** | **Contabilidade real** |
 | **CASAS (Conta B)** | Faturas NORMAL + FALTANTE (filtro != PIA) | ✅ **SIM** | **Contabilidade real** |
 | **CONTROLE** | Faturas DUPLICATA/CUIDADO/ERRO | ❌ **NÃO** | **Auditoria manual** |
-| **🆕 ALERTAS TRIGGER** | Situações críticas detectadas | ❌ **NÃO** | **Automação alertas** |
 
 ### 🎯 **Como Funciona a Estrutura Real (CÓDIGO VALIDADO):**
 
@@ -189,8 +173,11 @@ self._salvar_onedrive_background(excel_bytes, mes, ano)
 **SEÇÃO DE CONTROLE (NÃO entra nos totais):**
 - **DUPLICATA/CUIDADO:** Faturas com `status_duplicata != 'NORMAL'` (exceto FALTANTE), separadas por status para verificação manual
 
-**🆕 SEÇÃO ALERTAS (trigger automático):**
-- **ALERTAS TELEGRAM:** Situações críticas detectadas automaticamente disparam notificações via bot
+**⚠️ FINALIDADE DA SEÇÃO CONTROLE:** 
+- **Evitar pagamentos duplos** (DUPLICATAS detectadas pelo SEEK)
+- **Alertar sobre anomalias** (CUIDADO - problemas na extração/dados)
+- **Auditoria manual** de situações que fogem do padrão
+- **NÃO contaminar totais** financeiros com dados problemáticos
 
 **⚠️ NOTA IMPORTANTE:** Casas FALTANTES entram nos totais porque representam valores esperados/planejados, diferente de DUPLICATAS que são problemas a serem corrigidos.
 
@@ -224,51 +211,6 @@ Exemplo Planilha:
 BRK-Planilha-2025-06.xlsx
 ```
 
-## 🤖 **Alertas Telegram Bot - Arquitetura Inteligente (EM DESENVOLVIMENTO)**
-
-### 🎯 **Tipos de Alertas Automáticos:**
-
-**🚨 ALERTAS CRÍTICOS (imediatos):**
-```python
-# Consumo muito alto detectado
-if porcentagem_consumo > 150:
-    enviar_alerta_telegram(f"🚨 CONSUMO ALTO: {casa} - {consumo}m³ (+{porcentagem}%)")
-
-# Duplicata detectada  
-if status_duplicata == 'DUPLICATA':
-    enviar_alerta_telegram(f"❌ DUPLICATA: {cdc} - {casa} - {competencia}")
-
-# Valor muito anômalo
-if diferenca_valor > 200:
-    enviar_alerta_telegram(f"💰 VALOR ANÔMALO: {casa} - R$ {valor} (média: R$ {media})")
-```
-
-**📊 ALERTAS INFORMATIVOS (diários/semanais):**
-- Resumo diário de processamento
-- Casas faltantes no mês atual  
-- Estatísticas de consumo semanal
-- Relatório mensal consolidado
-
-### 🔧 **Configuração Telegram Bot:**
-
-**📋 Variáveis de Ambiente (NOVAS):**
-- `TELEGRAM_BOT_TOKEN` - Token do bot Telegram
-- `TELEGRAM_CHAT_ID_TESOURARIA` - Chat ID tesouraria
-- `TELEGRAM_CHAT_ID_ADMIN` - Chat ID administração  
-- `ALERTAS_ATIVAR` - true/false para ativar alertas
-
-### 🎯 **Integração com Sistema Existente:**
-
-```python
-# No monitor_brk.py - após processar fatura
-if self.telegram_bot and dados_extraidos:
-    self.telegram_bot.verificar_alertas(dados_extraidos)
-
-# No excel_brk.py - após gerar planilha  
-if self.telegram_bot and faturas_outros:
-    self.telegram_bot.alertar_problemas_detectados(faturas_outros)
-```
-
 ## ☁️ **Upload Automático OneDrive - Arquitetura Consolidada (IMPLEMENTADO)**
 
 ### 🏗️ **Reutilização Inteligente de Código**
@@ -291,11 +233,10 @@ self._fazer_upload_pdf_onedrive(...)                      # Upload via Microsoft
 | `database_brk.py` | Dados + Nomenclatura | `_extrair_ano_mes()`, `_gerar_nome_padronizado()` |
 | `email_processor.py` | Processamento + Upload PDFs | `upload_fatura_onedrive()`, `_criar_pasta_onedrive()` |
 | `excel_brk.py` | Geração + Upload Planilhas | `_salvar_onedrive_background()`, jobs automáticos |
-| `telegram_bot.py` | Alertas + Notificações | `enviar_alerta()`, `verificar_situacoes_criticas()` |
 
-## 🔧 Configuração e Deploy (TESTADO EM PRODUÇÃO + BOT)
+## 🔧 Configuração e Deploy (TESTADO EM PRODUÇÃO)
 
-### **📋 Variáveis de Ambiente (VALIDADAS + NOVAS)**
+### **📋 Variáveis de Ambiente (VALIDADAS)**
 
 | Variável | Status | Descrição | Exemplo |
 |----------|--------|-----------|---------|
@@ -303,10 +244,6 @@ self._fazer_upload_pdf_onedrive(...)                      # Upload via Microsoft
 | `MICROSOFT_TENANT_ID` | ⚠️ OPCIONAL | Tenant ID (padrão: consumers) | comum/orgs |
 | `PASTA_BRK_ID` | ✅ OBRIGATÓRIA | ID pasta "BRK" Outlook (emails) | AQMkAD... |
 | `ONEDRIVE_BRK_ID` | ✅ RECOMENDADA | ID pasta "/BRK/" OneDrive (arquivos) | 01ABCD... |
-| `TELEGRAM_BOT_TOKEN` | 🆕 **NOVA** | Token bot Telegram alertas | 123456:ABC-DEF... |
-| `TELEGRAM_CHAT_ID_TESOURARIA` | 🆕 **NOVA** | Chat ID tesouraria | -1001234567890 |
-| `TELEGRAM_CHAT_ID_ADMIN` | 🆕 **NOVA** | Chat ID administração | -1001234567891 |
-| `ALERTAS_ATIVAR` | 🆕 **NOVA** | Ativar alertas (true/false) | true |
 
 ### **🚀 Deploy no Render (GARANTIDO 3 MINUTOS)**
 
@@ -318,10 +255,9 @@ self._fazer_upload_pdf_onedrive(...)                      # Upload via Microsoft
    Start Command: python app.py
    ```
 4. **Environment Variables** (tabela acima)
-5. **Configurar Bot Telegram** (opcional)
-6. **Deploy automático** - sistema ativo em 3 minutos!
+5. **Deploy automático** - sistema ativo em 3 minutos!
 
-### **📊 Requirements.txt (ATUALIZADO PRODUÇÃO + BOT)**
+### **📊 Requirements.txt (ATUALIZADO PRODUÇÃO)**
 ```
 Flask==3.0.3
 requests==2.31.0
@@ -329,7 +265,6 @@ python-dateutil==2.8.2
 pdfplumber==0.9.0
 openpyxl==3.1.2
 schedule==1.2.0
-python-telegram-bot==20.7
 gunicorn==23.0.0
 Werkzeug==3.0.3
 Jinja2==3.1.4
@@ -338,24 +273,22 @@ itsdangerous==2.2.0
 click==8.1.7
 ```
 
-## 🔑 **Primeiro Acesso (PROCEDIMENTO VALIDADO + BOT)**
+## 🔑 **Primeiro Acesso (PROCEDIMENTO VALIDADO)**
 
 1. **Acesse**: https://brk-render-seguro.onrender.com
 2. **Upload token**: Sistema requer token.json válido Microsoft OAuth
-3. **Configurar Bot Telegram** (opcional): Upload variáveis ambiente Bot
-4. **Inicialização automática**: 
+3. **Inicialização automática**: 
    - ✅ DatabaseBRK SQLite thread-safe
    - ✅ Relacionamento CDC (38 registros carregados)
    - ✅ Monitor automático ativo (verificação 10min)
    - ✅ **Scheduler automático ativo (job 06:00h)**
-   - ✅ **Telegram Bot ativo** (se configurado)
    - ✅ **Upload OneDrive integrado e testado**
    - ✅ **Gerador Excel funcionando**
    - ✅ **Reconstituição BRK disponível**
    - ✅ Validação dependências completa
    - ✅ DBEDIT disponível (ver seção DBEDIT)
-5. **Logs automáticos**: Visíveis no Render com dados extraídos **+ upload OneDrive + jobs Excel + alertas Telegram**
-6. **Interface funcional**: Pronta para processamento + navegação database + geração planilhas + reconstituição + alertas
+4. **Logs automáticos**: Visíveis no Render com dados extraídos **+ upload OneDrive + jobs Excel**
+5. **Interface funcional**: Pronta para processamento + navegação database + geração planilhas + reconstituição
 
 ### **🔐 Gerenciamento Token (ROBUSTO):**
 - **Persistent storage** Render (/opt/render/project/storage/)
@@ -363,9 +296,9 @@ click==8.1.7
 - **Fallback gracioso** se token expirar
 - **Logs detalhados** status autenticação
 
-## 📊 **Como Funciona na Prática (LOG REAL PRODUÇÃO COMPLETA + ALERTAS)**
+## 📊 **Como Funciona na Prática (LOG REAL PRODUÇÃO COMPLETA)**
 
-### **📧 Monitor Automático (FUNCIONANDO 24/7 + UPLOAD AUTOMÁTICO + ALERTAS):**
+### **📧 Monitor Automático (FUNCIONANDO 24/7 + UPLOAD AUTOMÁTICO):**
 
 ```
 🔄 [19:42:04] MONITOR BRK - Verificação automática
@@ -403,11 +336,6 @@ click==8.1.7
 🔗 URL: https://onedrive.live.com/view?...
 📁 OneDrive: /BRK/Faturas/2025/07/10-07-BRK 07-2025 - BR 21-0668 VILA MAGINI...
 
-🤖 Verificando alertas Telegram...
-✅ Consumo normal (-22.22%) - sem alerta
-✅ Valor dentro da faixa esperada - sem alerta
-✅ Status NORMAL - sem alerta
-
 🔄 Database sincronizado com OneDrive
 
 ✅ Processamento concluído:
@@ -415,44 +343,13 @@ click==8.1.7
    📎 PDFs extraídos: 1
    💾 Database salvos: 1
    ☁️ OneDrive uploads: 1
-   🤖 Alertas verificados: 1 (nenhum disparado)
 ⏰ Próxima verificação em 10 minutos
 ```
 
-### **🤖 Alertas Telegram Bot em Ação:**
+### **⏰ Job Automático 06:00h (FUNCIONANDO):**
 
 ```
-🤖 [14:25:12] TELEGRAM BOT - Situação crítica detectada
-📧 Fatura processada: fatura_38945621.pdf
-📊 Dados extraídos:
-   🏠 Casa: BR 21-0485 - JARDIM ESPERANÇA
-   💰 Valor: R$ 890,50 (Média histórica: R$ 180,25)
-   💧 Consumo: 45m³ (Média: 12m³)
-   📊 Variação: +275% em relação à média
-
-🚨 ALERTA CRÍTICO DETECTADO:
-   ⚠️ Consumo ALTO: +275% da média
-   ⚠️ Valor ANÔMALO: +394% da média
-
-📱 Enviando alerta Telegram...
-✅ Mensagem enviada para chat tesouraria: -1001234567890
-✅ Mensagem enviada para chat administração: -1001234567891
-
-📋 Mensagem enviada:
-"🚨 ALERTA BRK - CONSUMO ALTO
-🏠 Casa: BR 21-0485 - JARDIM ESPERANÇA  
-💧 Consumo: 45m³ (+275% da média)
-💰 Valor: R$ 890,50 (+394% da média)
-📅 Competência: Julho/2025
-⚠️ VERIFICAR IMEDIATAMENTE"
-
-🔄 Status: Alerta disparado com sucesso
-```
-
-### **⏰ Job Automático 06:00h + Alertas (FUNCIONANDO):**
-
-```
-🚀 [06:00:01] JOB AUTOMÁTICO - Geração planilha BRK + Alertas
+🚀 [06:00:01] JOB AUTOMÁTICO - Geração planilha BRK
 📅 Período: Julho/2025 (mês atual)
 
 📊 Carregando dados database_brk...
@@ -475,18 +372,7 @@ click==8.1.7
 📤 Upload concluído: 89.234 bytes
 🔗 URL: https://onedrive.live.com/view?...
 
-🤖 Verificando situações para alertas...
-✅ 2 casas faltantes detectadas (enviando alerta informativo)
-⚠️ 3 faturas com problemas (enviando alerta verificação)
-
-📱 Enviando relatório diário Telegram...
-✅ Relatório enviado: "📊 RELATÓRIO DIÁRIO BRK - Jul/2025
-💰 Total processado: R$ 13.195,95
-📧 Faturas normais: 42
-⚠️ Problemas detectados: 3 (verificar planilha)
-🏠 Casas faltantes: 2"
-
-✅ Job 06:00h concluído: BRK-Planilha-2025-07.xlsx + alertas enviados
+✅ Job 06:00h concluído: BRK-Planilha-2025-07.xlsx
 ⏰ Próximo job: amanhã às 06:00h
 ```
 
@@ -510,14 +396,12 @@ click==8.1.7
 ✅ PDFs extraídos: 47 arquivos
 ✅ Database salvos: 47 registros (42 NORMAL, 3 DUPLICATA, 2 CUIDADO)
 ☁️ OneDrive uploads: 42 uploads realizados
-🤖 Alertas verificados: 47 (5 alertas disparados)
 
 📧 Lote 2/5: emails 51-100
 ✅ Processados: 48 emails
 ✅ PDFs extraídos: 51 arquivos
 ✅ Database salvos: 51 registros (46 NORMAL, 4 DUPLICATA, 1 CUIDADO)
 ☁️ OneDrive uploads: 46 uploads realizados
-🤖 Alertas verificados: 51 (3 alertas disparados)
 
 [... continuação dos lotes ...]
 
@@ -529,14 +413,7 @@ click==8.1.7
    🔄 DUPLICATAS: 45 registros
    ⚠️ CUIDADO: 24 registros
    ☁️ OneDrive uploads: 198 uploads
-   🤖 Total alertas disparados: 23 alertas
    ⏱️ Tempo total: 12 minutos 34 segundos
-
-📱 Enviando relatório reconstituição...
-✅ Relatório enviado Telegram: "🔄 RECONSTITUIÇÃO BRK CONCLUÍDA
-📊 267 faturas reprocessadas
-⚠️ 23 alertas disparados (verificar situações críticas)
-📈 Base totalmente atualizada"
 
 ✅ Base BRK reconstituída com sucesso!
 📊 Sistema funcionando normalmente
@@ -560,7 +437,6 @@ click==8.1.7
 ⚡ Comando: NEXT → Registro 848/1234
 ☁️ OneDrive Upload: ✅ Realizado
 📁 Arquivo OneDrive: 10-07-BRK 07-2025 - BR 21-0668 VILA MAGINI...
-🤖 Alertas: Nenhum alerta disparado para este registro
 ```
 
 ### **📊 Geração Manual Excel:**
@@ -580,16 +456,12 @@ click==8.1.7
 📋 Casas: 38 registros
 📊 Planilha gerada: 87.456 bytes
 
-🤖 Verificando alertas na planilha...
-⚠️ 1 duplicata detectada (sem alerta - já conhecida)
-✅ Casas faltantes normais para o período
-
 💾 Download iniciado: BRK-Planilha-2025-06.xlsx
 ☁️ Upload OneDrive: /BRK/Faturas/2025/06/BRK-Planilha-2025-06.xlsx
 ✅ Geração manual concluída
 ```
 
-## 🌐 **Endpoints HTTP Disponíveis (TESTADOS EM PRODUÇÃO + BOT)**
+## 🌐 **Endpoints HTTP Disponíveis (TESTADOS EM PRODUÇÃO)**
 
 ### **🔧 Sistema Principal**
 - `GET /` - Dashboard principal status completo + interface visual
@@ -599,25 +471,20 @@ click==8.1.7
 - `GET /status` - Status completo JSON
 
 ### **⚙️ Processamento**
-- `POST /processar-emails-novos` - Processa emails + salvamento automático **+ upload OneDrive + alertas**
+- `POST /processar-emails-novos` - Processa emails + salvamento automático **+ upload OneDrive**
 - `GET /processar-emails-form` - Interface web processamento
 - `GET /diagnostico-pasta` - Diagnóstico pasta BRK + DatabaseBRK
 
 ### **📊 Gerador Excel BRK**
 - `GET /gerar-planilha-brk` - **Interface geração planilhas Excel mensais**
-- `POST /gerar-planilha-brk` - **Processar geração + download + upload OneDrive + alertas**
+- `POST /gerar-planilha-brk` - **Processar geração + download + upload OneDrive**
 
 ### **⏰ Scheduler Automático**
 - `GET /status-scheduler-brk` - **Status scheduler + próximos jobs**
 
 ### **🔄 Reconstituição Total**
 - `GET /reconstituicao-brk` - **Interface reconstituição total da base**
-- `POST /executar-reconstituicao` - **Executar reprocessamento completo + alertas**
-
-### **🤖 Telegram Bot Alertas**
-- `GET /telegram-bot-status` - **Status bot + últimos alertas enviados**
-- `POST /telegram-bot-test` - **Teste envio alerta manual**
-- `GET /telegram-bot-config` - **Interface configuração bot**
+- `POST /executar-reconstituicao` - **Executar reprocessamento completo**
 
 ### **📊 DatabaseBRK**
 - `GET /estatisticas-database` - Estatísticas SQLite completas
@@ -666,7 +533,6 @@ SEEK "Jul/2025"  → Buscar competência específica
 - **⌨️ Atalhos**: Setas para navegar, Ctrl+Home/End
 - **📱 Responsivo**: Funciona desktop e mobile
 - **☁️ Status Upload**: Indica se PDF foi enviado para OneDrive
-- **🤖 Status Alertas**: Indica se registro gerou alertas
 
 ## 🗃️ **Estrutura DatabaseBRK (PRODUÇÃO)**
 
@@ -686,10 +552,9 @@ competencia, valor
 medido_real, faturado, media_6m, porcentagem_consumo, 
 alerta_consumo
 
--- CONTROLE TÉCNICO + UPLOAD ONEDRIVE + ALERTAS
+-- CONTROLE TÉCNICO + UPLOAD ONEDRIVE
 dados_extraidos_ok, relacionamento_usado, onedrive_upload,
-onedrive_url, nome_onedrive, onedrive_pasta,
-alertas_disparados, telegram_alertas_count
+onedrive_url, nome_onedrive, onedrive_pasta
 ```
 
 ### **🔍 Índices Performance (OTIMIZADOS):**
@@ -698,9 +563,8 @@ alertas_disparados, telegram_alertas_count
 - `idx_casa_oracao` - Relatórios por igreja específica
 - `idx_data_processamento` - Análises temporais
 - `idx_competencia` - Análises mensais e anuais
-- `idx_alertas_disparados` - Consultas alertas enviados
 
-## 🛡️ **Contingência e Robustez (TESTADO + ALERTAS)**
+## 🛡️ **Contingência e Robustez (TESTADO)**
 
 ### **🔄 OneDrive Indisponível:**
 - ✅ Sistema detecta falha automaticamente
@@ -709,7 +573,6 @@ alertas_disparados, telegram_alertas_count
 - ✅ Zero perda de dados garantida
 - ✅ **Upload continua funcionando** com fallback local
 - ✅ **Job scheduler continua** com retry automático
-- ✅ **Alertas Telegram funcionam** independente do OneDrive
 
 ### **☁️ Upload OneDrive Falha:**
 - ✅ Database continua funcionando normalmente
@@ -717,35 +580,24 @@ alertas_disparados, telegram_alertas_count
 - ✅ Retry automático na próxima verificação
 - ✅ Logs detalhados da falha específica
 - ✅ **Planilhas Excel** baixadas mesmo se upload falhar
-- ✅ **Alertas enviados** sobre falhas de upload
-
-### **🤖 Telegram Bot Indisponível:**
-- ✅ Sistema detecta falha automaticamente
-- ✅ Continua processamento normal sem alertas
-- ✅ Log detalhado de tentativas de envio
-- ✅ Retry automático quando bot volta
-- ✅ **Não interfere** nas funcionalidades principais
 
 ### **⚠️ Relacionamento CDC Falha:**
 - ✅ Sistema continua funcionando normalmente
 - ✅ Usa extração básica PDF (todos os campos menos Casa)
 - ✅ Logs indicam problema específico
 - ✅ Recarregamento manual via interface
-- ✅ **Alerta Telegram** sobre problema relacionamento
 
 ### **📊 Gerador Excel Robusto:**
 - ✅ **Casas faltantes** detectadas automaticamente da base OneDrive (entram nos totais)
 - ✅ **Seção de controle** separada para duplicatas/problemas (não entram nos totais)
 - ✅ **Download sempre funciona** mesmo se upload OneDrive falhar
 - ✅ **Job 06:00h** com tratamento de erros completo
-- ✅ **Alertas sobre problemas** na planilha
 
 ### **🔄 Reconstituição Segura:**
 - ✅ **Não para o sistema** durante operação
 - ✅ **Processa em lotes** para não sobrecarregar
 - ✅ **Logs detalhados** de cada etapa
 - ✅ **Fallback automático** em caso de erro
-- ✅ **Alertas sobre reconstituição** via Telegram
 
 ### **🔧 Self-Healing (IMPLEMENTADO):**
 - ✅ Criação automática estrutura OneDrive se não existir
@@ -754,7 +606,6 @@ alertas_disparados, telegram_alertas_count
 - ✅ Retry inteligente em falhas temporárias
 - ✅ **Criação automática estrutura /BRK/Faturas/YYYY/MM/**
 - ✅ **Scheduler automático** continua funcionando mesmo após erros
-- ✅ **Bot Telegram** reconecta automaticamente
 
 ### **📊 Monitor Thread Safety (CORRIGIDO):**
 - ✅ SQLite configurado com `check_same_thread=False`
@@ -763,9 +614,8 @@ alertas_disparados, telegram_alertas_count
 - ✅ Sincronização automática OneDrive funcionando
 - ✅ **Upload OneDrive não bloqueia monitor principal**
 - ✅ **Scheduler em thread separada** sem interferência
-- ✅ **Bot Telegram em thread própria** sem bloqueios
 
-## 🎯 **Diferencial Técnico (VALIDADO + ALERTAS)**
+## 🎯 **Diferencial Técnico (VALIDADO)**
 
 ### **✅ Sem Pandas - Python 3.11.9:**
 - ✅ Deploy sempre 3 minutos (sem compilação C++)
@@ -805,26 +655,36 @@ alertas_disparados, telegram_alertas_count
 - ✅ **Processamento otimizado**: lotes para não sobrecarregar sistema
 - ✅ **Operação transparente**: logs detalhados de cada etapa
 
-### **🤖 Alertas Telegram Inteligentes (EM DESENVOLVIMENTO):**
-- ✅ **Reutilização máxima**: usa dados DatabaseBRK + análises existentes
-- ✅ **Thread separada**: não bloqueia processamento principal
-- ✅ **Filtros inteligentes**: apenas alertas realmente críticos
-- ✅ **Múltiplos destinatários**: tesouraria + administração
-- ✅ **Fallback robusto**: sistema funciona sem bot se necessário
-
 ### **📊 Monitor Automático (24/7 ATIVO):**
 - ✅ Logs estruturados Render com dados extraídos
 - ✅ Verificação contínua sem intervenção humana
 - ✅ Estatísticas pasta tempo real
 - ✅ Processamento transparente + alertas visuais
 - ✅ **Upload OneDrive integrado no ciclo de monitoramento**
-- ✅ **Alertas Telegram integrados no ciclo de processamento**
 
 ### **📝 Estrutura Modular Compacta (MAINTÍVEL):**
 - ✅ **auth/**: Isolado e reutilizável
-- ✅ **processor/**: Core funcional integrado + upload OneDrive + Excel + scheduler + reconstituição + alertas
+- ✅ **processor/**: Core funcional integrado + upload OneDrive + Excel + scheduler + reconstituição
 - ✅ **admin/**: Interface administrativa + DBEDIT separados
 - ✅ **app.py**: Orquestração limpa
+
+## 🔮 **Roadmap Futuro (PLANEJADO)**
+
+### **🤖 Alertas Telegram Bot (PRÓXIMA VERSÃO):**
+- **🚨 Alertas críticos**: Consumo alto, valores anômalos, duplicatas detectadas
+- **📊 Relatórios automáticos**: Resumos diários/semanais via bot
+- **👥 Múltiplos destinatários**: Tesouraria, administração, etc.
+- **🎯 Filtros inteligentes**: Apenas alertas realmente importantes
+
+### **📈 Análises Avançadas (FUTURO):**
+- **📊 Dashboard interativo**: Gráficos consumo, tendências, alertas
+- **🔍 Análise preditiva**: Previsão consumo e custos baseado histórico
+- **📋 Relatórios customizados**: Filtros por período, casa, tipo
+
+### **🔗 Integrações (EXPANSÃO):**
+- **💳 Sistemas bancários**: Integração para confirmação pagamentos
+- **📱 App mobile**: Notificações push, consultas rápidas
+- **🌐 API externa**: Webhook para sistemas terceiros
 
 ## 📞 **Suporte e Manutenção**
 
@@ -832,7 +692,7 @@ alertas_disparados, telegram_alertas_count
 **Sidney Gubitoso** - Auxiliar Tesouraria Administrativa Mauá
 
 ### **🔧 Versão Atual:**
-**Sistema BRK v5.0 Alertas Completo** - Estrutura completa e robusta + gerador planilhas + scheduler + reconstituição + alertas Telegram
+**Sistema BRK v4.0 Completo** - Estrutura completa e robusta + gerador planilhas + scheduler + reconstituição
 
 ### **📊 Status Produção (Julho 2025):**
 - ✅ **Em produção ativa** no Render
@@ -840,7 +700,6 @@ alertas_disparados, telegram_alertas_count
 - ✅ **Gerador planilhas Excel** manual e automático funcionando
 - ✅ **Scheduler automático** jobs às 06:00h ativo
 - ✅ **Reconstituição total** disponível e testada
-- ✅ **Alertas Telegram Bot** em desenvolvimento/teste
 - ✅ **Monitoramento automático** 24/7 estável
 - ✅ **Backup automático** OneDrive funcionando
 - ✅ **Thread safety** corrigido e validado
@@ -855,7 +714,6 @@ alertas_disparados, telegram_alertas_count
 - **☁️ Uploads OneDrive**: Estrutura /BRK/Faturas/YYYY/MM/ automática
 - **📊 Planilhas Excel**: Geração manual + job automático 06:00h
 - **🔄 Reconstituição**: Disponível via interface web
-- **🤖 Alertas Telegram**: Em desenvolvimento (integração testada)
 - **⏰ Uptime monitor**: 10 minutos verificação contínua
 - **🚀 Deploy time**: 3 minutos garantidos
 - **🗃️ DBEDIT**: https://brk-render-seguro.onrender.com/dbedit
@@ -863,7 +721,7 @@ alertas_disparados, telegram_alertas_count
 - **🔄 Reconstituição**: https://brk-render-seguro.onrender.com/reconstituicao-brk
 - **🌐 URL Produção**: https://brk-render-seguro.onrender.com
 
-## ✅ **Validação Técnica Completa (JULHO 2025 + TODAS FUNCIONALIDADES + ALERTAS)**
+## ✅ **Validação Técnica Completa (JULHO 2025 + TODAS FUNCIONALIDADES REAIS)**
 
 ### **📋 Sistema Auditado e Validado:**
 - ✅ **Variáveis ambiente** consistentes código real
@@ -872,7 +730,6 @@ alertas_disparados, telegram_alertas_count
 - ✅ **Gerador Excel** implementado com reutilização máxima DatabaseBRK + estrutura correta validada
 - ✅ **Scheduler automático** funcionando em thread separada
 - ✅ **Reconstituição total** implementada e testada
-- ✅ **Alertas Telegram** arquitetura definida (em desenvolvimento)
 - ✅ **Dependências** atualizadas e funcionais (3min deploy)
 - ✅ **Python 3.11.9** compatibilidade total
 - ✅ **Funcionalidades** documentadas existem e funcionam
@@ -882,19 +739,17 @@ alertas_disparados, telegram_alertas_count
 - ✅ **DBEDIT Clipper** funcional com comandos completos
 
 ### **🔍 Última Validação:**
-- **Data**: 30 Junho 2025 - **ESTRUTURA VALIDADA COM CÓDIGO + ALERTAS PLANEJADOS**
-- **Código base**: Estrutura modular completa thread-safe + todas funcionalidades
+- **Data**: 30 Junho 2025 - **ESTRUTURA VALIDADA COM CÓDIGO - APENAS FUNCIONALIDADES REAIS**
+- **Código base**: Estrutura modular completa thread-safe + todas funcionalidades implementadas
 - **CORREÇÃO IMPORTANTE**: Estrutura planilha Excel validada linha-por-linha do código `excel_brk.py`
   - **Casas FALTANTES entram nos totais** (seção principal PIA/CASAS)
   - **Apenas DUPLICATA/CUIDADO ficam na seção controle** (não entram nos totais)
-  - **Alertas Telegram são trigger automático** baseado em situações críticas detectadas
 - **Monitor**: 24/7 ativo processando emails automaticamente + upload
 - **Database**: SQLite OneDrive + cache + fallback funcionando
 - **Upload OneDrive**: Reutilização `database_brk` functions + estrutura automática
 - **Gerador Excel**: Manual + automático funcionando + seção controle validada
 - **Scheduler**: Jobs 06:00h ativos + thread separada
 - **Reconstituição**: Interface + processamento completo funcionando
-- **Alertas Telegram**: Arquitetura definida, em desenvolvimento
 - **Deploy**: Testado Render - 3 minutos garantidos
 - **Contingência**: Implementada, documentada e testada
 - **Interface**: Upload token + testes + help + Excel + reconstituição funcionando
@@ -902,15 +757,14 @@ alertas_disparados, telegram_alertas_count
 
 ---
 
-**🏆 Sistema BRK - Processamento inteligente de faturas COMPLETO COM ALERTAS**  
-**🎯 Zero intervenção manual - Máxima precisão - Organização total - Logs contínuos - Planilhas automáticas - Reconstituição total - Alertas inteligentes**  
-**🛡️ Thread-safe - Modular completo - Escalável - Production-ready - Todas funcionalidades integradas - Automação completa**
+**🏆 Sistema BRK - Processamento inteligente de faturas COMPLETO**  
+**🎯 Zero intervenção manual - Máxima precisão - Organização total - Logs contínuos - Planilhas automáticas - Reconstituição total**  
+**🛡️ Thread-safe - Modular completo - Escalável - Production-ready - Todas funcionalidades implementadas**
 
 > **Desenvolvido por Sidney Gubitoso** - Auxiliar Tesouraria Administrativa Mauá  
-> **Versão Completa v5.0 Alertas** - Estrutura completa e maintível + todas funcionalidades implementadas + alertas Telegram  
+> **Versão Completa v4.0** - Estrutura completa e maintível + todas funcionalidades realmente implementadas  
 > **Deploy Time:** ⚡ 3 minutos | **Uptime:** 🌐 24/7 | **Compatibilidade:** 🛡️ Python 3.11.9  
 > **URL Produção:** 🌐 https://brk-render-seguro.onrender.com  
 > **Excel:** 📊 https://brk-render-seguro.onrender.com/gerar-planilha-brk  
 > **DBEDIT:** 🗃️ https://brk-render-seguro.onrender.com/dbedit  
-> **Reconstituição:** 🔄 https://brk-render-seguro.onrender.com/reconstituicao-brk  
-> **Bot Status:** 🤖 https://brk-render-seguro.onrender.com/telegram-bot-status
+> **Reconstituição:** 🔄 https://brk-render-seguro.onrender.com/reconstituicao-brk
