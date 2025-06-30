@@ -26,3 +26,6 @@ gunicorn==23.0.0
 
 # 🔐 ETAPA 2: Criptografia para tokens
 cryptography==41.0.7
+
+openpyxl==3.1.2
+schedule==1.2.0
