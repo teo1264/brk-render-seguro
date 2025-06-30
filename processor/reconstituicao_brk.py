@@ -374,7 +374,11 @@ def obter_estatisticas_pre_reconstituicao(auth_manager):
         }
 
 
-def gerar_interface_web_lotes(estatisticas, progresso=None):
+def gerar_interface_web_lotes(estatisticas, progresso=None, inicializacao=None):
+    # Se há resultado de inicialização, mostrar tela de sucesso
+    if inicializacao and inicializacao.get('status') == 'sucesso':
+        return _gerar_interface_inicializacao_sucesso(inicializacao)   
+    
     """
     🆕 INTERFACE NOVA: Interface web para processamento em lotes.
     
@@ -658,7 +662,24 @@ def gerar_resultado_final_lotes(resultado):
     
     return html
 
-
+def _gerar_interface_inicializacao_sucesso(resultado):
+    """Interface de sucesso da inicialização"""
+    total_emails = resultado.get('total_emails', 0)
+    lotes_necessarios = resultado.get('lotes_necessarios', 0)
+    
+    return f"""<!DOCTYPE html>
+    <html><head><title>✅ Inicialização Concluída</title><meta charset="UTF-8">
+    <style>body{{font-family:Arial;margin:40px;background:#f5f5f5;}}.container{{max-width:600px;margin:0 auto;background:white;padding:30px;border-radius:10px;}}</style>
+    </head><body><div class="container">
+    <h1>✅ Reconstituição Inicializada!</h1>
+    <p>📊 {total_emails:,} emails encontrados</p>
+    <p>📋 {lotes_necessarios} lotes necessários</p>
+    <form method="post" action="/executar-reconstituicao">
+        <input type="hidden" name="acao" value="continuar">
+        <input type="hidden" name="offset" value="0">
+        <button type="submit">🚀 PROCESSAR PRIMEIROS 10 EMAILS</button>
+    </form>
+    </div></body></html>"""
 # ============================================================================
 # FUNÇÕES DE COMPATIBILIDADE (manter originais funcionando)
 # ============================================================================
