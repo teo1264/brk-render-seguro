@@ -657,7 +657,6 @@ def status_scheduler_brk():
     status = obter_status_scheduler()
     return jsonify(status)
 
-@app.errorhandler(404)  # ← ESTA LINHA JÁ EXISTE
 # ============================================================================
 # TRATAMENTO DE ERROS
 # ============================================================================
