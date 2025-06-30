@@ -197,29 +197,33 @@ class ExcelGeneratorBRK:
         try:
             logger.info(f"Iniciando geração Excel {mes}/{ano}")
             
-            # 1. BUSCAR DADOS PRONTOS da faturas_brk
-            faturas_prontas = self._buscar_faturas_prontas(mes, ano)
-            logger.info(f"Faturas na base: {len(faturas_prontas)}")
+            # 1. BUSCAR DADOS PRONTOS da faturas_brk (NORMAL)
+            faturas_normais = self._buscar_faturas_prontas(mes, ano, status='NORMAL')
+            logger.info(f"Faturas NORMAIS: {len(faturas_normais)}")
             
-            # 2. CARREGAR BASE COMPLETA OneDrive (para casas faltantes)
+            # 2. BUSCAR OUTROS STATUS (DUPLICATA, CUIDADO, etc.)
+            faturas_outros_status = self._buscar_faturas_prontas(mes, ano, status='OUTROS')
+            logger.info(f"Faturas outros status: {len(faturas_outros_status)}")
+            
+            # 3. CARREGAR BASE COMPLETA OneDrive (para casas faltantes)
             base_completa = self._carregar_base_onedrive()
             logger.info(f"Casas na base OneDrive: {len(base_completa)}")
             
-            # 3. DETECTAR CASAS FALTANTES
-            casas_faltantes = self._detectar_casas_faltantes(faturas_prontas, base_completa, mes, ano)
+            # 4. DETECTAR CASAS FALTANTES (baseado nas NORMAIS)
+            casas_faltantes = self._detectar_casas_faltantes(faturas_normais, base_completa, mes, ano)
             logger.info(f"Casas faltantes: {len(casas_faltantes)}")
             
-            # 4. COMBINAR: faturas + faltantes
-            dados_completos = faturas_prontas + casas_faltantes
+            # 5. COMBINAR: faturas normais + faltantes
+            dados_normais_completos = faturas_normais + casas_faltantes
             
-            # 5. SEPARAR PIA das demais casas
-            dados_pia, dados_casas = self._separar_pia_casas(dados_completos)
-            logger.info(f"PIAs: {len(dados_pia)}, Casas: {len(dados_casas)}")
+            # 6. SEPARAR PIA das demais casas (NORMAIS)
+            dados_pia, dados_casas = self._separar_pia_casas(dados_normais_completos)
+            logger.info(f"PIAs NORMAIS: {len(dados_pia)}, Casas NORMAIS: {len(dados_casas)}")
             
-            # 6. GERAR EXCEL FORMATADO
-            excel_bytes = self._gerar_excel_formatado(dados_pia, dados_casas, mes, ano)
+            # 7. GERAR EXCEL FORMATADO (com seção adicional para outros status)
+            excel_bytes = self._gerar_excel_formatado_completo(dados_pia, dados_casas, faturas_outros_status, mes, ano)
             
-            # 7. SALVAR NO ONEDRIVE (background)
+            # 8. SALVAR NO ONEDRIVE (background)
             try:
                 self._salvar_onedrive_background(excel_bytes, mes, ano)
             except Exception as e:
@@ -232,7 +236,7 @@ class ExcelGeneratorBRK:
             logger.error(f"Erro gerar_planilha_mensal: {e}")
             raise
     
-    def _buscar_faturas_prontas(self, mes, ano):
+    def _buscar_faturas_prontas(self, mes, ano, status='NORMAL'):
         """BUSCAR DADOS PRONTOS da tabela faturas_brk"""
         try:
             # Usar DatabaseBRK existente (sistema já configurado)
@@ -251,16 +255,28 @@ class ExcelGeneratorBRK:
             
             conn.row_factory = sqlite3.Row
             
-            # Query SIMPLES nos dados prontos
-            query = """
-                SELECT * FROM faturas_brk 
-                WHERE competencia LIKE ? 
-                AND vencimento LIKE ?
-                AND status_duplicata = 'NORMAL'
-                ORDER BY vencimento, casa_oracao
-            """
-            
-            params = (f"%/{ano}", f"__/{mes:02d}/%")
+            # Query baseada no status solicitado
+            if status == 'NORMAL':
+                query = """
+                    SELECT * FROM faturas_brk 
+                    WHERE competencia LIKE ? 
+                    AND vencimento LIKE ?
+                    AND status_duplicata = 'NORMAL'
+                    ORDER BY vencimento, casa_oracao
+                """
+                params = (f"%/{ano}", f"__/{mes:02d}/%")
+                logger.info(f"✅ Buscando faturas NORMAIS")
+                
+            elif status == 'OUTROS':
+                query = """
+                    SELECT * FROM faturas_brk 
+                    WHERE competencia LIKE ? 
+                    AND vencimento LIKE ?
+                    AND status_duplicata != 'NORMAL'
+                    ORDER BY status_duplicata, vencimento, casa_oracao
+                """
+                params = (f"%/{ano}", f"__/{mes:02d}/%")
+                logger.info(f"✅ Buscando faturas com outros status")
             
             cursor = conn.execute(query, params)
             resultados = cursor.fetchall()
@@ -271,11 +287,11 @@ class ExcelGeneratorBRK:
                 fatura = dict(row)
                 faturas.append(fatura)
             
-            logger.info(f"✅ Dados prontos da faturas_brk: {len(faturas)} registros")
+            logger.info(f"✅ Dados {status}: {len(faturas)} registros")
             return faturas
             
         except Exception as e:
-            logger.error(f"Erro _buscar_faturas_prontas: {e}")
+            logger.error(f"Erro _buscar_faturas_prontas({status}): {e}")
             raise
     
     def _carregar_base_onedrive(self):
@@ -409,8 +425,8 @@ class ExcelGeneratorBRK:
         casa = registro.get("casa_oracao", "").upper()
         return casa == "PIA"
     
-    def _gerar_excel_formatado(self, dados_pia, dados_casas, mes, ano):
-        """Gerar Excel formatado final"""
+    def _gerar_excel_formatado_completo(self, dados_pia, dados_casas, faturas_outros_status, mes, ano):
+        """Gerar Excel formatado com seção adicional para outros status"""
         try:
             wb = openpyxl.Workbook()
             ws = wb.active
@@ -418,17 +434,22 @@ class ExcelGeneratorBRK:
             
             linha_atual = 1
             
+            # SEÇÃO PRINCIPAL: APENAS NORMAIS
             # Título principal
             linha_atual = self._adicionar_titulo_principal(ws, linha_atual, mes, ano)
             
-            # Seção PIA
+            # Seção PIA (NORMAIS)
             linha_atual = self._adicionar_secao_pia(ws, linha_atual, dados_pia)
             
-            # Seção Casas agrupadas por vencimento
+            # Seção Casas agrupadas por vencimento (NORMAIS)
             linha_atual = self._adicionar_secao_casas(ws, linha_atual, dados_casas)
             
-            # Totais finais
-            self._adicionar_totais_finais(ws, linha_atual, dados_pia, dados_casas)
+            # Totais finais (NORMAIS)
+            linha_atual = self._adicionar_totais_finais(ws, linha_atual, dados_pia, dados_casas)
+            
+            # SEÇÃO ADICIONAL: OUTROS STATUS (se existirem)
+            if faturas_outros_status:
+                linha_atual = self._adicionar_secao_outros_status(ws, linha_atual + 3, faturas_outros_status)
             
             # Formatação geral
             self._aplicar_formatacao_geral(ws)
@@ -441,14 +462,14 @@ class ExcelGeneratorBRK:
             return excel_buffer.read()
             
         except Exception as e:
-            logger.error(f"Erro _gerar_excel_formatado: {e}")
+            logger.error(f"Erro _gerar_excel_formatado_completo: {e}")
             raise
     
     def _adicionar_titulo_principal(self, ws, linha, mes, ano):
         """Título principal"""
         titulo = f"📋 RELATÓRIO BRK - {self.mes_nomes[mes].upper()}/{ano}"
         
-        ws.merge_cells(f"A{linha}:G{linha}")
+        ws.merge_cells(f"A{linha}:L{linha}")  # 12 colunas A-L
         ws[f"A{linha}"] = titulo
         ws[f"A{linha}"].font = Font(bold=True, size=14, color="FFFFFF")
         ws[f"A{linha}"].fill = PatternFill(start_color="2C5282", end_color="2C5282", fill_type="solid")
@@ -460,33 +481,38 @@ class ExcelGeneratorBRK:
         """Seção PIA"""
         linha = linha_inicial
         
-        # Cabeçalho PIA
-        ws.merge_cells(f"A{linha}:G{linha}")
+        # Cabeçalho PIA (12 colunas)
+        ws.merge_cells(f"A{linha}:L{linha}")
         ws[f"A{linha}"] = "=== PIA (Conta Bancária A) ==="
         ws[f"A{linha}"].font = Font(bold=True, color="FFFFFF")
         ws[f"A{linha}"].fill = PatternFill(start_color="C53030", end_color="C53030", fill_type="solid")
         ws[f"A{linha}"].alignment = Alignment(horizontal="center")
         linha += 1
         
-        # Headers
-        headers = ["CDC", "Casa", "Competência", "Vencimento", "Valor", "Consumo", "Status"]
+        # Headers COMPLETOS (igual ao relatório original)
+        headers = ["CDC", "Casa de Oração", "Competência", "Data Emissão", "Vencimento", "Nota Fiscal", "Valor", "Medido Real", "Faturado", "Média 6M", "% Consumo", "Alerta Consumo"]
         for col, header in enumerate(headers, 1):
             ws.cell(row=linha, column=col, value=header)
             ws.cell(row=linha, column=col).font = Font(bold=True)
         linha += 1
         
-        # Dados PIA
+        # Dados PIA COMPLETOS
         subtotal_pia = 0
         for pia in dados_pia:
             ws[f"A{linha}"] = pia.get("cdc", "")
             ws[f"B{linha}"] = pia.get("casa_oracao", "")
             ws[f"C{linha}"] = pia.get("competencia", "")
-            ws[f"D{linha}"] = pia.get("vencimento", "")
-            ws[f"E{linha}"] = pia.get("valor", "")
-            ws[f"F{linha}"] = pia.get("alerta_consumo", "")
-            ws[f"G{linha}"] = pia.get("status_duplicata", "")
+            ws[f"D{linha}"] = pia.get("data_emissao", "")
+            ws[f"E{linha}"] = pia.get("vencimento", "")
+            ws[f"F{linha}"] = pia.get("nota_fiscal", "")
+            ws[f"G{linha}"] = pia.get("valor", "")
+            ws[f"H{linha}"] = pia.get("medido_real", "")
+            ws[f"I{linha}"] = pia.get("faturado", "")
+            ws[f"J{linha}"] = pia.get("media_6m", "")
+            ws[f"K{linha}"] = pia.get("porcentagem_consumo", "")
+            ws[f"L{linha}"] = pia.get("alerta_consumo", "")
             
-            # Somar valor se numérico
+            # Somar valor se numérico (coluna G agora)
             if pia.get("valor"):
                 try:
                     valor_num = float(pia["valor"].replace("R$", "").replace(",", ".").strip())
@@ -496,12 +522,12 @@ class ExcelGeneratorBRK:
             
             linha += 1
         
-        # Subtotal PIA
-        ws.merge_cells(f"A{linha}:D{linha}")
+        # Subtotal PIA (ajustar para coluna G)
+        ws.merge_cells(f"A{linha}:F{linha}")
         ws[f"A{linha}"] = "SUBTOTAL PIA:"
         ws[f"A{linha}"].font = Font(bold=True)
-        ws[f"E{linha}"] = f"R$ {subtotal_pia:.2f}".replace(".", ",")
-        ws[f"E{linha}"].font = Font(bold=True)
+        ws[f"G{linha}"] = f"R$ {subtotal_pia:.2f}".replace(".", ",")
+        ws[f"G{linha}"].font = Font(bold=True)
         
         return linha + 2
     
@@ -509,8 +535,8 @@ class ExcelGeneratorBRK:
         """Seção Casas agrupadas por vencimento"""
         linha = linha_inicial
         
-        # Cabeçalho Casas
-        ws.merge_cells(f"A{linha}:G{linha}")
+        # Cabeçalho Casas (12 colunas)
+        ws.merge_cells(f"A{linha}:L{linha}")
         ws[f"A{linha}"] = "=== CASAS DE ORAÇÃO (Conta Bancária B) ==="
         ws[f"A{linha}"].font = Font(bold=True, color="FFFFFF")
         ws[f"A{linha}"].fill = PatternFill(start_color="2D7D32", end_color="2D7D32", fill_type="solid")
@@ -530,14 +556,14 @@ class ExcelGeneratorBRK:
             if not vencimento:
                 continue
                 
-            # Cabeçalho do vencimento
-            ws.merge_cells(f"A{linha}:G{linha}")
+            # Cabeçalho do vencimento (12 colunas)
+            ws.merge_cells(f"A{linha}:L{linha}")
             ws[f"A{linha}"] = f"Vencimento {vencimento}:"
             ws[f"A{linha}"].font = Font(bold=True, color="2D7D32")
             linha += 1
             
-            # Headers
-            headers = ["CDC", "Casa", "Competência", "Vencimento", "Valor", "Consumo", "Status"]
+            # Headers COMPLETOS
+            headers = ["CDC", "Casa de Oração", "Competência", "Data Emissão", "Vencimento", "Nota Fiscal", "Valor", "Medido Real", "Faturado", "Média 6M", "% Consumo", "Alerta Consumo"]
             for col, header in enumerate(headers, 1):
                 ws.cell(row=linha, column=col, value=header)
                 ws.cell(row=linha, column=col).font = Font(bold=True, size=9)
@@ -545,17 +571,22 @@ class ExcelGeneratorBRK:
             
             subtotal_vencimento = 0
             
-            # Casas do vencimento
+            # Casas do vencimento COM TODOS OS CAMPOS
             for casa in casas_por_vencimento[vencimento]:
                 ws[f"A{linha}"] = casa.get("cdc", "")
                 ws[f"B{linha}"] = casa.get("casa_oracao", "")
                 ws[f"C{linha}"] = casa.get("competencia", "")
-                ws[f"D{linha}"] = casa.get("vencimento", "")
-                ws[f"E{linha}"] = casa.get("valor", "")
-                ws[f"F{linha}"] = casa.get("alerta_consumo", "")
-                ws[f"G{linha}"] = casa.get("status_duplicata", "")
+                ws[f"D{linha}"] = casa.get("data_emissao", "")
+                ws[f"E{linha}"] = casa.get("vencimento", "")
+                ws[f"F{linha}"] = casa.get("nota_fiscal", "")
+                ws[f"G{linha}"] = casa.get("valor", "")
+                ws[f"H{linha}"] = casa.get("medido_real", "")
+                ws[f"I{linha}"] = casa.get("faturado", "")
+                ws[f"J{linha}"] = casa.get("media_6m", "")
+                ws[f"K{linha}"] = casa.get("porcentagem_consumo", "")
+                ws[f"L{linha}"] = casa.get("alerta_consumo", "")
                 
-                # Somar valor
+                # Somar valor (coluna G agora)
                 if casa.get("valor"):
                     try:
                         valor_num = float(casa["valor"].replace("R$", "").replace(",", ".").strip())
@@ -566,20 +597,20 @@ class ExcelGeneratorBRK:
                 
                 linha += 1
             
-            # Subtotal do vencimento
-            ws.merge_cells(f"A{linha}:D{linha}")
+            # Subtotal do vencimento (ajustar para coluna G)
+            ws.merge_cells(f"A{linha}:F{linha}")
             ws[f"A{linha}"] = f"SUBTOTAL {vencimento}:"
             ws[f"A{linha}"].font = Font(bold=True, size=9)
-            ws[f"E{linha}"] = f"R$ {subtotal_vencimento:.2f}".replace(".", ",")
-            ws[f"E{linha}"].font = Font(bold=True, size=9)
+            ws[f"G{linha}"] = f"R$ {subtotal_vencimento:.2f}".replace(".", ",")
+            ws[f"G{linha}"].font = Font(bold=True, size=9)
             linha += 2
         
-        # Subtotal todas as casas
-        ws.merge_cells(f"A{linha}:D{linha}")
+        # Subtotal todas as casas (ajustar para coluna G)
+        ws.merge_cells(f"A{linha}:F{linha}")
         ws[f"A{linha}"] = "SUBTOTAL CASAS:"
         ws[f"A{linha}"].font = Font(bold=True)
-        ws[f"E{linha}"] = f"R$ {subtotal_casas:.2f}".replace(".", ",")
-        ws[f"E{linha}"].font = Font(bold=True)
+        ws[f"G{linha}"] = f"R$ {subtotal_casas:.2f}".replace(".", ",")
+        ws[f"G{linha}"].font = Font(bold=True)
         
         return linha + 1
     
@@ -605,27 +636,34 @@ class ExcelGeneratorBRK:
                 except:
                     pass
         
-        # Total geral
-        ws.merge_cells(f"A{linha}:D{linha}")
+        # Total geral (ajustar para coluna G)
+        ws.merge_cells(f"A{linha}:F{linha}")
         ws[f"A{linha}"] = "TOTAL GERAL:"
         ws[f"A{linha}"].font = Font(bold=True, size=12, color="FFFFFF")
         ws[f"A{linha}"].fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
-        ws[f"E{linha}"] = f"R$ {total_geral:.2f}".replace(".", ",")
-        ws[f"E{linha}"].font = Font(bold=True, size=12, color="FFFFFF")
-        ws[f"E{linha}"].fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
+        ws[f"G{linha}"] = f"R$ {total_geral:.2f}".replace(".", ",")
+        ws[f"G{linha}"].font = Font(bold=True, size=12, color="FFFFFF")
+        ws[f"G{linha}"].fill = PatternFill(start_color="1A365D", end_color="1A365D", fill_type="solid")
+        
+        return linha + 1  # Retornar próxima linha
     
     def _aplicar_formatacao_geral(self, ws):
-        """Formatação geral"""
-        # Largura colunas
+        """Formatação geral com todas as colunas"""
+        # Largura colunas (12 colunas A-L)
         ws.column_dimensions['A'].width = 12  # CDC
-        ws.column_dimensions['B'].width = 35  # Casa
+        ws.column_dimensions['B'].width = 35  # Casa de Oração
         ws.column_dimensions['C'].width = 15  # Competência
-        ws.column_dimensions['D'].width = 12  # Vencimento
-        ws.column_dimensions['E'].width = 15  # Valor
-        ws.column_dimensions['F'].width = 15  # Consumo
-        ws.column_dimensions['G'].width = 12  # Status
+        ws.column_dimensions['D'].width = 12  # Data Emissão
+        ws.column_dimensions['E'].width = 12  # Vencimento
+        ws.column_dimensions['F'].width = 15  # Nota Fiscal
+        ws.column_dimensions['G'].width = 15  # Valor
+        ws.column_dimensions['H'].width = 12  # Medido Real
+        ws.column_dimensions['I'].width = 12  # Faturado
+        ws.column_dimensions['J'].width = 12  # Média 6M
+        ws.column_dimensions['K'].width = 15  # % Consumo
+        ws.column_dimensions['L'].width = 20  # Alerta Consumo
         
-        # Bordas
+        # Bordas para todas as células com dados
         thin_border = Border(
             left=Side(style='thin'), right=Side(style='thin'), 
             top=Side(style='thin'), bottom=Side(style='thin')
@@ -635,6 +673,96 @@ class ExcelGeneratorBRK:
             for cell in row:
                 if cell.value:
                     cell.border = thin_border
+    
+    def _adicionar_secao_outros_status(self, ws, linha_inicial, faturas_outros_status):
+        """Adicionar seção final com outros status (DUPLICATA, CUIDADO, etc.)"""
+        linha = linha_inicial
+        
+        # Cabeçalho da seção de controle
+        ws.merge_cells(f"A{linha}:L{linha}")
+        ws[f"A{linha}"] = "=== CONTROLE: FATURAS COM STATUS ESPECIAL ==="
+        ws[f"A{linha}"].font = Font(bold=True, color="FFFFFF")
+        ws[f"A{linha}"].fill = PatternFill(start_color="FF6600", end_color="FF6600", fill_type="solid")  # Laranja
+        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
+        linha += 1
+        
+        # Explicação
+        ws.merge_cells(f"A{linha}:L{linha}")
+        ws[f"A{linha}"] = "⚠️ Faturas abaixo NÃO estão incluídas nos totais acima - Apenas para controle"
+        ws[f"A{linha}"].font = Font(bold=True, italic=True, color="FF6600")
+        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
+        linha += 2
+        
+        # Agrupar por status
+        faturas_por_status = defaultdict(list)
+        for fatura in faturas_outros_status:
+            status = fatura.get("status_duplicata", "INDEFINIDO")
+            faturas_por_status[status].append(fatura)
+        
+        # Para cada status
+        for status in sorted(faturas_por_status.keys()):
+            faturas_status = faturas_por_status[status]
+            
+            # Cabeçalho do status
+            ws.merge_cells(f"A{linha}:L{linha}")
+            cor_status = self._obter_cor_status(status)
+            ws[f"A{linha}"] = f"STATUS: {status} ({len(faturas_status)} faturas)"
+            ws[f"A{linha}"].font = Font(bold=True, color=cor_status)
+            linha += 1
+            
+            # Headers
+            headers = ["CDC", "Casa de Oração", "Competência", "Data Emissão", "Vencimento", "Nota Fiscal", "Valor", "Medido Real", "Faturado", "Média 6M", "% Consumo", "Status"]
+            for col, header in enumerate(headers, 1):
+                ws.cell(row=linha, column=col, value=header)
+                ws.cell(row=linha, column=col).font = Font(bold=True, size=9)
+                ws.cell(row=linha, column=col).fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+            linha += 1
+            
+            # Dados das faturas
+            for fatura in faturas_status:
+                ws[f"A{linha}"] = fatura.get("cdc", "")
+                ws[f"B{linha}"] = fatura.get("casa_oracao", "")
+                ws[f"C{linha}"] = fatura.get("competencia", "")
+                ws[f"D{linha}"] = fatura.get("data_emissao", "")
+                ws[f"E{linha}"] = fatura.get("vencimento", "")
+                ws[f"F{linha}"] = fatura.get("nota_fiscal", "")
+                ws[f"G{linha}"] = fatura.get("valor", "")
+                ws[f"H{linha}"] = fatura.get("medido_real", "")
+                ws[f"I{linha}"] = fatura.get("faturado", "")
+                ws[f"J{linha}"] = fatura.get("media_6m", "")
+                ws[f"K{linha}"] = fatura.get("porcentagem_consumo", "")
+                ws[f"L{linha}"] = fatura.get("status_duplicata", "")
+                
+                # Colorir linha conforme status
+                for col in range(1, 13):  # A-L
+                    cell = ws.cell(row=linha, column=col)
+                    if status == "DUPLICATA":
+                        cell.fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")  # Amarelo claro
+                    elif status == "CUIDADO":
+                        cell.fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")  # Vermelho claro
+                
+                linha += 1
+            
+            linha += 1  # Espaço entre status
+        
+        # Resumo final da seção
+        ws.merge_cells(f"A{linha}:L{linha}")
+        total_outros = len(faturas_outros_status)
+        ws[f"A{linha}"] = f"📊 TOTAL REGISTROS DE CONTROLE: {total_outros} faturas (não computadas nos totais)"
+        ws[f"A{linha}"].font = Font(bold=True, color="FF6600")
+        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
+        
+        return linha + 1
+    
+    def _obter_cor_status(self, status):
+        """Retorna cor para cada tipo de status"""
+        cores = {
+            "DUPLICATA": "FF8C00",  # Laranja
+            "CUIDADO": "DC143C",    # Vermelho
+            "PENDENTE": "4682B4",   # Azul
+            "ERRO": "8B0000",       # Vermelho escuro
+        }
+        return cores.get(status, "666666")  # Cinza padrão
     
     def _salvar_onedrive_background(self, excel_bytes, mes, ano):
         """Salvar no OneDrive"""
