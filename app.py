@@ -1093,7 +1093,7 @@ def _renderizar_inicializacao_sucesso(resultado):
 
 @app.route('/executar-reconstituicao', methods=['POST'])
 def executar_reconstituicao():
-    """Rota POST para executar reconstituição em lotes"""
+    """Rota POST para executar reconstituição em lotes por período"""
     if not RECONSTITUICAO_DISPONIVEL:
         return jsonify({"erro": "Módulo reconstituição indisponível"}), 503
     
@@ -1103,16 +1103,22 @@ def executar_reconstituicao():
     try:
         acao = request.form.get('acao')
         
+        # ✅ RECEBER DATAS DO FORMULÁRIO
+        data_inicio = request.form.get('data_inicio')
+        data_fim = request.form.get('data_fim')
+        
         if acao == 'inicializar':
-            resultado = inicializar_reconstituicao_primeira_vez(auth_manager)
+            # ✅ PASSAR DATAS PARA FUNÇÃO
+            resultado = inicializar_reconstituicao_primeira_vez(auth_manager, data_inicio, data_fim)
             if resultado.get('status') == 'sucesso':
                 return gerar_interface_web_lotes({}, inicializacao=resultado)
             else:
                 return f"<h1>Erro: {resultado.get('mensagem')}</h1><a href='/reconstituicao-brk'>Voltar</a>", 500
                 
         elif acao == 'continuar':
+            # ✅ PASSAR DATAS + OFFSET PARA FUNÇÃO
             offset = int(request.form.get('offset', 0))
-            resultado = executar_reconstituicao_lote(auth_manager, offset)
+            resultado = executar_reconstituicao_lote(auth_manager, offset, data_inicio, data_fim)
             
             if resultado.get('finalizado'):
                 return gerar_resultado_final_lotes(resultado)
@@ -1124,7 +1130,7 @@ def executar_reconstituicao():
     except Exception as e:
         logger.error(f"Erro executar reconstituição: {e}")
         return f"<h1>Erro: {e}</h1><a href='/reconstituicao-brk'>Voltar</a>", 500
-# ============================================================================
+============================================================================
 # 3. OPCIONAL: ADICIONAR LINK NO DASHBOARD PRINCIPAL
 # Na rota '/' existente, adicionar uma linha no HTML:
 # ============================================================================
