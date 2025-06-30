@@ -20,7 +20,8 @@ except ImportError:
 from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
 from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico
-
+# NOVO: Import scheduler BRK
+from processor.scheduler_brk import inicializar_scheduler_automatico, obter_status_scheduler
 # Configuração do Flask
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
@@ -92,6 +93,7 @@ def index():
                         <h3>🔧 Ações Disponíveis:</h3>
                         <a href="/diagnostico-pasta" class="button">📊 Diagnóstico Pasta</a>
                         <a href="/processar-emails-form" class="button">⚙️ Processar Emails</a>
+                        <a href="/gerar-planilha-brk" class="button">📊 Gerar Planilha</a>
                         <a href="/test-onedrive" class="button">🧪 Teste OneDrive</a>
                         <a href="/estatisticas-database" class="button">📈 DatabaseBRK</a>
                         <a href="/dbedit" class="button">🗃️ DBEDIT Clipper</a>
@@ -637,7 +639,20 @@ def delete_handler():
         logger.error(f"Erro DELETE: {e}")
         return jsonify({"status": "error", "message": f"Erro DELETE: {str(e)}"}), 500
 
+# GERADOR EXCEL BRK
+@app.route('/gerar-planilha-brk', methods=['GET', 'POST'])
+def gerar_planilha_brk():
+    """Gerador Excel BRK"""
+    from processor.excel_brk import ExcelGeneratorBRK
+    return ExcelGeneratorBRK().handle_request()
 
+@app.route('/status-scheduler-brk')
+def status_scheduler_brk():
+    """Status scheduler"""
+    status = obter_status_scheduler()
+    return jsonify(status)
+
+@app.errorhandler(404)  # ← ESTA LINHA JÁ EXISTE
 # ============================================================================
 # TRATAMENTO DE ERROS
 # ============================================================================
@@ -691,7 +706,14 @@ def inicializar_aplicacao():
     
     if not verificar_configuracao():
         return False
-    
+    # NOVO: Scheduler BRK
+    print("🔄 Inicializando Scheduler BRK...")
+    scheduler_iniciado = inicializar_scheduler_automatico()
+    if scheduler_iniciado:
+        print("✅ Scheduler BRK: Ativo (jobs automáticos às 06:00h)")
+    else:
+        print("⚠️ Scheduler BRK: Falha na inicialização") 
+   
     if auth_manager.access_token:
         print(f"✅ Autenticação funcionando")
         
