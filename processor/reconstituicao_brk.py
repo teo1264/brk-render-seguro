@@ -15,17 +15,18 @@ import os
 import sys
 from datetime import datetime
 
-# ✅ REUTILIZAR: Imports dos módulos que JÁ FUNCIONAM
+# ✅ IMPORTS SIMPLIFICADOS (corrigido)
 try:
-    from email_processor import EmailProcessor
-    from database_brk import DatabaseBRK
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from auth.microsoft_auth import MicrosoftAuth
+    from .email_processor import EmailProcessor
+    from .database_brk import DatabaseBRK
 except ImportError:
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from processor.email_processor import EmailProcessor
     from processor.database_brk import DatabaseBRK
-    from auth.microsoft_auth import MicrosoftAuth
+
+# Auth sempre absoluto
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from auth.microsoft_auth import MicrosoftAuth
 
 
 def reconstituir_base_brk_lotes(auth_manager, offset=0, limit_lote=10):
@@ -375,20 +376,20 @@ def obter_estatisticas_pre_reconstituicao(auth_manager):
 
 
 def gerar_interface_web_lotes(estatisticas, progresso=None, inicializacao=None):
-    # Se há resultado de inicialização, mostrar tela de sucesso
-    if inicializacao and inicializacao.get('status') == 'sucesso':
-        return _gerar_interface_inicializacao_sucesso(inicializacao)   
-    
     """
     🆕 INTERFACE NOVA: Interface web para processamento em lotes.
     
     Args:
         estatisticas (dict): Estatísticas do sistema
         progresso (dict): Progresso atual (se existir)
+        inicializacao (dict): Resultado da inicialização (se existir)
         
     Returns:
         str: HTML da interface em lotes
     """
+    # Se há resultado de inicialização, mostrar tela de sucesso
+    if inicializacao and inicializacao.get('status') == 'sucesso':
+        return _gerar_interface_inicializacao_sucesso(inicializacao)
     
     pasta_stats = estatisticas.get('pasta_brk', {})
     db_stats = estatisticas.get('database_atual', {})
@@ -662,6 +663,7 @@ def gerar_resultado_final_lotes(resultado):
     
     return html
 
+
 def _gerar_interface_inicializacao_sucesso(resultado):
     """Interface de sucesso da inicialização"""
     total_emails = resultado.get('total_emails', 0)
@@ -680,6 +682,8 @@ def _gerar_interface_inicializacao_sucesso(resultado):
         <button type="submit">🚀 PROCESSAR PRIMEIROS 10 EMAILS</button>
     </form>
     </div></body></html>"""
+
+
 # ============================================================================
 # FUNÇÕES DE COMPATIBILIDADE (manter originais funcionando)
 # ============================================================================
