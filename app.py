@@ -12,7 +12,12 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, redirect, session, render_template_string
 import logging
 try:
-    from processor.reconstituicao_brk import executar_reconstituicao_simples, obter_estatisticas_pre_reconstituicao, gerar_interface_web_simples, gerar_resultado_final
+    from processor.reconstituicao_brk import (
+        executar_reconstituicao_simples, obter_estatisticas_pre_reconstituicao, 
+        gerar_interface_web_simples, gerar_resultado_final,
+        executar_reconstituicao_lote, inicializar_reconstituicao_primeira_vez,
+        gerar_interface_web_lotes, gerar_resultado_final_lotes
+    )
     RECONSTITUICAO_DISPONIVEL = True
 except ImportError:
     RECONSTITUICAO_DISPONIVEL = False
@@ -990,12 +995,11 @@ def _executar_delete_flask_seguro(engine, tabela, registro_atual, registro):
 # BLOCO 3/3 - INTEGRAÇÃO NO APP.PY - MÍNIMA E LIMPA
 # ADICIONAR apenas 2 linhas no topo + 2 rotas simples no final
 # ============================================================================
-
+# PROCURAR e SUBSTITUIR toda esta função:
 @app.route('/reconstituicao-brk')
 def reconstituicao_brk():
     """
-    🔄 Interface para Reconstituição Total da Base BRK.
-    Página simples com confirmação.
+    🔄 Interface para Reconstituição Total da Base BRK - VERSÃO EM LOTES.
     """
     if not RECONSTITUICAO_DISPONIVEL:
         return jsonify({"erro": "Módulo reconstituição indisponível"}), 503
@@ -1004,43 +1008,87 @@ def reconstituicao_brk():
         return redirect('/login')
     
     try:
-        # ✅ USAR função existente para estatísticas
         estatisticas = obter_estatisticas_pre_reconstituicao(auth_manager)
         
         if estatisticas.get('status') != 'sucesso':
             return f"<h1>Erro: {estatisticas.get('erro')}</h1><a href='/'>Voltar</a>"
         
-        # ✅ USAR função existente para interface
-        html_interface = gerar_interface_web_simples(estatisticas)
+        html_interface = gerar_interface_web_lotes(estatisticas)
         return html_interface
         
     except Exception as e:
         logger.error(f"Erro reconstituição interface: {e}")
         return f"<h1>Erro: {e}</h1><a href='/'>Voltar</a>", 500
-
-
-@app.route('/executar-reconstituicao', methods=['POST'])
-def executar_reconstituicao():
-    """
-    🚀 Executa reconstituição total - APENAS UMA LINHA DE CÓDIGO NOVO.
-    """
-    if not RECONSTITUICAO_DISPONIVEL:
-        return jsonify({"erro": "Módulo indisponível"}), 503
+# ADICIONAR esta função nova antes do "if __name__ == '__main__':"
+def _renderizar_inicializacao_sucesso(resultado):
+    total_emails = resultado.get('total_emails', 0)
+    lotes_necessarios = resultado.get('lotes_necessarios', 0)
     
-    if not auth_manager or not auth_manager.access_token:
-        return redirect('/login')
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+        <title>✅ Reconstituição Inicializada</title>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: Arial; margin: 40px; background: #f5f5f5; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }}
+            .success {{ background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; margin: 20px 0; }}
+            .button {{ background: #007bff; color: white; padding: 15px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 10px 5px; text-decoration: none; display: inline-block; }}
+            .button:hover {{ background: #0056b3; }}
+            .button-secondary {{ background: #6c757d; }}
+            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }}
+            .stat-card {{ background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>✅ Reconstituição Inicializada com Sucesso!</h1>
+            
+            <div class="success">
+                <h3>📊 Preparação Concluída:</h3>
+                <p><strong>✅ Backup OneDrive:</strong> {'Realizado' if resultado.get('backup_realizado') else 'Falhou'}</p>
+                <p><strong>🗑️ Tabela resetada:</strong> Todos os registros removidos</p>
+                <p><strong>📧 Emails encontrados:</strong> {total_emails:,}</p>
+            </div>
+            
+            <h3>📋 Plano de Processamento:</h3>
+            <div class="stats">
+                <div class="stat-card">
+                    <h4>📧 Por Lote</h4>
+                    <p><strong>10</strong> emails</p>
+                </div>
+                <div class="stat-card">
+                    <h4>📊 Total Lotes</h4>
+                    <p><strong>{lotes_necessarios}</strong> lotes</p>
+                </div>
+                <div class="stat-card">
+                    <h4>⏱️ Tempo Estimado</h4>
+                    <p><strong>~{lotes_necessarios * 15}s</strong> total</p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <form method="post" action="/executar-reconstituicao">
+                    <input type="hidden" name="acao" value="continuar">
+                    <input type="hidden" name="offset" value="0">
+                    <button type="submit" class="button">
+                        🚀 PROCESSAR PRIMEIROS 10 EMAILS
+                    </button>
+                </form>
+                <a href="/reconstituicao-brk" class="button button-secondary">🔙 Cancelar</a>
+            </div>
+            
+            <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-top: 20px;">
+                <small><strong>💡 Dica:</strong> Cada lote demora ~10-15 segundos. Continue clicando para processar todos os emails.</small>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
     
-    try:
-        # ✅ USAR função existente - UMA LINHA SÓ!
-        resultado = executar_reconstituicao_simples(auth_manager)
-        
-        # ✅ USAR função existente para resultado
-        html_resultado = gerar_resultado_final(resultado)
-        return html_resultado
-        
-    except Exception as e:
-        logger.error(f"Erro executando reconstituição: {e}")
-        return f"<h1>Erro: {e}</h1><a href='/'>Voltar</a>", 500
+    return html
+
 
 # ============================================================================
 # 3. OPCIONAL: ADICIONAR LINK NO DASHBOARD PRINCIPAL
