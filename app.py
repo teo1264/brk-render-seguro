@@ -23,7 +23,9 @@ try:
     print("✅ RECONSTITUIÇÃO: Importação bem-sucedida")
 except ImportError as e:
     print(f"❌ RECONSTITUIÇÃO: Erro import: {e}")
-    RECONSTITUICAO_DISPONIVEL = Falsefrom auth.microsoft_auth import MicrosoftAuth
+    RECONSTITUICAO_DISPONIVEL = False
+
+from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
 from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico
 # NOVO: Import scheduler BRK
