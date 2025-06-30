@@ -141,7 +141,8 @@ class ExcelGeneratorBRK:
                     • Dados da tabela faturas_brk (já processados)<br>
                     • PIA separada das demais casas<br>
                     • Casas faltantes detectadas automaticamente<br>
-                    • Planilha salva no OneDrive /BRK/Faturas/
+                    • Planilha será salva no OneDrive /BRK/Faturas/<br>
+                    • Seção de controle para duplicatas (se houver)
                 </div>
             </div>
         </body>
@@ -163,13 +164,16 @@ class ExcelGeneratorBRK:
             # Nome do arquivo
             nome_arquivo = f"BRK-Planilha-{ano}-{mes:02d}.xlsx"
             
-            # Retornar download
-            return send_file(
-                io.BytesIO(excel_bytes),
-                as_attachment=True,
-                download_name=nome_arquivo,
-                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
+            # SALVAR APENAS NO ONEDRIVE (sem download)
+            try:
+                self._salvar_onedrive_background(excel_bytes, mes, ano)
+                
+                # Página de sucesso
+                return self._render_sucesso(mes, ano, nome_arquivo)
+                
+            except Exception as e:
+                logger.error(f"Erro salvando OneDrive: {e}")
+                return jsonify({"erro": f"Erro salvando no OneDrive: {e}"}), 500
             
         except Exception as e:
             logger.error(f"Erro _processar_geracao: {e}")
@@ -192,42 +196,88 @@ class ExcelGeneratorBRK:
         except (ValueError, TypeError) as e:
             raise ValueError(f"Parâmetros inválidos: {e}")
     
+    def _render_sucesso(self, mes, ano, nome_arquivo):
+        """Página de sucesso após salvar no OneDrive"""
+        pasta_onedrive = f"/BRK/Faturas/{ano}/{mes:02d}/"
+        
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>✅ Planilha BRK Gerada</title>
+            <meta charset="utf-8">
+            <style>
+                body {{ font-family: Arial; margin: 40px; background: #f5f5f5; }}
+                .container {{ background: white; padding: 30px; border-radius: 10px; max-width: 600px; margin: 0 auto; }}
+                .success {{ color: #28a745; font-weight: bold; font-size: 18px; }}
+                .info {{ background: #e6f3ff; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+                .button {{ background: #2c5282; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; margin: 10px 5px; display: inline-block; }}
+                .button:hover {{ background: #2a4e7a; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>✅ Planilha BRK Gerada com Sucesso!</h2>
+                
+                <div class="success">
+                    📊 Relatório de {self.mes_nomes[mes]}/{ano} processado
+                </div>
+                
+                <div class="info">
+                    <strong>📁 Arquivo salvo no OneDrive:</strong><br>
+                    <code>{pasta_onedrive}{nome_arquivo}</code><br><br>
+                    
+                    <strong>📋 Conteúdo da planilha:</strong><br>
+                    • PIA separada (Conta Bancária A)<br>
+                    • Casas de Oração agrupadas por vencimento (Conta Bancária B)<br>
+                    • Casas faltantes detectadas automaticamente<br>
+                    • Totais e subtotais calculados<br>
+                    • Seção de controle para duplicatas (se houver)
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="/gerar-planilha-brk" class="button">📊 Gerar Outra Planilha</a>
+                    <a href="/" class="button">🏠 Dashboard</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return html
+    
     def gerar_planilha_mensal(self, mes, ano):
         """MÉTODO PRINCIPAL: Gerar planilha Excel do período"""
         try:
             logger.info(f"Iniciando geração Excel {mes}/{ano}")
             
-            # 1. BUSCAR DADOS PRONTOS da faturas_brk (NORMAL)
-            faturas_normais = self._buscar_faturas_prontas(mes, ano, status='NORMAL')
+            # 1. BUSCAR DADOS NORMAIS da faturas_brk
+            faturas_normais = self._buscar_faturas_prontas(mes, ano)
             logger.info(f"Faturas NORMAIS: {len(faturas_normais)}")
             
-            # 2. BUSCAR OUTROS STATUS (DUPLICATA, CUIDADO, etc.)
-            faturas_outros_status = self._buscar_faturas_prontas(mes, ano, status='OUTROS')
-            logger.info(f"Faturas outros status: {len(faturas_outros_status)}")
-            
-            # 3. CARREGAR BASE COMPLETA OneDrive (para casas faltantes)
+            # 2. CARREGAR BASE COMPLETA OneDrive (para casas faltantes)
             base_completa = self._carregar_base_onedrive()
             logger.info(f"Casas na base OneDrive: {len(base_completa)}")
             
-            # 4. DETECTAR CASAS FALTANTES (baseado nas NORMAIS)
+            # 3. DETECTAR CASAS FALTANTES
             casas_faltantes = self._detectar_casas_faltantes(faturas_normais, base_completa, mes, ano)
             logger.info(f"Casas faltantes: {len(casas_faltantes)}")
             
-            # 5. COMBINAR: faturas normais + faltantes
-            dados_normais_completos = faturas_normais + casas_faltantes
+            # 4. COMBINAR: faturas normais + faltantes
+            dados_completos = faturas_normais + casas_faltantes
             
-            # 6. SEPARAR PIA das demais casas (NORMAIS)
-            dados_pia, dados_casas = self._separar_pia_casas(dados_normais_completos)
-            logger.info(f"PIAs NORMAIS: {len(dados_pia)}, Casas NORMAIS: {len(dados_casas)}")
+            # 5. SEPARAR PIA das demais casas
+            dados_pia, dados_casas = self._separar_pia_casas(dados_completos)
+            logger.info(f"PIAs: {len(dados_pia)}, Casas: {len(dados_casas)}")
             
-            # 7. GERAR EXCEL FORMATADO (com seção adicional para outros status)
-            excel_bytes = self._gerar_excel_formatado_completo(dados_pia, dados_casas, faturas_outros_status, mes, ano)
-            
-            # 8. SALVAR NO ONEDRIVE (background)
+            # 6. BUSCAR OUTROS STATUS (simples, separado)
             try:
-                self._salvar_onedrive_background(excel_bytes, mes, ano)
-            except Exception as e:
-                logger.warning(f"Upload OneDrive falhou (não crítico): {e}")
+                faturas_outros = self._buscar_outros_status_simples(mes, ano)
+                logger.info(f"Outros status: {len(faturas_outros)}")
+            except:
+                faturas_outros = []
+            
+            # 7. GERAR EXCEL FORMATADO
+            excel_bytes = self._gerar_excel_com_controle(dados_pia, dados_casas, faturas_outros, mes, ano)
             
             logger.info(f"Planilha gerada: {len(excel_bytes)} bytes")
             return excel_bytes
@@ -236,8 +286,8 @@ class ExcelGeneratorBRK:
             logger.error(f"Erro gerar_planilha_mensal: {e}")
             raise
     
-    def _buscar_faturas_prontas(self, mes, ano, status='NORMAL'):
-        """BUSCAR DADOS PRONTOS da tabela faturas_brk"""
+    def _buscar_faturas_prontas(self, mes, ano):
+        """BUSCAR DADOS NORMAIS da tabela faturas_brk (função original)"""
         try:
             # Usar DatabaseBRK existente (sistema já configurado)
             from processor.database_brk import DatabaseBRK
@@ -255,28 +305,16 @@ class ExcelGeneratorBRK:
             
             conn.row_factory = sqlite3.Row
             
-            # Query baseada no status solicitado
-            if status == 'NORMAL':
-                query = """
-                    SELECT * FROM faturas_brk 
-                    WHERE competencia LIKE ? 
-                    AND vencimento LIKE ?
-                    AND status_duplicata = 'NORMAL'
-                    ORDER BY vencimento, casa_oracao
-                """
-                params = (f"%/{ano}", f"__/{mes:02d}/%")
-                logger.info(f"✅ Buscando faturas NORMAIS")
-                
-            elif status == 'OUTROS':
-                query = """
-                    SELECT * FROM faturas_brk 
-                    WHERE competencia LIKE ? 
-                    AND vencimento LIKE ?
-                    AND status_duplicata != 'NORMAL'
-                    ORDER BY status_duplicata, vencimento, casa_oracao
-                """
-                params = (f"%/{ano}", f"__/{mes:02d}/%")
-                logger.info(f"✅ Buscando faturas com outros status")
+            # Query SIMPLES nos dados NORMAIS (como era antes)
+            query = """
+                SELECT * FROM faturas_brk 
+                WHERE competencia LIKE ? 
+                AND vencimento LIKE ?
+                AND status_duplicata = 'NORMAL'
+                ORDER BY vencimento, casa_oracao
+            """
+            
+            params = (f"%/{ano}", f"__/{mes:02d}/%")
             
             cursor = conn.execute(query, params)
             resultados = cursor.fetchall()
@@ -287,11 +325,52 @@ class ExcelGeneratorBRK:
                 fatura = dict(row)
                 faturas.append(fatura)
             
-            logger.info(f"✅ Dados {status}: {len(faturas)} registros")
+            logger.info(f"✅ Dados NORMAIS: {len(faturas)} registros")
             return faturas
             
         except Exception as e:
-            logger.error(f"Erro _buscar_faturas_prontas({status}): {e}")
+            logger.error(f"Erro _buscar_faturas_prontas: {e}")
+            raise
+    
+    def _buscar_outros_status_simples(self, mes, ano):
+        """Buscar apenas outros status (DUPLICATA, CUIDADO, etc.) - SIMPLES"""
+        try:
+            from processor.database_brk import DatabaseBRK
+            
+            onedrive_brk_id = os.getenv("ONEDRIVE_BRK_ID")
+            db = DatabaseBRK(self.auth, onedrive_brk_id)
+            conn = db.get_connection()
+            
+            if not conn:
+                return []
+            
+            conn.row_factory = sqlite3.Row
+            
+            # Query SIMPLES para outros status
+            query = """
+                SELECT * FROM faturas_brk 
+                WHERE competencia LIKE ? 
+                AND vencimento LIKE ?
+                AND status_duplicata != 'NORMAL'
+                ORDER BY status_duplicata, casa_oracao
+            """
+            
+            params = (f"%/{ano}", f"__/{mes:02d}/%")
+            
+            cursor = conn.execute(query, params)
+            resultados = cursor.fetchall()
+            
+            # Converter para lista de dicts
+            outros = []
+            for row in resultados:
+                outro = dict(row)
+                outros.append(outro)
+            
+            return outros
+            
+        except Exception as e:
+            logger.warning(f"Erro buscando outros status: {e}")
+            return []car_faturas_prontas({status}): {e}")
             raise
     
     def _carregar_base_onedrive(self):
@@ -425,7 +504,45 @@ class ExcelGeneratorBRK:
         casa = registro.get("casa_oracao", "").upper()
         return casa == "PIA"
     
-    def _gerar_excel_formatado_completo(self, dados_pia, dados_casas, faturas_outros_status, mes, ano):
+    def _gerar_excel_com_controle(self, dados_pia, dados_casas, faturas_outros, mes, ano):
+        """Gerar Excel formatado com seção de controle no final"""
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = f"BRK {self.mes_nomes[mes]} {ano}"
+            
+            linha_atual = 1
+            
+            # SEÇÃO PRINCIPAL: APENAS NORMAIS
+            # Título principal
+            linha_atual = self._adicionar_titulo_principal(ws, linha_atual, mes, ano)
+            
+            # Seção PIA (NORMAIS)
+            linha_atual = self._adicionar_secao_pia(ws, linha_atual, dados_pia)
+            
+            # Seção Casas agrupadas por vencimento (NORMAIS)
+            linha_atual = self._adicionar_secao_casas(ws, linha_atual, dados_casas)
+            
+            # Totais finais (NORMAIS)
+            linha_atual = self._adicionar_totais_finais(ws, linha_atual, dados_pia, dados_casas)
+            
+            # SEÇÃO ADICIONAL: OUTROS STATUS (se existirem)
+            if faturas_outros:
+                linha_atual = self._adicionar_secao_controle_simples(ws, linha_atual + 3, faturas_outros)
+            
+            # Formatação geral
+            self._aplicar_formatacao_geral(ws)
+            
+            # Salvar em bytes
+            excel_buffer = io.BytesIO()
+            wb.save(excel_buffer)
+            excel_buffer.seek(0)
+            
+            return excel_buffer.read()
+            
+        except Exception as e:
+            logger.error(f"Erro _gerar_excel_com_controle: {e}")
+            raise
         """Gerar Excel formatado com seção adicional para outros status"""
         try:
             wb = openpyxl.Workbook()
@@ -674,7 +791,51 @@ class ExcelGeneratorBRK:
                 if cell.value:
                     cell.border = thin_border
     
-    def _adicionar_secao_outros_status(self, ws, linha_inicial, faturas_outros_status):
+    def _adicionar_secao_controle_simples(self, ws, linha_inicial, faturas_outros):
+        """Seção simples de controle para outros status"""
+        linha = linha_inicial
+        
+        # Cabeçalho simples
+        ws.merge_cells(f"A{linha}:L{linha}")
+        ws[f"A{linha}"] = f"=== CONTROLE: {len(faturas_outros)} FATURAS COM STATUS ESPECIAL ==="
+        ws[f"A{linha}"].font = Font(bold=True, color="FFFFFF")
+        ws[f"A{linha}"].fill = PatternFill(start_color="FF6600", end_color="FF6600", fill_type="solid")
+        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
+        linha += 1
+        
+        # Explicação
+        ws.merge_cells(f"A{linha}:L{linha}")
+        ws[f"A{linha}"] = "⚠️ Faturas abaixo NÃO estão incluídas nos totais acima"
+        ws[f"A{linha}"].font = Font(bold=True, italic=True, color="FF6600")
+        ws[f"A{linha}"].alignment = Alignment(horizontal="center")
+        linha += 2
+        
+        # Headers simples
+        headers = ["CDC", "Casa de Oração", "Competência", "Vencimento", "Valor", "Status", "Observação"]
+        for col, header in enumerate(headers, 1):
+            ws.cell(row=linha, column=col, value=header)
+            ws.cell(row=linha, column=col).font = Font(bold=True, size=9)
+            ws.cell(row=linha, column=col).fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+        linha += 1
+        
+        # Dados simples
+        for fatura in faturas_outros:
+            ws[f"A{linha}"] = fatura.get("cdc", "")
+            ws[f"B{linha}"] = fatura.get("casa_oracao", "")
+            ws[f"C{linha}"] = fatura.get("competencia", "")
+            ws[f"D{linha}"] = fatura.get("vencimento", "")
+            ws[f"E{linha}"] = fatura.get("valor", "")
+            ws[f"F{linha}"] = fatura.get("status_duplicata", "")
+            ws[f"G{linha}"] = "Verificar manualmente"
+            
+            # Cor de fundo leve
+            for col in range(1, 8):
+                cell = ws.cell(row=linha, column=col)
+                cell.fill = PatternFill(start_color="FFF8DC", end_color="FFF8DC", fill_type="solid")
+            
+            linha += 1
+        
+        return linha
         """Adicionar seção final com outros status (DUPLICATA, CUIDADO, etc.)"""
         linha = linha_inicial
         
@@ -765,12 +926,12 @@ class ExcelGeneratorBRK:
         return cores.get(status, "666666")  # Cinza padrão
     
     def _salvar_onedrive_background(self, excel_bytes, mes, ano):
-        """Salvar no OneDrive"""
+        """Salvar no OneDrive de forma síncrona"""
         try:
             nome_arquivo = f"BRK-Planilha-{ano}-{mes:02d}.xlsx"
             pasta_destino = f"/BRK/Faturas/{ano}/{mes:02d}/"
             
-            logger.info(f"Upload OneDrive: {nome_arquivo}")
+            logger.info(f"Salvando no OneDrive: {nome_arquivo}")
             
             headers = self.auth.obter_headers_autenticados()
             url = f"https://graph.microsoft.com/v1.0/me/drive/root:{pasta_destino}{nome_arquivo}:/content"
@@ -781,12 +942,15 @@ class ExcelGeneratorBRK:
             response = requests.put(url, headers=upload_headers, data=excel_bytes, timeout=60)
             
             if response.status_code in [200, 201]:
-                logger.info(f"✅ Upload OneDrive concluído: {nome_arquivo}")
+                logger.info(f"✅ Planilha salva no OneDrive: {pasta_destino}{nome_arquivo}")
+                return True
             else:
-                logger.error(f"❌ Upload falhou: HTTP {response.status_code}")
+                logger.error(f"❌ Erro salvando no OneDrive: HTTP {response.status_code}")
+                raise Exception(f"Erro HTTP {response.status_code}")
                 
         except Exception as e:
-            logger.error(f"Erro upload OneDrive: {e}")
+            logger.error(f"Erro salvando OneDrive: {e}")
+            raise
 
 
 # Job automático
