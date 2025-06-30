@@ -1130,7 +1130,7 @@ def executar_reconstituicao():
     except Exception as e:
         logger.error(f"Erro executar reconstituição: {e}")
         return f"<h1>Erro: {e}</h1><a href='/reconstituicao-brk'>Voltar</a>", 500
-============================================================================
+# ============================================================================
 # 3. OPCIONAL: ADICIONAR LINK NO DASHBOARD PRINCIPAL
 # Na rota '/' existente, adicionar uma linha no HTML:
 # ============================================================================
