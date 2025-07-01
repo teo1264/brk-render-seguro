@@ -1548,23 +1548,8 @@ def recarregar_relacionamento_manual(self, forcar=False):
                     "max_tentativas": self.max_tentativas,
                     "onedrive_configurado": bool(self.onedrive_brk_id),
                     "pasta_emails_configurada": bool(self.pasta_brk_id)
-                },
-                "relacionamento": {
-                    "status": "✅ Ativo" if self.relacionamento_carregado else "❌ Inativo",
-                    "registros_totais": len(self.cdc_brk_vetor),
-                    "amostra_cdcs": self.cdc_brk_vetor[:5] if len(self.cdc_brk_vetor) >= 5 else self.cdc_brk_vetor,
-                    "amostra_casas": self.casa_oracao_vetor[:5] if len(self.casa_oracao_vetor) >= 5 else self.casa_oracao_vetor
-                },
-                "configuracao": {
-                    "pasta_emails_id": f"{self.pasta_brk_id[:10]}******" if self.pasta_brk_id else "N/A",
-                    "onedrive_brk_id": f"{self.onedrive_brk_id[:15]}******" if self.onedrive_brk_id else "N/A",
-                    "autenticacao_ativa": bool(self.auth.access_token)
                 }
             }
-            
-            # Análise de cobertura (se relacionamento ativo)
-            if self.relacionamento_carregado and len(self.cdc_brk_vetor) > 0:
-                stats["cobertura"] = self._analisar_cobertura_relacionamento()
             
             return stats
             
