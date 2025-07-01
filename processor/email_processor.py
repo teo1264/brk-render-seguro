@@ -2687,6 +2687,264 @@ def recarregar_relacionamento_manual(self, forcar=False):
             return None
 
 # ============================================================================
+    # MÉTODOS PERÍODO ESPECÍFICO - FUNCIONALIDADE PRINCIPAL (FALTOU NO BLOCO 5!)
+    # ============================================================================
+
+    def buscar_emails_periodo(self, data_inicio, data_fim):
+        """
+        Busca emails em período específico usando Microsoft Graph API.
+        REUTILIZA: Infraestrutura existente buscar_emails_novos()
+        
+        Args:
+            data_inicio (str): Data início formato 'YYYY-MM-DD'
+            data_fim (str): Data fim formato 'YYYY-MM-DD'
+            
+        Returns:
+            List[Dict]: Lista de emails do período (formato compatível)
+        """
+        try:
+            print(f"\n📅 BUSCA POR PERÍODO: {data_inicio} até {data_fim}")
+            
+            # ✅ VALIDAÇÃO PERÍODO
+            try:
+                inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d')
+                fim_dt = datetime.strptime(data_fim, '%Y-%m-%d')
+            except ValueError as e:
+                print(f"❌ Formato de data inválido: {e}")
+                return []
+            
+            if inicio_dt > fim_dt:
+                print(f"❌ Data início deve ser anterior à data fim")
+                return []
+            
+            diferenca_dias = (fim_dt - inicio_dt).days + 1
+            if diferenca_dias > 14:
+                print(f"❌ Período muito longo: {diferenca_dias} dias (máximo: 14)")
+                return []
+            
+            print(f"✅ Período válido: {diferenca_dias} dia(s)")
+            
+            # ✅ REUTILIZAR AUTENTICAÇÃO EXISTENTE
+            if not self.garantir_autenticacao():
+                print(f"❌ Falha na autenticação")
+                return []
+            
+            headers = self.auth.obter_headers_autenticados()
+            if not headers:
+                print(f"❌ Headers de autenticação indisponíveis")
+                return []
+            
+            # ✅ CONVERTER DATAS PARA FILTRO MICROSOFT GRAPH
+            # Formato ISO 8601 requerido pela API Microsoft
+            data_inicio_iso = f"{data_inicio}T00:00:00Z"
+            data_fim_iso = f"{data_fim}T23:59:59Z"
+            
+            print(f"🔍 Filtro API: {data_inicio_iso} até {data_fim_iso}")
+            
+            # ✅ REUTILIZAR ESTRUTURA buscar_emails_novos()
+            url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{self.pasta_brk_id}/messages"
+            params = {
+                "$filter": f"receivedDateTime ge {data_inicio_iso} and receivedDateTime le {data_fim_iso}",
+                "$expand": "attachments",
+                "$orderby": "receivedDateTime desc",
+                "$top": "100"  # Limite maior para períodos
+            }
+            
+            print(f"📧 Consultando pasta BRK...")
+            response = requests.get(url, headers=headers, params=params, timeout=60)
+            
+            # ✅ REUTILIZAR RENOVAÇÃO TOKEN (mesmo padrão buscar_emails_novos)
+            if response.status_code == 401:
+                print(f"🔄 Token expirado, renovando...")
+                if self.auth.atualizar_token():
+                    headers = self.auth.obter_headers_autenticados()
+                    response = requests.get(url, headers=headers, params=params, timeout=60)
+                else:
+                    print(f"❌ Falha na renovação do token")
+                    return []
+            
+            if response.status_code == 200:
+                emails_data = response.json()
+                emails = emails_data.get('value', [])
+                
+                print(f"✅ Emails encontrados no período: {len(emails)}")
+                
+                # ✅ LOG RESUMO (mesmo padrão existente)
+                if emails:
+                    primeiro = emails[0].get('receivedDateTime', '')[:10]
+                    ultimo = emails[-1].get('receivedDateTime', '')[:10] if len(emails) > 1 else primeiro
+                    print(f"📊 Período real dos emails: {ultimo} até {primeiro}")
+                
+                return emails
+            else:
+                print(f"❌ Erro API Microsoft: HTTP {response.status_code}")
+                if response.status_code == 403:
+                    print(f"   💡 Verifique permissões da pasta BRK")
+                return []
+                
+        except Exception as e:
+            print(f"❌ Erro buscando emails por período: {e}")
+            return []
+
+    def processar_emails_periodo_completo(self, data_inicio, data_fim):
+        """
+        Processa emails de período específico REUTILIZANDO toda infraestrutura existente.
+        REUTILIZA: extrair_pdfs_do_email() + database + upload + logs completos
+        
+        Args:
+            data_inicio (str): Data início formato 'YYYY-MM-DD'
+            data_fim (str): Data fim formato 'YYYY-MM-DD'
+            
+        Returns:
+            Dict: Resultado completo (formato compatível com processar_emails_completo_com_database)
+        """
+        try:
+            print(f"\n🔄 PROCESSAMENTO PERÍODO COMPLETO: {data_inicio} até {data_fim}")
+            print(f"="*70)
+            
+            # ✅ ETAPA 1: BUSCAR EMAILS DO PERÍODO (usando método novo)
+            emails = self.buscar_emails_periodo(data_inicio, data_fim)
+            
+            if not emails:
+                return {
+                    "status": "sucesso",
+                    "mensagem": f"Nenhum email encontrado no período {data_inicio} até {data_fim}",
+                    "emails_processados": 0,
+                    "pdfs_extraidos": 0,
+                    "periodo": {
+                        "data_inicio": data_inicio,
+                        "data_fim": data_fim,
+                        "total_emails": 0
+                    },
+                    "database_brk": {"integrado": bool(self.database_brk)},
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            # ✅ VERIFICAR DatabaseBRK (mesmo padrão existente)
+            database_ativo = bool(self.database_brk)
+            if database_ativo:
+                print(f"✅ DatabaseBRK ativo - faturas serão salvas automaticamente")
+            else:
+                print(f"⚠️ DatabaseBRK não disponível - apenas extração")
+            
+            # ✅ VERIFICAR RELACIONAMENTO (mesmo padrão existente)
+            relacionamento_ok = self.garantir_relacionamento_carregado()
+            if relacionamento_ok:
+                print(f"✅ Relacionamento disponível: {len(self.cdc_brk_vetor)} registros")
+            else:
+                print(f"⚠️ Relacionamento não disponível - processará apenas dados básicos")
+            
+            # ✅ ETAPA 2: PROCESSAR EMAILS (REUTILIZANDO TUDO)
+            print(f"\n📧 PROCESSANDO {len(emails)} EMAILS DO PERÍODO...")
+            
+            # Contadores (mesmo padrão processar_emails_novos)
+            emails_processados = 0
+            pdfs_extraidos = 0
+            faturas_salvas = 0
+            faturas_duplicatas = 0
+            faturas_cuidado = 0
+            upload_onedrive_sucessos = 0
+            
+            for i, email in enumerate(emails, 1):
+                try:
+                    email_subject = email.get('subject', 'Sem assunto')[:50]
+                    email_date = email.get('receivedDateTime', '')[:10]
+                    print(f"\n📧 Processando email {i}/{len(emails)}: {email_date} - {email_subject}")
+                    
+                    # ✅ REUTILIZAR EXTRAÇÃO COMPLETA (método existente)
+                    pdfs_dados = self.extrair_pdfs_do_email(email)
+                    
+                    if pdfs_dados:
+                        pdfs_extraidos += len(pdfs_dados)
+                        print(f"📎 {len(pdfs_dados)} PDF(s) extraído(s)")
+                        
+                        # ✅ CONTAR RESULTADOS DATABASE + UPLOAD (mesmo padrão)
+                        for pdf_data in pdfs_dados:
+                            if pdf_data.get('database_salvo', False):
+                                status = pdf_data.get('database_status', 'NORMAL')
+                                if status == 'NORMAL':
+                                    faturas_salvas += 1
+                                elif status == 'DUPLICATA':
+                                    faturas_duplicatas += 1
+                                elif status == 'CUIDADO':
+                                    faturas_cuidado += 1
+                            
+                            # Contar uploads OneDrive
+                            if pdf_data.get('onedrive_upload', False):
+                                upload_onedrive_sucessos += 1
+                        
+                        # ✅ REUTILIZAR LOG CONSOLIDADO (método existente)
+                        if hasattr(self, 'log_consolidado_email'):
+                            self.log_consolidado_email(email, pdfs_dados)
+                    else:
+                        print(f"📭 Nenhum PDF encontrado")
+                    
+                    emails_processados += 1
+                    
+                except Exception as e:
+                    print(f"❌ Erro processando email {i}: {e}")
+                    continue
+            
+            # ✅ ETAPA 3: RESULTADO COMPLETO (formato compatível)
+            print(f"\n✅ PROCESSAMENTO PERÍODO CONCLUÍDO:")
+            print(f"   📧 Emails processados: {emails_processados}")
+            print(f"   📎 PDFs extraídos: {pdfs_extraidos}")
+            if database_ativo:
+                print(f"   💾 Faturas novas (NORMAL): {faturas_salvas}")
+                print(f"   🔄 Duplicatas detectadas: {faturas_duplicatas}")
+                print(f"   ⚠️ Requer atenção (CUIDADO): {faturas_cuidado}")
+                print(f"   ☁️ Upload OneDrive sucessos: {upload_onedrive_sucessos}")
+            print(f"="*70)
+            
+            # ✅ RETORNO COMPATÍVEL (mesmo formato processar_emails_novos)
+            return {
+                "status": "sucesso",
+                "mensagem": f"Processamento período {data_inicio} até {data_fim} finalizado",
+                "processamento": {
+                    "emails_processados": emails_processados,
+                    "pdfs_extraidos": pdfs_extraidos,
+                    "periodo_especifico": True,
+                    "data_inicio": data_inicio,
+                    "data_fim": data_fim,
+                    "total_emails_periodo": len(emails)
+                },
+                "database_brk": {
+                    "integrado": database_ativo,
+                    "faturas_salvas": faturas_salvas,
+                    "faturas_duplicatas": faturas_duplicatas,
+                    "faturas_cuidado": faturas_cuidado,
+                    "total_database": faturas_salvas + faturas_duplicatas + faturas_cuidado
+                },
+                "onedrive": {
+                    "uploads_sucessos": upload_onedrive_sucessos,
+                    "uploads_ativos": upload_onedrive_sucessos > 0
+                },
+                "periodo": {
+                    "data_inicio": data_inicio,
+                    "data_fim": data_fim,
+                    "total_emails": len(emails),
+                    "emails_processados": emails_processados
+                },
+                "relacionamento": {
+                    "ativo": relacionamento_ok,
+                    "total_registros": len(self.cdc_brk_vetor) if relacionamento_ok else 0
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro no processamento período completo: {e}")
+            return {
+                "status": "erro",
+                "erro": str(e),
+                "periodo": {
+                    "data_inicio": data_inicio,
+                    "data_fim": data_fim
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        
+# ============================================================================
 # 🎉 EMAILPROCESSOR COMPLETO SEM PANDAS FINALIZADO COM MÉTODOS PERÍODO!
 # 
 # TOTAL DE FUNCIONALIDADES:
