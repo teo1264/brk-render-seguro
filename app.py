@@ -12,19 +12,6 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, redirect, session, render_template_string
 import logging
 # Imports dos módulos (que já funcionam)
-try:
-    import processor.reconstituicao_brk as reconst
-    from processor.reconstituicao_brk import (
-        obter_estatisticas_pre_reconstituicao,
-        gerar_interface_web_lotes, gerar_resultado_final_lotes,
-        executar_reconstituicao_lote, inicializar_reconstituicao_primeira_vez
-    )
-    RECONSTITUICAO_DISPONIVEL = True
-    print("✅ RECONSTITUIÇÃO: Importação bem-sucedida")
-except ImportError as e:
-    print(f"❌ RECONSTITUIÇÃO: Erro import: {e}")
-    RECONSTITUICAO_DISPONIVEL = False
-
 from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
 from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico
@@ -233,6 +220,15 @@ def processar_emails_novos():
             return jsonify({"erro": "Token não disponível"}), 401
         
         data = request.get_json() or {}
+        
+        # 🆕 DETECÇÃO INTELIGENTE: Período específico ou dias atrás?
+        if 'data_inicio' in data and 'data_fim' in data:
+            # USAR MÉTODO NOVO: período específico (resolve timeout)
+            processor = EmailProcessor(auth_manager)
+            resultado = processor.processar_emails_periodo_completo(data['data_inicio'], data['data_fim'])
+            return jsonify(resultado)
+        
+        # FORMATO ANTIGO: continuar com dias_atras (compatibilidade 100%)
         dias_atras = data.get('dias_atras', 1)
         
         processor = EmailProcessor(auth_manager)
@@ -405,12 +401,35 @@ def processar_emails_form():
                 
                 <form id="processarForm">
                     <h3>📅 Período para Processar:</h3>
-                    <select id="diasAtras" class="input">
-                        <option value="1">Últimas 24 horas</option>
-                        <option value="2">Últimos 2 dias</option>
-                        <option value="7">Última semana</option>
-                        <option value="30">Último mês</option>
-                    </select>
+                    
+                    <!-- OPÇÕES PRÉ-DEFINIDAS -->
+                    <div style="margin: 10px 0;">
+                        <label style="display: block; margin: 5px 0;">
+                            <input type="radio" name="tipoProcessamento" value="predefinido" checked> 
+                            <strong>Períodos pré-definidos:</strong>
+                        </label>
+                        <select id="diasAtras" class="input" style="margin-left: 20px;">
+                            <option value="1">Últimas 24 horas</option>
+                            <option value="2">Últimos 2 dias</option>
+                            <option value="7">Última semana</option>
+                            <option value="14">Últimas 2 semanas (máximo seguro)</option>
+                        </select>
+                    </div>
+                    
+                    <!-- PERÍODO PERSONALIZADO -->
+                    <div style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                        <label style="display: block; margin: 5px 0;">
+                            <input type="radio" name="tipoProcessamento" value="personalizado"> 
+                            <strong>Período personalizado:</strong>
+                        </label>
+                        <div style="margin-left: 20px;">
+                            <label>Data início:</label>
+                            <input type="date" id="dataInicio" class="input" disabled>
+                            <label>Data fim:</label>
+                            <input type="date" id="dataFim" class="input" disabled>
+                            <div id="avisoPeríodo" style="color: #dc3545; font-size: 12px; margin-top: 5px;"></div>
+                        </div>
+                    </div>
                     
                     <br><br>
                     <button type="submit" class="button">🚀 Processar Emails</button>
@@ -421,10 +440,132 @@ def processar_emails_form():
             </div>
             
             <script>
+                <script>
+                // HABILITAR/DESABILITAR CAMPOS BASEADO NA SELEÇÃO
+                document.querySelectorAll('input[name="tipoProcessamento"]').forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        const isPersonalizado = this.value === 'personalizado';
+                        document.getElementById('diasAtras').disabled = isPersonalizado;
+                        document.getElementById('dataInicio').disabled = !isPersonalizado;
+                        document.getElementById('dataFim').disabled = !isPersonalizado;
+                        
+                        if (isPersonalizado) {
+                            // Sugerir período padrão (últimos 7 dias)
+                            const hoje = new Date();
+                            const semanaAtras = new Date(hoje);
+                            semanaAtras.setDate(hoje.getDate() - 7);
+                            
+                            document.getElementById('dataFim').value = hoje.toISOString().split('T')[0];
+                            document.getElementById('dataInicio').value = semanaAtras.toISOString().split('T')[0];
+                            validarPeriodo();
+                        }
+                    });
+                });
+                
+                // VALIDAR PERÍODO PERSONALIZADO
+                function validarPeriodo() {
+                    const dataInicio = document.getElementById('dataInicio').value;
+                    const dataFim = document.getElementById('dataFim').value;
+                    const avisoDiv = document.getElementById('avisoPeríodo');
+                    
+                    if (dataInicio && dataFim) {
+                        const inicio = new Date(dataInicio);
+                        const fim = new Date(dataFim);
+                        const diferenca = Math.ceil((fim - inicio) / (1000 * 60 * 60 * 24)) + 1;
+                        
+                        if (diferenca > 14) {
+                            avisoDiv.textContent = `⚠️ Período muito longo (${diferenca} dias). Máximo: 14 dias para evitar timeout.`;
+                            avisoDiv.style.color = '#dc3545';
+                            return false;
+                        } else if (diferenca <= 0) {
+                            avisoDiv.textContent = '⚠️ Data início deve ser anterior à data fim.';
+                            avisoDiv.style.color = '#dc3545';
+                            return false;
+                        } else {
+                            avisoDiv.textContent = `✅ Período válido: ${diferenca} dia(s)`;
+                            avisoDiv.style.color = '#28a745';
+                            return true;
+                        }
+                    }
+                    return true;
+                }
+                
+                // VALIDAR AO ALTERAR DATAS
+                document.getElementById('dataInicio').addEventListener('change', validarPeriodo);
+                document.getElementById('dataFim').addEventListener('change', validarPeriodo);
+                
+                // PROCESSAMENTO DO FORMULÁRIO
                 document.getElementById('processarForm').addEventListener('submit', async function(e) {
                     e.preventDefault();
                     
-                    const diasAtras = document.getElementById('diasAtras').value;
+                    const resultadoDiv = document.getElementById('resultado');
+                    const tipoProcessamento = document.querySelector('input[name="tipoProcessamento"]:checked').value;
+                    
+                    let dadosEnvio = {};
+                    
+                    if (tipoProcessamento === 'personalizado') {
+                        const dataInicio = document.getElementById('dataInicio').value;
+                        const dataFim = document.getElementById('dataFim').value;
+                        
+                        if (!validarPeriodo()) {
+                            resultadoDiv.innerHTML = '<div class="status error">❌ Corrija o período antes de continuar</div>';
+                            return;
+                        }
+                        
+                        dadosEnvio = {
+                            data_inicio: dataInicio,
+                            data_fim: dataFim
+                        };
+                        
+                        resultadoDiv.innerHTML = `<div class="status info">🔄 Processando período ${dataInicio} até ${dataFim}... Aguarde...</div>`;
+                    } else {
+                        const diasAtras = document.getElementById('diasAtras').value;
+                        dadosEnvio = { dias_atras: parseInt(diasAtras) };
+                        resultadoDiv.innerHTML = `<div class="status info">🔄 Processando últimos ${diasAtras} dia(s)... Aguarde...</div>`;
+                    }
+                    
+                    try {
+                        const response = await fetch('/processar-emails-novos', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(dadosEnvio)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.status === 'sucesso') {
+                            let html = '<div class="status success">';
+                            html += '<h3>✅ Processamento Finalizado!</h3>';
+                            
+                            if (data.processamento?.periodo_especifico) {
+                                html += `<p><strong>📅 Período:</strong> ${data.periodo?.data_inicio} até ${data.periodo?.data_fim}</p>`;
+                                html += `<p><strong>📧 Emails período:</strong> ${data.periodo?.total_emails}</p>`;
+                            }
+                            
+                            html += `<p><strong>📧 Emails processados:</strong> ${data.processamento?.emails_processados || 0}</p>`;
+                            html += `<p><strong>📎 PDFs extraídos:</strong> ${data.processamento?.pdfs_extraidos || 0}</p>`;
+                            
+                            if (data.database_brk?.integrado) {
+                                html += '<h4>🗃️ DatabaseBRK:</h4>';
+                                html += `<p><strong>💾 Faturas novas:</strong> ${data.database_brk.faturas_salvas || 0}</p>`;
+                                html += `<p><strong>🔄 Duplicatas:</strong> ${data.database_brk.faturas_duplicatas || 0}</p>`;
+                                html += `<p><strong>⚠️ Atenção:</strong> ${data.database_brk.faturas_cuidado || 0}</p>`;
+                            }
+                            
+                            if (data.onedrive?.uploads_ativos) {
+                                html += `<p><strong>☁️ Upload OneDrive:</strong> ${data.onedrive.uploads_sucessos} arquivo(s)</p>`;
+                            }
+                            
+                            html += '</div>';
+                            resultadoDiv.innerHTML = html;
+                        } else {
+                            resultadoDiv.innerHTML = `<div class="status error">❌ Erro: ${data.erro || data.mensagem || 'Erro desconhecido'}</div>`;
+                        }
+                    } catch (error) {
+                        resultadoDiv.innerHTML = `<div class="status error">❌ Erro de conexão: ${error.message}</div>`;
+                    }
+                });
+            </script>
                     const resultadoDiv = document.getElementById('resultado');
                     
                     resultadoDiv.innerHTML = '<div class="status info">🔄 Processando emails... Aguarde...</div>';
@@ -993,154 +1134,6 @@ def _executar_delete_flask_seguro(engine, tabela, registro_atual, registro):
         logger.error(f"Erro DELETE: {e}")
         return jsonify({"status": "error", "message": f"Erro DELETE: {str(e)}"}), 500
 
-# ============================================================================
-# BLOCO 3/3 - INTEGRAÇÃO NO APP.PY - MÍNIMA E LIMPA
-# ADICIONAR apenas 2 linhas no topo + 2 rotas simples no final
-# ============================================================================
-# PROCURAR e SUBSTITUIR toda esta função:
-@app.route('/reconstituicao-brk')
-def reconstituicao_brk():
-    """
-    🔄 Interface para Reconstituição Total da Base BRK - VERSÃO EM LOTES.
-    """
-    if not RECONSTITUICAO_DISPONIVEL:
-        return jsonify({"erro": "Módulo reconstituição indisponível"}), 503
-    
-    if not auth_manager or not auth_manager.access_token:
-        return redirect('/login')
-    
-    try:
-        estatisticas = obter_estatisticas_pre_reconstituicao(auth_manager)
-        
-        if estatisticas.get('status') != 'sucesso':
-            return f"<h1>Erro: {estatisticas.get('erro')}</h1><a href='/'>Voltar</a>"
-        
-        html_interface = gerar_interface_web_lotes(estatisticas)
-        return html_interface
-        
-    except Exception as e:
-        logger.error(f"Erro reconstituição interface: {e}")
-        return f"<h1>Erro: {e}</h1><a href='/'>Voltar</a>", 500
-# ADICIONAR esta função nova antes do "if __name__ == '__main__':"
-def _renderizar_inicializacao_sucesso(resultado):
-    total_emails = resultado.get('total_emails', 0)
-    lotes_necessarios = resultado.get('lotes_necessarios', 0)
-    
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-        <title>✅ Reconstituição Inicializada</title>
-        <meta charset="UTF-8">
-        <style>
-            body {{ font-family: Arial; margin: 40px; background: #f5f5f5; }}
-            .container {{ max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }}
-            .success {{ background: #d4edda; color: #155724; padding: 20px; border-radius: 8px; margin: 20px 0; }}
-            .button {{ background: #007bff; color: white; padding: 15px 30px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 10px 5px; text-decoration: none; display: inline-block; }}
-            .button:hover {{ background: #0056b3; }}
-            .button-secondary {{ background: #6c757d; }}
-            .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 20px 0; }}
-            .stat-card {{ background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }}
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>✅ Reconstituição Inicializada com Sucesso!</h1>
-            
-            <div class="success">
-                <h3>📊 Preparação Concluída:</h3>
-                <p><strong>✅ Backup OneDrive:</strong> {'Realizado' if resultado.get('backup_realizado') else 'Falhou'}</p>
-                <p><strong>🗑️ Tabela resetada:</strong> Todos os registros removidos</p>
-                <p><strong>📧 Emails encontrados:</strong> {total_emails:,}</p>
-            </div>
-            
-            <h3>📋 Plano de Processamento:</h3>
-            <div class="stats">
-                <div class="stat-card">
-                    <h4>📧 Por Lote</h4>
-                    <p><strong>10</strong> emails</p>
-                </div>
-                <div class="stat-card">
-                    <h4>📊 Total Lotes</h4>
-                    <p><strong>{lotes_necessarios}</strong> lotes</p>
-                </div>
-                <div class="stat-card">
-                    <h4>⏱️ Tempo Estimado</h4>
-                    <p><strong>~{lotes_necessarios * 15}s</strong> total</p>
-                </div>
-            </div>
-            
-            <div style="text-align: center; margin: 30px 0;">
-                <form method="post" action="/executar-reconstituicao">
-                    <input type="hidden" name="acao" value="continuar">
-                    <input type="hidden" name="offset" value="0">
-                    <button type="submit" class="button">
-                        🚀 PROCESSAR PRIMEIROS 10 EMAILS
-                    </button>
-                </form>
-                <a href="/reconstituicao-brk" class="button button-secondary">🔙 Cancelar</a>
-            </div>
-            
-            <div style="background: #e3f2fd; padding: 15px; border-radius: 5px; margin-top: 20px;">
-                <small><strong>💡 Dica:</strong> Cada lote demora ~10-15 segundos. Continue clicando para processar todos os emails.</small>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    
-    return html
-
-@app.route('/executar-reconstituicao', methods=['POST'])
-def executar_reconstituicao():
-    """Rota POST para executar reconstituição em lotes por período"""
-    if not RECONSTITUICAO_DISPONIVEL:
-        return jsonify({"erro": "Módulo reconstituição indisponível"}), 503
-    
-    if not auth_manager.access_token:
-        return redirect('/login')
-    
-    try:
-        acao = request.form.get('acao')
-        
-        # ✅ RECEBER DATAS DO FORMULÁRIO
-        data_inicio = request.form.get('data_inicio')
-        data_fim = request.form.get('data_fim')
-        
-        if acao == 'inicializar':
-            # ✅ PASSAR DATAS PARA FUNÇÃO
-            resultado = inicializar_reconstituicao_primeira_vez(auth_manager, data_inicio, data_fim)
-            if resultado.get('status') == 'sucesso':
-                return gerar_interface_web_lotes({}, inicializacao=resultado)
-            else:
-                return f"<h1>Erro: {resultado.get('mensagem')}</h1><a href='/reconstituicao-brk'>Voltar</a>", 500
-                
-        elif acao == 'continuar':
-            # ✅ PASSAR DATAS + OFFSET PARA FUNÇÃO
-            offset = int(request.form.get('offset', 0))
-            resultado = executar_reconstituicao_lote(auth_manager, offset, data_inicio, data_fim)
-            
-            if resultado.get('finalizado'):
-                return gerar_resultado_final_lotes(resultado)
-            else:
-                return gerar_interface_web_lotes({}, progresso=resultado)
-        else:
-            return jsonify({"erro": "Ação inválida"}), 400
-            
-    except Exception as e:
-        logger.error(f"Erro executar reconstituição: {e}")
-        return f"<h1>Erro: {e}</h1><a href='/reconstituicao-brk'>Voltar</a>", 500
-# ============================================================================
-# 3. OPCIONAL: ADICIONAR LINK NO DASHBOARD PRINCIPAL
-# Na rota '/' existente, adicionar uma linha no HTML:
-# ============================================================================
-
-# ADICIONAR esta linha no HTML do dashboard principal (rota '/'):
-# <a href="/reconstituicao-brk" class="button" style="background: #dc3545;">🔄 Reconstituição Total</a>
-
-# ============================================================================
-# RESUMO DA INTEGRAÇÃO:
-# ============================================================================
 
 """
 📋 RESUMO - INTEGRAÇÃO MÍNIMA NO APP.PY:
