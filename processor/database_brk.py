@@ -390,9 +390,8 @@ class DatabaseBRK:
             
             # 3. Inserir no SQLite
             id_salvo = self._inserir_fatura_sqlite(dados_fatura, status_duplicata, nome_padronizado)
-            from alertas.alert_processor import processar_alerta_fatura
+            from processor.alertas.alert_processor import processar_alerta_fatura
             processar_alerta_fatura(dados_fatura)
-
             # 4. Sincronizar com OneDrive (backup automático)
             self.sincronizar_onedrive()
             
