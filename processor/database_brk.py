@@ -370,53 +370,53 @@ class DatabaseBRK:
             return False
     
     def salvar_fatura(self, dados_fatura):
-    """
-    MÉTODO PRINCIPAL: Salva fatura com lógica SEEK + sincronização OneDrive.
-    🆕 INTEGRAÇÃO: Envia alertas automáticos após salvar fatura
+        """
+        MÉTODO PRINCIPAL: Salva fatura com lógica SEEK + sincronização OneDrive.
+        🆕 INTEGRAÇÃO: Envia alertas automáticos após salvar fatura
+        
+        Args:
+            dados_fatura (dict): Dados extraídos pelo EmailProcessor
+            
+        Returns:
+            dict: {'status': 'sucesso/erro', 'mensagem': '...', 'id_salvo': int}
+        """
+        try:
+            print(f"💾 Salvando fatura: {dados_fatura.get('nome_arquivo_original', 'unknown')}")
+            
+            # 1. LÓGICA SEEK (estilo Clipper)
+            status_duplicata = self._verificar_duplicata_seek(dados_fatura)
+            
+            # 2. Gerar nome padronizado
+            nome_padronizado = self._gerar_nome_padronizado(dados_fatura)
+            
+            # 3. Inserir no SQLite
+            id_salvo = self._inserir_fatura_sqlite(dados_fatura, status_duplicata, nome_padronizado)
+            
+            # 🆕 INTEGRAÇÃO ALERTAS (2 linhas adicionadas):
+            from processor.alertas.alert_processor import processar_alerta_fatura
+            processar_alerta_fatura(dados_fatura)
+            
+            # 4. Sincronizar com OneDrive (backup automático)
+            self.sincronizar_onedrive()
+            
+            # 5. Retornar resultado
+            return {
+                'status': 'sucesso',
+                'mensagem': f'Fatura salva - Status: {status_duplicata}',
+                'id_salvo': id_salvo,
+                'status_duplicata': status_duplicata,
+                'nome_arquivo': nome_padronizado,
+                'usando_onedrive': self.usando_onedrive
+            }
+            
+        except Exception as e:
+            print(f"❌ Erro salvando fatura: {e}")
+            return {
+                'status': 'erro', 
+                'mensagem': str(e),
+                'id_salvo': None
+            }
     
-    Args:
-        dados_fatura (dict): Dados extraídos pelo EmailProcessor
-        
-    Returns:
-        dict: {'status': 'sucesso/erro', 'mensagem': '...', 'id_salvo': int}
-    """
-    try:
-        print(f"💾 Salvando fatura: {dados_fatura.get('nome_arquivo_original', 'unknown')}")
-        
-        # 1. LÓGICA SEEK (estilo Clipper)
-        status_duplicata = self._verificar_duplicata_seek(dados_fatura)
-        
-        # 2. Gerar nome padronizado
-        nome_padronizado = self._gerar_nome_padronizado(dados_fatura)
-        
-        # 3. Inserir no SQLite
-        id_salvo = self._inserir_fatura_sqlite(dados_fatura, status_duplicata, nome_padronizado)
-        
-        # 🆕 INTEGRAÇÃO ALERTAS (2 linhas adicionadas):
-        from processor.alertas.alert_processor import processar_alerta_fatura
-        processar_alerta_fatura(dados_fatura)
-        
-        # 4. Sincronizar com OneDrive (backup automático)
-        self.sincronizar_onedrive()
-        
-        # 5. Retornar resultado
-        return {
-            'status': 'sucesso',
-            'mensagem': f'Fatura salva - Status: {status_duplicata}',
-            'id_salvo': id_salvo,
-            'status_duplicata': status_duplicata,
-            'nome_arquivo': nome_padronizado,
-            'usando_onedrive': self.usando_onedrive
-        }
-        
-    except Exception as e:
-        print(f"❌ Erro salvando fatura: {e}")
-        return {
-            'status': 'erro', 
-            'mensagem': str(e),
-            'id_salvo': None
-        }
-        
     def _verificar_duplicata_seek(self, dados_fatura):
         """
         Lógica SEEK estilo Clipper: CDC + Competência.
@@ -863,4 +863,4 @@ def integrar_database_emailprocessor(email_processor):
         
     except Exception as e:
         print(f"❌ Erro na integração: {e}")
-        return False
+        return False#
