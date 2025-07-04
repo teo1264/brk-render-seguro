@@ -90,63 +90,64 @@ class DBEditEngineBRK:
         print(f"   🔗 Conexão: Via DatabaseBRK (OneDrive + cache)")
     
     def conectar_database_real(self) -> bool:
-        """
-        Conectar usando a infraestrutura REAL do sistema
-        Exatamente como o EmailProcessor faz
-        
-        Returns:
-            bool: True se conexão bem-sucedida
-        """
-        try:
-            print("🔗 Conectando via sistema REAL (DatabaseBRK)...")
-            
-            # 1. Inicializar autenticação REAL
-            # 1. ✅ USAR AUTH PASSADO PELO APP.PY (não sobrescrever)
-            if not hasattr(self, 'auth') or not self.auth:
-                print("⚠️ Auth não fornecido, criando nova instância...")
-                self.auth = MicrosoftAuth()
-            else:
-                print("✅ Usando auth fornecido pelo sistema principal")
-            
-            if not self.auth.access_token:
-                print("❌ Erro: Token de autenticação não encontrado")
-                return False          
-            
-            
-            # 2. Inicializar EmailProcessor REAL
-            self.processor = EmailProcessor(self.auth)
-            if not hasattr(self.processor, 'database_brk') or not self.processor.database_brk:
-                print("❌ Erro: DatabaseBRK não disponível no EmailProcessor")
-                return False
-            
-            # 3. Usar DatabaseBRK REAL
-            self.database_brk = self.processor.database_brk
-            
-            # 4. Verificar conexão SQLite
-            if not hasattr(self.database_brk, 'conn') or not self.database_brk.conn:
-                print("🔄 Inicializando conexão DatabaseBRK...")
-                if hasattr(self.database_brk, 'conectar_database'):
-                    self.database_brk.conectar_database()
-                elif hasattr(self.database_brk, 'inicializar_sistema'):
-                    self.database_brk.inicializar_sistema()
-            
-            self.conn = self.database_brk.conn
-            
-            if self.conn:
-                print("✅ Conectado via DatabaseBRK REAL")
-                print(f"   💾 OneDrive: {'✅' if getattr(self.database_brk, 'usando_onedrive', False) else '❌'}")
-                print(f"   🔄 Cache: {'✅' if getattr(self.database_brk, 'db_local_cache', False) else '❌'}")
-                return True
-            else:
-                print("❌ Erro: Conexão SQLite não estabelecida")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Erro conectando sistema real: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
+    """
+    Conectar usando auth em memória do sistema principal
+    ✅ SEGURO: Usa token em memória, não cria nova instância
     
+    Returns:
+        bool: True se conexão bem-sucedida
+    """
+    try:
+        print("🔗 Conectando via sistema REAL (DatabaseBRK)...")
+        
+        # 1. ✅ USAR AUTH EM MEMÓRIA (não criar nova instância)
+        if not hasattr(self, 'auth') or not self.auth:
+            print("❌ Auth não fornecido pelo app.py")
+            return False
+        
+        print("✅ Usando auth em memória do sistema principal")
+        
+        # 2. ✅ VERIFICAR TOKEN EM MEMÓRIA
+        if not self.auth.access_token:
+            print("❌ Token não disponível na memória")
+            return False
+        
+        print("✅ Token disponível na memória")
+        
+        # 3. Inicializar EmailProcessor REAL
+        self.processor = EmailProcessor(self.auth)
+        if not hasattr(self.processor, 'database_brk') or not self.processor.database_brk:
+            print("❌ Erro: DatabaseBRK não disponível no EmailProcessor")
+            return False
+        
+        # 4. Usar DatabaseBRK REAL
+        self.database_brk = self.processor.database_brk
+        
+        # 5. Verificar conexão SQLite
+        if not hasattr(self.database_brk, 'conn') or not self.database_brk.conn:
+            print("🔄 Inicializando conexão DatabaseBRK...")
+            if hasattr(self.database_brk, 'conectar_database'):
+                self.database_brk.conectar_database()
+            elif hasattr(self.database_brk, 'inicializar_sistema'):
+                self.database_brk.inicializar_sistema()
+        
+        self.conn = self.database_brk.conn
+        
+        if self.conn:
+            print("✅ Conectado via DatabaseBRK REAL")
+            print(f"   💾 OneDrive: {'✅' if getattr(self.database_brk, 'usando_onedrive', False) else '❌'}")
+            print(f"   🔄 Cache: {'✅' if getattr(self.database_brk, 'db_local_cache', False) else '❌'}")
+            return True
+        else:
+            print("❌ Erro: Conexão SQLite não estabelecida")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro conectando sistema real: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+        
     def listar_tabelas_reais(self) -> list:
         """
         Listar tabelas do database real
