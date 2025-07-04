@@ -101,10 +101,17 @@ class DBEditEngineBRK:
             print("🔗 Conectando via sistema REAL (DatabaseBRK)...")
             
             # 1. Inicializar autenticação REAL
-            self.auth = MicrosoftAuth()
+            # 1. ✅ USAR AUTH PASSADO PELO APP.PY (não sobrescrever)
+            if not hasattr(self, 'auth') or not self.auth:
+                print("⚠️ Auth não fornecido, criando nova instância...")
+                self.auth = MicrosoftAuth()
+            else:
+                print("✅ Usando auth fornecido pelo sistema principal")
+            
             if not self.auth.access_token:
                 print("❌ Erro: Token de autenticação não encontrado")
-                return False
+                return False          
+            
             
             # 2. Inicializar EmailProcessor REAL
             self.processor = EmailProcessor(self.auth)
