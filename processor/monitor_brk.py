@@ -64,7 +64,7 @@ class MonitorBRK:
         self.processor = email_processor
         self.ativo = False
         self.thread_monitor = None
-        self.intervalo_minutos = 10
+        self.intervalo_minutos = 30
         
         # 🔍 VALIDAR DEPENDÊNCIAS OBRIGATÓRIAS
         self._validar_dependencias()
@@ -181,51 +181,65 @@ class MonitorBRK:
         except Exception as e:
             print(f"❌ Erro no processamento: {e}")
 
-    def executar_ciclo_completo(self):
-        """
-        Executa um ciclo completo de monitoramento.
-        Combina estatísticas + processamento.
-        """
-        timestamp = datetime.now().strftime('%H:%M:%S')
-        print(f"\n🔄 [{timestamp}] MONITOR BRK - Verificação automática")
-        print(f"=" * 55)
+   def executar_ciclo_completo(self):
+    """
+    Executa ciclo completo: emails + planilha integrada
+    ✅ NOVO: Inclui atualização automática da planilha
+    """
+    timestamp = datetime.now().strftime('%H:%M:%S')
+    print(f"\n🔄 [{timestamp}] MONITOR BRK INTEGRADO - Ciclo completo")
+    print(f"=" * 55)
+    
+    try:
+        # 1. ETAPA EMAILS (lógica existente)
+        print("📧 ETAPA 1: Processamento de emails")
+        self.exibir_estatisticas_pasta()
+        print()
+        self.processar_emails_novos()
         
-        try:
-            # 1. Mostrar estatísticas da pasta
-            self.exibir_estatisticas_pasta()
-            print()  # Linha em branco
-            
-            # 2. Processar emails novos
-            self.processar_emails_novos()
-            
-        except Exception as e:
-            print(f"❌ Erro no ciclo: {e}")
+        # 2. ETAPA PLANILHA (NOVA)
+        print(f"\n📊 ETAPA 2: Atualização planilha BRK")
+        self.atualizar_planilha_automatica()
         
-        print(f"=" * 55)
-        print(f"⏰ Próxima verificação em {self.intervalo_minutos} minutos")
+    except Exception as e:
+        print(f"❌ Erro no ciclo integrado: {e}")
+    
+    print(f"=" * 55)
+    print(f"⏰ Próximo ciclo em {self.intervalo_minutos} minutos")
 
-    def loop_monitoramento(self):
-        """
-        Loop principal do monitoramento.
-        Roda em thread separada.
-        """
-        print(f"🚀 Monitor BRK iniciado - verificação a cada {self.intervalo_minutos} min")
+    def atualizar_planilha_automatica(self):
+    """
+    NOVA FUNÇÃO: Atualizar planilha com sistema backup inteligente
+    """
+    try:
+        print("📊 Gerando planilha atualizada...")
         
-        while self.ativo:
-            try:
-                # Executar ciclo completo
-                self.executar_ciclo_completo()
-                
-                # Aguardar próximo ciclo
-                for i in range(self.intervalo_minutos * 60):  # 10 min = 600 segundos
-                    if not self.ativo:  # Permitir parada
-                        break
-                    time.sleep(1)
-                    
-            except Exception as e:
-                print(f"❌ Erro crítico no monitor: {e}")
-                print(f"🔄 Tentando novamente em 1 minuto...")
-                time.sleep(60)  # Aguardar 1 minuto antes de tentar novamente
+        # Importar módulos necessários
+        from processor.excel_brk import ExcelGeneratorBRK
+        from processor.planilha_backup import salvar_planilha_inteligente
+        
+        # Gerar dados da planilha
+        excel_generator = ExcelGeneratorBRK()
+        dados_planilha = excel_generator.gerar_excel_bytes()
+        
+        if dados_planilha:
+            print("📊 Dados da planilha gerados com sucesso")
+            
+            # Usar sistema backup inteligente
+            sucesso = salvar_planilha_inteligente(self.processor.auth, dados_planilha)
+            
+            if sucesso:
+                print("✅ Planilha atualizada com sucesso")
+            else:
+                print("❌ Falha no salvamento da planilha")
+        else:
+            print("❌ Erro gerando dados da planilha")
+            
+    except ImportError as e:
+        print(f"❌ Módulo não encontrado: {e}")
+        print("⚠️ Verifique se processor/excel_brk.py e processor/planilha_backup.py existem")
+    except Exception as e:
+        print(f"❌ Erro atualizando planilha: {e}")      
 
     def iniciar_monitoramento(self):
         """
@@ -305,36 +319,31 @@ class MonitorBRK:
 # ============================================================================
 # FUNÇÕES DE UTILIDADE PARA APP.PY
 # ============================================================================
-
 def verificar_dependencias_monitor(email_processor) -> dict:
     """
-    Verifica se EmailProcessor tem todas as dependências necessárias.
-    Útil para debug antes de criar o monitor.
-    
-    Args:
-        email_processor: Instância de EmailProcessor para verificar
-        
-    Returns:
-        dict: Status das dependências
+    Verifica dependências para monitor integrado (emails + planilha)
+    ✅ ATUALIZADO: Inclui verificação de planilha
     """
     metodos_obrigatorios = [
         'diagnosticar_pasta_brk',
         'buscar_emails_novos',
         'extrair_pdfs_do_email', 
-        'log_consolidado_email',
-        'obter_estatisticas_avancadas'
+        'log_consolidado_email'
     ]
     
     resultado = {
         "dependencias_ok": True,
         "email_processor_valido": bool(email_processor),
         "autenticacao_ok": False,
+        "excel_generator_ok": False,
+        "planilha_backup_ok": False,
+        "onedrive_brk_ok": False,
         "metodos_disponivel": {},
         "metodos_faltando": [],
         "observacoes": []
     }
     
-    # Verificar se processor é válido
+    # Verificações básicas existentes...
     if not email_processor:
         resultado["dependencias_ok"] = False
         resultado["observacoes"].append("❌ EmailProcessor é None")
@@ -355,14 +364,38 @@ def verificar_dependencias_monitor(email_processor) -> dict:
             resultado["metodos_faltando"].append(metodo)
             resultado["dependencias_ok"] = False
     
-    # Adicionar observações
-    if resultado["dependencias_ok"]:
-        resultado["observacoes"].append("✅ Todas as dependências OK")
+    # NOVAS VERIFICAÇÕES: Planilha
+    try:
+        from processor.excel_brk import ExcelGeneratorBRK
+        resultado["excel_generator_ok"] = True
+        resultado["observacoes"].append("✅ ExcelGeneratorBRK disponível")
+    except ImportError:
+        resultado["observacoes"].append("❌ ExcelGeneratorBRK não encontrado")
+    
+    try:
+        from processor.planilha_backup import salvar_planilha_inteligente
+        resultado["planilha_backup_ok"] = True
+        resultado["observacoes"].append("✅ Sistema backup planilha disponível")
+    except ImportError:
+        resultado["observacoes"].append("❌ Sistema backup planilha não encontrado")
+    
+    # Verificar ONEDRIVE_BRK_ID
+    import os
+    if os.getenv('ONEDRIVE_BRK_ID'):
+        resultado["onedrive_brk_ok"] = True
+        resultado["observacoes"].append("✅ ONEDRIVE_BRK_ID configurado")
     else:
-        resultado["observacoes"].append(f"❌ Faltam métodos: {', '.join(resultado['metodos_faltando'])}")
+        resultado["observacoes"].append("❌ ONEDRIVE_BRK_ID não configurado")
+    
+    # Avaliação final
+    planilha_ok = (resultado["excel_generator_ok"] and 
+                   resultado["planilha_backup_ok"] and 
+                   resultado["onedrive_brk_ok"])
+    
+    if not planilha_ok:
+        resultado["observacoes"].append("⚠️ Funcionalidade planilha não disponível")
     
     return resultado
-
 
 def criar_monitor_brk(email_processor) -> MonitorBRK:
     """
