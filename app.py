@@ -707,26 +707,21 @@ def health_check():
 
 @app.route('/dbedit')
 def dbedit():
-    """DBEDIT - Engine real + HTML funcional - ✅ CORRIGIDO"""
+    """DBEDIT - Usando auth_manager que JÁ FUNCIONA - ✅ CORRIGIDO"""
     try:
-        # ✅ VERIFICAÇÃO SUAVE: Não bloqueia se auth temporariamente indisponível
-        auth_disponivel = False
-        try:
-            if auth_manager and auth_manager.access_token:
-                auth_disponivel = True
-        except Exception:
-            # Se erro na verificação auth, continuar sem bloquear
-            pass
-        
-        # ⚠️ AVISO SUAVE: Em vez de redirect forçado
-        if not auth_disponivel:
-            logger.warning("DBEDIT: Auth temporariamente indisponível, continuando...")
-        
-        # ✅ IMPORTAÇÃO SEGURA: Engine modular (admin/dbedit_server.py)
+        # ✅ IMPORTAÇÃO SEGURA: Engine modular
         from admin.dbedit_server import DBEditEngineBRK
         
-        # ✅ NAVEGAÇÃO: Engine processa todos os comandos
+        # ✅ CRIAR ENGINE
         engine = DBEditEngineBRK()
+        
+        # 🎯 SOLUÇÃO: USAR AUTH QUE JÁ FUNCIONA (não criar nova instância)
+        engine.auth = auth_manager  # ← PASSAR AUTH FUNCIONANDO
+        engine.conn = None  # Reset para reconectar com auth correto
+        
+        print(f"🔧 DBEDIT: Usando auth_manager do sistema principal")
+        
+        # ✅ NAVEGAÇÃO: Engine processa todos os comandos
         resultado = engine.navegar_registro_real(
             request.args.get('tabela', 'faturas_brk'),
             int(request.args.get('rec', '1')),
@@ -739,7 +734,7 @@ def dbedit():
         if request.args.get('formato') == 'json':
             return jsonify(resultado)
         
-        # ✅ HTML FUNCIONAL: Interface completa (função auxiliar já existe)
+        # ✅ HTML FUNCIONAL: Interface completa
         return _render_dbedit_flask_seguro(resultado)
         
     except ImportError as e:
@@ -751,11 +746,6 @@ def dbedit():
             <div style="background: #800000; padding: 20px; border: 1px solid #ffffff;">
                 <h1>❌ DBEDIT INDISPONÍVEL</h1>
                 <h3>Módulo admin/dbedit_server.py não encontrado</h3>
-                <p><strong>Arquivos necessários:</strong></p>
-                <ul>
-                    <li>admin/dbedit_server.py (engine)</li>
-                    <li>processor/database_brk.py (backend)</li>
-                </ul>
                 <p><a href="/" style="color: #00ffff;">← Voltar ao Dashboard</a></p>
             </div>
         </body></html>
@@ -772,16 +762,14 @@ def dbedit():
                 <h3>Erro: {str(e)}</h3>
                 <p><strong>Possíveis causas:</strong></p>
                 <ul>
-                    <li>Database connection temporariamente indisponível</li>
-                    <li>OneDrive sync em andamento</li>
                     <li>Configuração ONEDRIVE_BRK_ID pendente</li>
+                    <li>DatabaseBRK temporariamente indisponível</li>
                 </ul>
                 <p><a href="/dbedit" style="color: #00ffff;">🔄 Tentar novamente</a> | 
                    <a href="/" style="color: #00ffff;">🏠 Dashboard</a></p>
             </div>
         </body></html>
         """, 500
-
 # GERADOR EXCEL BRK
 @app.route('/gerar-planilha-brk', methods=['GET', 'POST'])
 def gerar_planilha_brk():
