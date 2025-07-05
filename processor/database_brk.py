@@ -752,6 +752,196 @@ class DatabaseBRK:
             'conexao_ativa': bool(self.conn),
             'onedrive_id': self.db_onedrive_id,
             'filename': self.db_filename
+
+        def obter_meses_com_faturas(self):
+        """
+        🆕 NOVA FUNÇÃO: Detecta todos os meses/anos que possuem faturas no database.
+        
+        Esta função resolve o problema principal: detectar AUTOMATICAMENTE todos os meses
+        que têm faturas, não apenas o mês atual.
+        
+        🔍 LÓGICA:
+           1. Consulta DISTINCT nos campos vencimento e competencia
+           2. Extrai mês/ano de cada data encontrada
+           3. Remove duplicatas e retorna lista única
+           4. Ignora dados inválidos/malformados
+        
+        📊 RESULTADO ESPERADO:
+           [(7, 2025), (8, 2025)] para julho e agosto de 2025
+        
+        Returns:
+            List[Tuple[int, int]]: Lista de (mes, ano) únicos encontrados
+        """
+        try:
+            if not self.conn:
+                print("❌ Conexão database não disponível")
+                return []
+            
+            print("🔍 Detectando meses com faturas no database...")
+            
+            cursor = self.conn.cursor()
+            
+            # Query para buscar TODOS os vencimentos e competências
+            query = """
+                SELECT DISTINCT vencimento, competencia 
+                FROM faturas_brk 
+                WHERE status_duplicata = 'NORMAL'
+                AND (vencimento IS NOT NULL OR competencia IS NOT NULL)
+                ORDER BY vencimento, competencia
+            """
+            
+            cursor.execute(query)
+            resultados = cursor.fetchall()
+            
+            print(f"📊 Encontrados {len(resultados)} registros únicos de datas")
+            
+            # Set para evitar duplicatas
+            meses_encontrados = set()
+            
+            # Processar cada resultado
+            for row in resultados:
+                vencimento = row[0] if row[0] else ""
+                competencia = row[1] if row[1] else ""
+                
+                # Extrair mês/ano do vencimento (formato: DD/MM/YYYY)
+                if vencimento and "/" in vencimento:
+                    try:
+                        partes = vencimento.split("/")
+                        if len(partes) == 3:
+                            mes_venc = int(partes[1])
+                            ano_venc = int(partes[2])
+                            if 1 <= mes_venc <= 12 and 2020 <= ano_venc <= 2030:
+                                meses_encontrados.add((mes_venc, ano_venc))
+                                print(f"   📅 Vencimento: {vencimento} → {mes_venc}/{ano_venc}")
+                    except (ValueError, IndexError):
+                        pass
+                
+                # Extrair mês/ano da competência (formatos: "Julho/2025", "07/2025")
+                if competencia and "/" in competencia:
+                    try:
+                        # Tentar formato "Julho/2025"
+                        if any(mes_nome in competencia for mes_nome in ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']):
+                            meses_nomes = {
+                                'Janeiro': 1, 'Jan': 1, 'Fevereiro': 2, 'Fev': 2,
+                                'Março': 3, 'Mar': 3, 'Abril': 4, 'Abr': 4,
+                                'Maio': 5, 'Mai': 5, 'Junho': 6, 'Jun': 6,
+                                'Julho': 7, 'Jul': 7, 'Agosto': 8, 'Ago': 8,
+                                'Setembro': 9, 'Set': 9, 'Outubro': 10, 'Out': 10,
+                                'Novembro': 11, 'Nov': 11, 'Dezembro': 12, 'Dez': 12
+                            }
+                            
+                            partes = competencia.split("/")
+                            if len(partes) == 2:
+                                mes_nome = partes[0].strip()
+                                ano_comp = int(partes[1].strip())
+                                
+                                for nome, numero in meses_nomes.items():
+                                    if nome.lower() in mes_nome.lower():
+                                        if 2020 <= ano_comp <= 2030:
+                                            meses_encontrados.add((numero, ano_comp))
+                                            print(f"   📆 Competência: {competencia} → {numero}/{ano_comp}")
+                                        break
+                        
+                        # Tentar formato "07/2025"
+                        else:
+                            partes = competencia.split("/")
+                            if len(partes) == 2:
+                                mes_comp = int(partes[0])
+                                ano_comp = int(partes[1])
+                                if 1 <= mes_comp <= 12 and 2020 <= ano_comp <= 2030:
+                                    meses_encontrados.add((mes_comp, ano_comp))
+                                    print(f"   📆 Competência: {competencia} → {mes_comp}/{ano_comp}")
+                                    
+                    except (ValueError, IndexError):
+                        pass
+            
+            # Converter para lista ordenada
+            meses_lista = sorted(list(meses_encontrados))
+            
+            print(f"\n✅ MESES DETECTADOS:")
+            meses_nomes = {
+                1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+                5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 
+                9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+            }
+            
+            for mes, ano in meses_lista:
+                print(f"   📊 {meses_nomes[mes]}/{ano} → Planilha: BRK-Planilha-{ano}-{mes:02d}.xlsx")
+            
+            print(f"🎯 TOTAL: {len(meses_lista)} planilha(s) serão geradas")
+            
+            return meses_lista
+            
+        except Exception as e:
+            print(f"❌ Erro detectando meses com faturas: {e}")
+            return []
+
+    def obter_estatisticas_por_mes(self, mes, ano):
+        """
+        🆕 NOVA FUNÇÃO: Estatísticas específicas de um mês/ano.
+        Útil para logs e validação das planilhas geradas.
+        
+        Args:
+            mes (int): Mês (1-12)
+            ano (int): Ano (ex: 2025)
+            
+        Returns:
+            Dict: Estatísticas do mês específico
+        """
+        try:
+            if not self.conn:
+                return {"erro": "Conexão indisponível"}
+            
+            cursor = self.conn.cursor()
+            
+            # Contar faturas do mês específico
+            query = """
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN status_duplicata = 'NORMAL' THEN 1 END) as normais,
+                    COUNT(CASE WHEN status_duplicata = 'DUPLICATA' THEN 1 END) as duplicatas,
+                    COUNT(CASE WHEN status_duplicata = 'FALTANTE' THEN 1 END) as faltantes
+                FROM faturas_brk 
+                WHERE (
+                    vencimento LIKE ? 
+                    OR competencia LIKE ?
+                    OR competencia LIKE ?
+                )
+            """
+            
+            # Parâmetros de busca para o mês/ano
+            mes_str = f"__{mes:02d}/{ano}"  # Para vencimento DD/MM/YYYY
+            comp_str1 = f"%/{ano}"          # Para competência Mês/YYYY
+            comp_str2 = f"{mes:02d}/{ano}"  # Para competência MM/YYYY
+            
+            cursor.execute(query, (mes_str, comp_str1, comp_str2))
+            resultado = cursor.fetchone()
+            
+            if resultado:
+                return {
+                    "mes": mes,
+                    "ano": ano,
+                    "total_faturas": resultado[0],
+                    "normais": resultado[1],
+                    "duplicatas": resultado[2],
+                    "faltantes": resultado[3],
+                    "status": "sucesso"
+                }
+            else:
+                return {
+                    "mes": mes,
+                    "ano": ano,
+                    "total_faturas": 0,
+                    "status": "sem_dados"
+                }
+                
+        except Exception as e:
+            return {
+                "mes": mes,
+                "ano": ano,
+                "erro": str(e),
+                "status": "erro"
+            }           
         }
     
     # ============================================================================
