@@ -219,9 +219,18 @@ class MonitorBRK:
             from processor.planilha_backup import salvar_planilha_inteligente
             
             # Gerar dados da planilha
+            # excel_generator = ExcelGeneratorBRK()
+            # dados_planilha = excel_generator.gerar_excel_bytes()
+
+            # Gerar dados da planilha
             excel_generator = ExcelGeneratorBRK()
-            dados_planilha = excel_generator.gerar_excel_bytes()
-            
+
+            # ✅ MÉTODO CORRETO: gerar_planilha_mensal(mes, ano)
+            from datetime import datetime
+            hoje = datetime.now()
+            dados_planilha = excel_generator.gerar_planilha_mensal(hoje.month, hoje.year)
+
+           
             if dados_planilha:
                 print("📊 Dados da planilha gerados com sucesso")
                 
