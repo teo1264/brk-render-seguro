@@ -1,22 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-📁 ARQUIVO: processor/database_brk.py
+📁 ARQUIVO: processor/database_brk.py - VERSÃO CORRIGIDA
 💾 ONDE SALVAR: brk-monitor-seguro/processor/database_brk.py
-📦 FUNÇÃO: Database BRK com SQLite no OneDrive + cache local
-🔧 DESCRIÇÃO: Sistema conforme README.md - dados no OneDrive, token no Render
-👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
-
-🚨 DEPENDÊNCIAS OBRIGATÓRIAS:
-   ✅ auth/microsoft_auth.py - Autenticação Microsoft
-   ✅ SQLite (built-in Python)
-   ✅ requests - HTTP requests para OneDrive
-   
-📊 ESTRUTURA OneDrive (conforme README.md):
-   🏢 /BRK/ (pasta raiz)
-   ├── 📊 database_brk.db ← AQUI FICA O SQLite!
-   ├── 📋 CDC_BRK_CCB.xlsx ← ARQUIVO DE RELACIONAMENTO (raiz /BRK/)
-   └── 📁 /Faturas/YYYY/MM/ ← ESTRUTURA DE ARQUIVOS PDF
+🔧 CORREÇÃO: Fechamento correto das funções + novas funções nas posições certas
 """
 
 import sqlite3
@@ -32,28 +19,17 @@ from pathlib import Path
 class DatabaseBRK:
     """
     Database BRK com SQLite no OneDrive + cache local.
-    
-    LÓGICA CONFORME README.md:
-    - SQLite principal: OneDrive /BRK/database_brk.db
-    - Cache local: /tmp/ para performance
-    - Fallback: Render disk se OneDrive falhar
     """
     
     def __init__(self, auth_manager, onedrive_brk_id):
-        """
-        Inicializar DatabaseBRK com SQLite no OneDrive.
-        
-        Args:
-            auth_manager: Instância de MicrosoftAuth
-            onedrive_brk_id: ID da pasta /BRK/ no OneDrive
-        """
+        """Inicializar DatabaseBRK com SQLite no OneDrive."""
         self.auth = auth_manager
         self.onedrive_brk_id = onedrive_brk_id
         
         # Configurações database OneDrive
         self.db_filename = "database_brk.db"
-        self.db_onedrive_id = None      # ID do arquivo no OneDrive
-        self.db_local_cache = None      # Path cache local temporário
+        self.db_onedrive_id = None
+        self.db_local_cache = None
         self.db_fallback_render = '/opt/render/project/storage/database_brk.db'
         
         # Conexão SQLite
@@ -70,10 +46,7 @@ class DatabaseBRK:
         self._inicializar_database_sistema()
     
     def _inicializar_database_sistema(self):
-        """
-        Inicializa sistema completo: OneDrive → cache local → fallback.
-        MVP: Tentar OneDrive primeiro, fallback Render se falhar.
-        """
+        """Inicializa sistema completo: OneDrive → cache local → fallback."""
         try:
             print(f"📊 Inicializando database no OneDrive...")
             
@@ -82,7 +55,6 @@ class DatabaseBRK:
             
             if database_existe:
                 print(f"✅ Database encontrado no OneDrive")
-                # Baixar para cache local
                 if self._baixar_database_para_cache():
                     self.usando_onedrive = True
                     print(f"📥 Database sincronizado para cache local")
@@ -90,7 +62,6 @@ class DatabaseBRK:
                     raise Exception("Falha baixando database do OneDrive")
             else:
                 print(f"🆕 Database não existe - criando novo no OneDrive")
-                # Criar database local e upload para OneDrive
                 if self._criar_database_novo():
                     self.usando_onedrive = True
                     print(f"📤 Database criado e enviado para OneDrive")
@@ -106,12 +77,7 @@ class DatabaseBRK:
             self._usar_fallback_render()
     
     def _verificar_database_onedrive(self):
-        """
-        Verifica se database_brk.db existe na pasta /BRK/ do OneDrive.
-        
-        Returns:
-            bool: True se database existe no OneDrive
-        """
+        """Verifica se database_brk.db existe na pasta /BRK/ do OneDrive."""
         try:
             headers = self.auth.obter_headers_autenticados()
             if not headers:
@@ -128,7 +94,7 @@ class DatabaseBRK:
                 for arquivo in arquivos:
                     if arquivo.get('name') == self.db_filename:
                         self.db_onedrive_id = arquivo['id']
-                        print(f"📊 Database OneDrive encontrado: {arquivo['name']} (ID: configurado)")
+                        print(f"📊 Database OneDrive encontrado: {arquivo['name']}")
                         return True
                 
                 print(f"📊 Database não encontrado no OneDrive /BRK/")
@@ -142,9 +108,7 @@ class DatabaseBRK:
             return False
     
     def _baixar_database_para_cache(self):
-        """
-        Baixa database do OneDrive para cache local temporário.
-        """
+        """Baixa database do OneDrive para cache local temporário."""
         try:
             if not self.db_onedrive_id:
                 raise ValueError("ID do database OneDrive não encontrado")
@@ -173,9 +137,7 @@ class DatabaseBRK:
             return False
     
     def _criar_database_novo(self):
-        """
-        Cria database SQLite novo e faz upload para OneDrive.
-        """
+        """Cria database SQLite novo e faz upload para OneDrive."""
         try:
             print(f"🆕 Criando database SQLite novo...")
             
@@ -201,24 +163,19 @@ class DatabaseBRK:
             return False
     
     def _criar_estrutura_sqlite(self, conn):
-        """
-        Cria estrutura SQLite com tabelas e índices.
-        """
+        """Cria estrutura SQLite com tabelas e índices."""
         sql_create = """
         CREATE TABLE IF NOT EXISTS faturas_brk (
-            -- CAMPOS DE CONTROLE
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             data_processamento DATETIME DEFAULT CURRENT_TIMESTAMP,
             status_duplicata TEXT DEFAULT 'NORMAL',
             observacao TEXT DEFAULT '',
             
-            -- DADOS DO EMAIL
             email_id TEXT NOT NULL,
             nome_arquivo_original TEXT NOT NULL,
             nome_arquivo TEXT NOT NULL,
             hash_arquivo TEXT UNIQUE,
             
-            -- DADOS EXTRAÍDOS DA FATURA
             cdc TEXT,
             nota_fiscal TEXT,
             casa_oracao TEXT,
@@ -227,19 +184,16 @@ class DatabaseBRK:
             competencia TEXT,
             valor TEXT,
             
-            -- ANÁLISE DE CONSUMO
             medido_real INTEGER,
             faturado INTEGER,
             media_6m INTEGER,
             porcentagem_consumo TEXT,
             alerta_consumo TEXT,
             
-            -- CONTROLE TÉCNICO
             dados_extraidos_ok BOOLEAN DEFAULT TRUE,
             relacionamento_usado BOOLEAN DEFAULT FALSE
         );
         
-        -- ÍNDICES PARA PERFORMANCE (SEEK)
         CREATE INDEX IF NOT EXISTS idx_cdc_competencia ON faturas_brk(cdc, competencia);
         CREATE INDEX IF NOT EXISTS idx_status_duplicata ON faturas_brk(status_duplicata);
         CREATE INDEX IF NOT EXISTS idx_casa_oracao ON faturas_brk(casa_oracao);
@@ -252,9 +206,7 @@ class DatabaseBRK:
         print(f"✅ Estrutura SQLite criada (tabelas + índices)")
     
     def _upload_database_onedrive(self):
-        """
-        Faz upload do database local para OneDrive /BRK/.
-        """
+        """Faz upload do database local para OneDrive /BRK/."""
         try:
             if not self.db_local_cache or not os.path.exists(self.db_local_cache):
                 raise ValueError("Cache local não encontrado para upload")
@@ -267,7 +219,7 @@ class DatabaseBRK:
             with open(self.db_local_cache, 'rb') as f:
                 db_content = f.read()
             
-            # Upload para OneDrive (PUT para sobrescrever ou criar)
+            # Upload para OneDrive
             url = f"https://graph.microsoft.com/v1.0/me/drive/items/{self.onedrive_brk_id}:/{self.db_filename}:/content"
             headers['Content-Type'] = 'application/octet-stream'
             
@@ -286,9 +238,7 @@ class DatabaseBRK:
             return False
     
     def _conectar_sqlite_cache(self):
-        """
-        Conecta SQLite usando cache local.
-        """
+        """Conecta SQLite usando cache local."""
         try:
             if not self.db_local_cache or not os.path.exists(self.db_local_cache):
                 raise ValueError("Cache local não disponível")
@@ -302,9 +252,7 @@ class DatabaseBRK:
             raise
     
     def _usar_fallback_render(self):
-        """
-        Fallback: usar database no Render disk se OneDrive falhar.
-        """
+        """Fallback: usar database no Render disk se OneDrive falhar."""
         try:
             print(f"🔄 Iniciando fallback Render disk...")
             
@@ -329,10 +277,7 @@ class DatabaseBRK:
             raise
     
     def sincronizar_onedrive(self):
-        """
-        Sincroniza database local com OneDrive (backup).
-        Chamado após operações importantes.
-        """
+        """Sincroniza database local com OneDrive (backup)."""
         try:
             if not self.usando_onedrive:
                 print(f"⚠️ Sincronização ignorada - usando fallback Render")
@@ -361,7 +306,6 @@ class DatabaseBRK:
                 
         except Exception as e:
             print(f"❌ Erro sincronização: {e}")
-            # Reconectar mesmo se sync falhar
             try:
                 if self.db_local_cache:
                     self.conn = sqlite3.connect(self.db_local_cache)
@@ -370,16 +314,7 @@ class DatabaseBRK:
             return False
     
     def salvar_fatura(self, dados_fatura):
-        """
-        MÉTODO PRINCIPAL: Salva fatura com lógica SEEK + sincronização OneDrive.
-        🆕 INTEGRAÇÃO: Envia alertas automáticos após salvar fatura
-        
-        Args:
-            dados_fatura (dict): Dados extraídos pelo EmailProcessor
-            
-        Returns:
-            dict: {'status': 'sucesso/erro', 'mensagem': '...', 'id_salvo': int}
-        """
+        """MÉTODO PRINCIPAL: Salva fatura com lógica SEEK + sincronização OneDrive."""
         try:
             print(f"💾 Salvando fatura: {dados_fatura.get('nome_arquivo_original', 'unknown')}")
             
@@ -392,14 +327,17 @@ class DatabaseBRK:
             # 3. Inserir no SQLite
             id_salvo = self._inserir_fatura_sqlite(dados_fatura, status_duplicata, nome_padronizado)
             
-            # 🆕 INTEGRAÇÃO ALERTAS (2 linhas adicionadas):
-            from processor.alertas.alert_processor import processar_alerta_fatura
-            processar_alerta_fatura(dados_fatura)
+            # 4. Integração alertas
+            try:
+                from processor.alertas.alert_processor import processar_alerta_fatura
+                processar_alerta_fatura(dados_fatura)
+            except ImportError:
+                pass  # Alertas opcionais
             
-            # 4. Sincronizar com OneDrive (backup automático)
+            # 5. Sincronizar com OneDrive
             self.sincronizar_onedrive()
             
-            # 5. Retornar resultado
+            # 6. Retornar resultado
             return {
                 'status': 'sucesso',
                 'mensagem': f'Fatura salva - Status: {status_duplicata}',
@@ -418,9 +356,7 @@ class DatabaseBRK:
             }
     
     def _verificar_duplicata_seek(self, dados_fatura):
-        """
-        Lógica SEEK estilo Clipper: CDC + Competência.
-        """
+        """Lógica SEEK estilo Clipper: CDC + Competência."""
         try:
             cdc = dados_fatura.get('cdc')
             competencia = dados_fatura.get('competencia')
@@ -439,19 +375,17 @@ class DatabaseBRK:
             
             if count == 0:
                 print(f"🔍 SEEK: CDC {cdc} + {competencia} → NOT FOUND() → STATUS: NORMAL")
-                return 'NORMAL'  # Primeira vez
+                return 'NORMAL'
             else:
                 print(f"🔍 SEEK: CDC {cdc} + {competencia} → FOUND() → STATUS: DUPLICATA")
-                return 'DUPLICATA'  # Já existe
+                return 'DUPLICATA'
                 
         except Exception as e:
             print(f"⚠️ Erro SEEK: {e}")
-            return 'NORMAL'  # Default seguro
+            return 'NORMAL'
     
     def _gerar_nome_padronizado(self, dados_fatura):
-        """
-        Gera nome arquivo padronizado estilo renomeia_brk10.py.
-        """
+        """Gera nome arquivo padronizado estilo renomeia_brk10.py."""
         try:
             # Extrair dados
             casa_oracao = dados_fatura.get('casa_oracao', 'Casa Desconhecida')
@@ -489,10 +423,7 @@ class DatabaseBRK:
             return f"BRK_Erro_{timestamp}.pdf"
     
     def _extrair_ano_mes(self, competencia, vencimento):
-        """
-        Extrai ano e mês para organização OneDrive.
-        CORRIGIDO: Lógica simples que sempre funciona.
-        """
+        """Extrai ano e mês para organização OneDrive."""
         try:
             # OPÇÃO 1: Usar vencimento se válido
             if vencimento and re.match(r'\d{2}/\d{2}/\d{4}', vencimento):
@@ -519,14 +450,11 @@ class DatabaseBRK:
             
         except Exception as e:
             print(f"❌ Erro extraindo ano/mês: {e}")
-            # Fallback final garantido
             hoje = datetime.now()
             return hoje.year, hoje.month
     
     def _inserir_fatura_sqlite(self, dados_fatura, status_duplicata, nome_padronizado):
-        """
-        Insere fatura no SQLite e retorna ID.
-        """
+        """Insere fatura no SQLite e retorna ID."""
         try:
             cursor = self.conn.cursor()
             
@@ -576,12 +504,7 @@ class DatabaseBRK:
             return None
     
     def obter_estatisticas(self):
-        """
-        Retorna estatísticas do database com informações OneDrive.
-        
-        Returns:
-            dict: Estatísticas completas do sistema
-        """
+        """Retorna estatísticas do database com informações OneDrive."""
         try:
             cursor = self.conn.cursor()
             
@@ -625,15 +548,7 @@ class DatabaseBRK:
             }
     
     def buscar_faturas(self, filtros=None):
-        """
-        Busca faturas com filtros opcionais.
-        
-        Args:
-            filtros (dict): Filtros opcionais
-            
-        Returns:
-            list: Lista de faturas encontradas
-        """
+        """Busca faturas com filtros opcionais."""
         try:
             cursor = self.conn.cursor()
             
@@ -644,7 +559,6 @@ class DatabaseBRK:
                     LIMIT 100
                 """)
             else:
-                # Implementar filtros básicos se necessário
                 cursor.execute("""
                     SELECT * FROM faturas_brk 
                     ORDER BY data_processamento DESC 
@@ -657,94 +571,8 @@ class DatabaseBRK:
             print(f"❌ Erro buscando faturas: {e}")
             return []
     
-    def forcar_sincronizacao_completa(self):
-        """
-        Força sincronização completa do database com OneDrive.
-        Útil para operações manuais ou recovery.
-        """
-        try:
-            if not self.usando_onedrive:
-                print(f"⚠️ Sincronização ignorada - sistema usando fallback Render")
-                return False
-            
-            print(f"🔄 Forçando sincronização completa...")
-            
-            # Fechar conexão atual
-            if self.conn:
-                self.conn.close()
-            
-            # Upload para OneDrive
-            sucesso = self._upload_database_onedrive()
-            
-            # Reconectar
-            self.conn = sqlite3.connect(self.db_local_cache)
-            
-            if sucesso:
-                print(f"✅ Sincronização completa realizada")
-                return True
-            else:
-                print(f"❌ Falha na sincronização completa")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Erro sincronização completa: {e}")
-            return False
-    
-    def verificar_integridade_database(self):
-        """
-        Verifica integridade do database SQLite.
-        """
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("PRAGMA integrity_check")
-            resultado = cursor.fetchone()[0]
-            
-            if resultado == 'ok':
-                print(f"✅ Integridade database: OK")
-                return True
-            else:
-                print(f"⚠️ Problema integridade: {resultado}")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Erro verificando integridade: {e}")
-            return False
-    
-    def fechar_conexao(self):
-        """
-        Fecha conexão SQLite e limpa cache temporário.
-        """
-        try:
-            # Sincronização final se usando OneDrive
-            if self.usando_onedrive:
-                self.sincronizar_onedrive()
-            
-            # Fechar conexão SQLite
-            if self.conn:
-                self.conn.close()
-                print(f"✅ Conexão SQLite fechada")
-            
-            # Limpar cache local temporário
-            if self.db_local_cache and os.path.exists(self.db_local_cache):
-                try:
-                    os.unlink(self.db_local_cache)
-                    print(f"🗑️ Cache local limpo: {self.db_local_cache}")
-                except:
-                    print(f"⚠️ Cache local não pôde ser removido")
-                    
-        except Exception as e:
-            print(f"⚠️ Erro fechando conexão: {e}")
-    
-    def __del__(self):
-        """
-        Destructor para garantir limpeza de recursos.
-        """
-        self.fechar_conexao()
-    
     def status_sistema(self):
-        """
-        Retorna status completo do sistema database.
-        """
+        """Retorna status completo do sistema database."""
         return {
             'usando_onedrive': self.usando_onedrive,
             'usando_fallback': self.usando_fallback,
@@ -752,22 +580,12 @@ class DatabaseBRK:
             'conexao_ativa': bool(self.conn),
             'onedrive_id': self.db_onedrive_id,
             'filename': self.db_filename
+        }
 
-        def obter_meses_com_faturas(self):
+    # ✅ NOVAS FUNÇÕES ADICIONADAS CORRETAMENTE APÓS status_sistema()
+    def obter_meses_com_faturas(self):
         """
         🆕 NOVA FUNÇÃO: Detecta todos os meses/anos que possuem faturas no database.
-        
-        Esta função resolve o problema principal: detectar AUTOMATICAMENTE todos os meses
-        que têm faturas, não apenas o mês atual.
-        
-        🔍 LÓGICA:
-           1. Consulta DISTINCT nos campos vencimento e competencia
-           2. Extrai mês/ano de cada data encontrada
-           3. Remove duplicatas e retorna lista única
-           4. Ignora dados inválidos/malformados
-        
-        📊 RESULTADO ESPERADO:
-           [(7, 2025), (8, 2025)] para julho e agosto de 2025
         
         Returns:
             List[Tuple[int, int]]: Lista de (mes, ano) únicos encontrados
@@ -879,7 +697,6 @@ class DatabaseBRK:
     def obter_estatisticas_por_mes(self, mes, ano):
         """
         🆕 NOVA FUNÇÃO: Estatísticas específicas de um mês/ano.
-        Útil para logs e validação das planilhas geradas.
         
         Args:
             mes (int): Mês (1-12)
@@ -941,25 +758,19 @@ class DatabaseBRK:
                 "ano": ano,
                 "erro": str(e),
                 "status": "erro"
-            }           
-        }
-    
+            }
+
     # ============================================================================
     # MÉTODOS DE COMPATIBILIDADE COM EMAILPROCESSOR
     # ============================================================================
     
     def inicializar_sistema(self):
-        """
-        Método de compatibilidade com EmailProcessor atual.
-        O novo sistema já inicializa automaticamente no __init__.
-        """
+        """Método de compatibilidade com EmailProcessor atual."""
         try:
-            # Sistema já foi inicializado no __init__
             if self.conn:
                 print(f"✅ Sistema DatabaseBRK já inicializado")
                 return True
             else:
-                # Tentar reinicializar se necessário
                 self._inicializar_database_sistema()
                 return bool(self.conn)
         except Exception as e:
@@ -967,12 +778,9 @@ class DatabaseBRK:
             return False
     
     def verificar_conexao(self):
-        """
-        Método de compatibilidade - verifica se conexão está ativa.
-        """
+        """Método de compatibilidade - verifica se conexão está ativa."""
         try:
             if self.conn:
-                # Testar conexão com query simples
                 cursor = self.conn.cursor()
                 cursor.execute("SELECT 1")
                 cursor.fetchone()
@@ -983,22 +791,40 @@ class DatabaseBRK:
             return False
     
     def get_connection(self):
-        """
-        Método de compatibilidade - retorna conexão SQLite.
-        """
+        """Método de compatibilidade - retorna conexão SQLite."""
         return self.conn
     
     def salvar_dados_fatura(self, dados_fatura):
-        """
-        Alias para salvar_fatura - compatibilidade com nomes diferentes.
-        """
+        """Alias para salvar_fatura - compatibilidade com nomes diferentes."""
         return self.salvar_fatura(dados_fatura)
     
     def inserir_fatura(self, dados_fatura):
-        """
-        Outro alias possível para salvar_fatura.
-        """
+        """Outro alias possível para salvar_fatura."""
         return self.salvar_fatura(dados_fatura)
+    
+    def fechar_conexao(self):
+        """Fecha conexão SQLite e limpa cache temporário."""
+        try:
+            if self.usando_onedrive:
+                self.sincronizar_onedrive()
+            
+            if self.conn:
+                self.conn.close()
+                print(f"✅ Conexão SQLite fechada")
+            
+            if self.db_local_cache and os.path.exists(self.db_local_cache):
+                try:
+                    os.unlink(self.db_local_cache)
+                    print(f"🗑️ Cache local limpo: {self.db_local_cache}")
+                except:
+                    print(f"⚠️ Cache local não pôde ser removido")
+                    
+        except Exception as e:
+            print(f"⚠️ Erro fechando conexão: {e}")
+    
+    def __del__(self):
+        """Destructor para garantir limpeza de recursos."""
+        self.fechar_conexao()
 
 
 # ============================================================================
@@ -1006,16 +832,7 @@ class DatabaseBRK:
 # ============================================================================
 
 def criar_database_brk(auth_manager, onedrive_brk_id):
-    """
-    Factory function para criar DatabaseBRK com OneDrive.
-    
-    Args:
-        auth_manager: Instância de MicrosoftAuth
-        onedrive_brk_id: ID da pasta BRK no OneDrive
-        
-    Returns:
-        DatabaseBRK: Instância configurada com OneDrive + fallback
-    """
+    """Factory function para criar DatabaseBRK com OneDrive."""
     try:
         db = DatabaseBRK(auth_manager, onedrive_brk_id)
         print(f"✅ DatabaseBRK criado - OneDrive: {db.usando_onedrive}")
@@ -1026,22 +843,12 @@ def criar_database_brk(auth_manager, onedrive_brk_id):
 
 
 def integrar_database_emailprocessor(email_processor):
-    """
-    Função de compatibilidade com EmailProcessor.
-    Integra DatabaseBRK ao EmailProcessor existente.
-    
-    Args:
-        email_processor: Instância de EmailProcessor
-        
-    Returns:
-        bool: True se integração bem-sucedida
-    """
+    """Função de compatibilidade com EmailProcessor."""
     try:
         if hasattr(email_processor, 'database_brk') and email_processor.database_brk:
             print(f"✅ DatabaseBRK já integrado ao EmailProcessor")
             return True
         
-        # Criar nova instância DatabaseBRK
         db_brk = DatabaseBRK(
             email_processor.auth, 
             email_processor.onedrive_brk_id
@@ -1053,4 +860,4 @@ def integrar_database_emailprocessor(email_processor):
         
     except Exception as e:
         print(f"❌ Erro na integração: {e}")
-        return False#
+        return False
