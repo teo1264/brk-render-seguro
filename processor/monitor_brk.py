@@ -181,65 +181,86 @@ class MonitorBRK:
         except Exception as e:
             print(f"❌ Erro no processamento: {e}")
 
-   def executar_ciclo_completo(self):
-    """
-    Executa ciclo completo: emails + planilha integrada
-    ✅ NOVO: Inclui atualização automática da planilha
-    """
-    timestamp = datetime.now().strftime('%H:%M:%S')
-    print(f"\n🔄 [{timestamp}] MONITOR BRK INTEGRADO - Ciclo completo")
-    print(f"=" * 55)
-    
-    try:
-        # 1. ETAPA EMAILS (lógica existente)
-        print("📧 ETAPA 1: Processamento de emails")
-        self.exibir_estatisticas_pasta()
-        print()
-        self.processar_emails_novos()
+    def executar_ciclo_completo(self):
+        """
+        Executa ciclo completo: emails + planilha integrada
+        ✅ NOVO: Inclui atualização automática da planilha
+        """
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        print(f"\n🔄 [{timestamp}] MONITOR BRK INTEGRADO - Ciclo completo")
+        print(f"=" * 55)
         
-        # 2. ETAPA PLANILHA (NOVA)
-        print(f"\n📊 ETAPA 2: Atualização planilha BRK")
-        self.atualizar_planilha_automatica()
+        try:
+            # 1. ETAPA EMAILS (lógica existente)
+            print("📧 ETAPA 1: Processamento de emails")
+            self.exibir_estatisticas_pasta()
+            print()
+            self.processar_emails_novos()
+            
+            # 2. ETAPA PLANILHA (NOVA)
+            print(f"\n📊 ETAPA 2: Atualização planilha BRK")
+            self.atualizar_planilha_automatica()
+            
+        except Exception as e:
+            print(f"❌ Erro no ciclo integrado: {e}")
         
-    except Exception as e:
-        print(f"❌ Erro no ciclo integrado: {e}")
-    
-    print(f"=" * 55)
-    print(f"⏰ Próximo ciclo em {self.intervalo_minutos} minutos")
+        print(f"=" * 55)
+        print(f"⏰ Próximo ciclo em {self.intervalo_minutos} minutos")
 
     def atualizar_planilha_automatica(self):
-    """
-    NOVA FUNÇÃO: Atualizar planilha com sistema backup inteligente
-    """
-    try:
-        print("📊 Gerando planilha atualizada...")
-        
-        # Importar módulos necessários
-        from processor.excel_brk import ExcelGeneratorBRK
-        from processor.planilha_backup import salvar_planilha_inteligente
-        
-        # Gerar dados da planilha
-        excel_generator = ExcelGeneratorBRK()
-        dados_planilha = excel_generator.gerar_excel_bytes()
-        
-        if dados_planilha:
-            print("📊 Dados da planilha gerados com sucesso")
+        """
+        NOVA FUNÇÃO: Atualizar planilha com sistema backup inteligente
+        """
+        try:
+            print("📊 Gerando planilha atualizada...")
             
-            # Usar sistema backup inteligente
-            sucesso = salvar_planilha_inteligente(self.processor.auth, dados_planilha)
+            # Importar módulos necessários
+            from processor.excel_brk import ExcelGeneratorBRK
+            from processor.planilha_backup import salvar_planilha_inteligente
             
-            if sucesso:
-                print("✅ Planilha atualizada com sucesso")
+            # Gerar dados da planilha
+            excel_generator = ExcelGeneratorBRK()
+            dados_planilha = excel_generator.gerar_excel_bytes()
+            
+            if dados_planilha:
+                print("📊 Dados da planilha gerados com sucesso")
+                
+                # Usar sistema backup inteligente
+                sucesso = salvar_planilha_inteligente(self.processor.auth, dados_planilha)
+                
+                if sucesso:
+                    print("✅ Planilha atualizada com sucesso")
+                else:
+                    print("❌ Falha no salvamento da planilha")
             else:
-                print("❌ Falha no salvamento da planilha")
-        else:
-            print("❌ Erro gerando dados da planilha")
+                print("❌ Erro gerando dados da planilha")
+                
+        except ImportError as e:
+            print(f"❌ Módulo não encontrado: {e}")
+            print("⚠️ Verifique se processor/excel_brk.py e processor/planilha_backup.py existem")
+        except Exception as e:
+            print(f"❌ Erro atualizando planilha: {e}")
+
+    def loop_monitoramento(self):
+        """
+        Loop principal do monitoramento.
+        Roda em thread separada.
+        """
+        print(f"🔄 Loop monitoramento iniciado (intervalo: {self.intervalo_minutos} min)")
+        
+        while self.ativo:
+            try:
+                self.executar_ciclo_completo()
+                
+            except Exception as e:
+                print(f"❌ Erro no ciclo de monitoramento: {e}")
+                
+            # Aguardar próximo ciclo (com verificação de status a cada 30 segundos)
+            tempo_restante = self.intervalo_minutos * 60  # Converter para segundos
             
-    except ImportError as e:
-        print(f"❌ Módulo não encontrado: {e}")
-        print("⚠️ Verifique se processor/excel_brk.py e processor/planilha_backup.py existem")
-    except Exception as e:
-        print(f"❌ Erro atualizando planilha: {e}")      
+            while tempo_restante > 0 and self.ativo:
+                time.sleep(min(30, tempo_restante))  # Dormir em chunks de 30s
+                tempo_restante -= 30
 
     def iniciar_monitoramento(self):
         """
