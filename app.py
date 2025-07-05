@@ -16,7 +16,7 @@ from auth.microsoft_auth import MicrosoftAuth
 from processor.email_processor import EmailProcessor
 from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico
 # NOVO: Import scheduler BRK
-from processor.scheduler_brk import inicializar_scheduler_automatico, obter_status_scheduler
+# from processor.scheduler_brk import inicializar_scheduler_automatico, obter_status_scheduler
 # Configuração do Flask
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-key-change-in-production')
@@ -777,11 +777,73 @@ def gerar_planilha_brk():
     from processor.excel_brk import ExcelGeneratorBRK
     return ExcelGeneratorBRK().handle_request()
 
-@app.route('/status-scheduler-brk')
-def status_scheduler_brk():
-    """Status scheduler"""
-    status = obter_status_scheduler()
-    return jsonify(status)
+# @app.route('/status-scheduler-brk')
+# def status_scheduler_brk():
+#    """Status scheduler"""
+#    status = obter_status_scheduler()
+#    return jsonify(status)
+
+@app.route('/status-monitor-integrado')
+def status_monitor_integrado():
+    """Status do novo monitor integrado BRK"""
+    try:
+        import threading
+        
+        # Verificar se thread do monitor está ativa
+        threads_ativas = threading.enumerate()
+        monitor_ativo = any(t.name == "MonitorBRK" and t.is_alive() for t in threads_ativas)
+        
+        # Verificar dependências
+        try:
+            processor = EmailProcessor(auth_manager)
+            from processor.monitor_brk import verificar_dependencias_monitor
+            deps = verificar_dependencias_monitor(processor)
+        except Exception as e:
+            deps = {"dependencias_ok": False, "erro": str(e)}
+        
+        status = {
+            "monitor_integrado": {
+                "ativo": monitor_ativo,
+                "thread_encontrada": monitor_ativo,
+                "funcionalidade": "Emails + Planilha em ciclo único",
+                "intervalo": "30 minutos",
+                "backup_sistema": "Pasta .brk_system (invisível)",
+                "substituiu": ["Monitor 10 min", "Scheduler 06:00h"]
+            },
+            "dependencias": {
+                "status": "ok" if deps.get("dependencias_ok") else "problemas",
+                "email_processor": deps.get("email_processor_valido", False),
+                "autenticacao": deps.get("autenticacao_ok", False),
+                "excel_generator": deps.get("excel_generator_ok", False),
+                "planilha_backup": deps.get("planilha_backup_ok", False),
+                "onedrive_brk": deps.get("onedrive_brk_ok", False),
+                "observacoes": deps.get("observacoes", [])
+            },
+            "threads_sistema": {
+                "total": len(threads_ativas),
+                "monitor_brk": monitor_ativo,
+                "threads_nomes": [t.name for t in threads_ativas if hasattr(t, 'name')]
+            },
+            "timestamp": datetime.now().isoformat(),
+            "sistema": "Monitor Integrado BRK v2.0"
+        }
+        
+        return jsonify(status)
+        
+    except Exception as e:
+        return jsonify({
+            "erro": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "sistema": "Monitor Integrado BRK v2.0"
+        }), 500
+
+# ❌ COMENTAR/REMOVER: Rota do scheduler antigo
+# @app.route('/status-scheduler-brk')
+# def status_scheduler_brk():
+#     """Status scheduler - ❌ REMOVIDO: Substituído por monitor integrado"""
+#     from processor.scheduler_brk import obter_status_scheduler
+#     status = obter_status_scheduler()
+#     return jsonify(status)
 
 # ============================================================================
 # TRATAMENTO DE ERROS
@@ -830,43 +892,48 @@ def verificar_configuracao():
     return True
 
 def inicializar_aplicacao():
-    """Inicialização com integração processor/"""
+    """Inicialização com monitor integrado - ✅ SEM SCHEDULER 06:00h"""
     print(f"\n🚀 INICIANDO SISTEMA BRK INTEGRADO COM PROCESSOR/")
     print(f"="*60)
     
     if not verificar_configuracao():
         return False
-    # NOVO: Scheduler BRK
-    print("🔄 Inicializando Scheduler BRK...")
-    scheduler_iniciado = inicializar_scheduler_automatico()
-    if scheduler_iniciado:
-        print("✅ Scheduler BRK: Ativo (jobs automáticos às 06:00h)")
-    else:
-        print("⚠️ Scheduler BRK: Falha na inicialização") 
-   
+    
+    # ❌ REMOVIDO: Scheduler BRK das 06:00h (substituído por monitor integrado)
+    # print("🔄 Inicializando Scheduler BRK...")
+    # scheduler_iniciado = inicializar_scheduler_automatico()
+    # if scheduler_iniciado:
+    #     print("✅ Scheduler BRK: Ativo (jobs automáticos às 06:00h)")
+    # else:
+    #     print("⚠️ Scheduler BRK: Falha na inicialização")
+    
     if auth_manager.access_token:
         print(f"✅ Autenticação funcionando")
         
         # 🆕 CRIAR EmailProcessor
         processor = EmailProcessor(auth_manager)
-        # Diagnóstico de teste (remover após identificar problema)
-        from processor.diagnostico_teste import ativar_diagnostico
-        ativar_diagnostico(processor)
-        # 🆕 VERIFICAR DEPENDÊNCIAS DO MONITOR
-
+        
+        # 🆕 VERIFICAR DEPENDÊNCIAS DO MONITOR INTEGRADO
+        from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico
+        
         deps = verificar_dependencias_monitor(processor)
         if deps['dependencias_ok']:
-            print(f"✅ Dependências do monitor validadas")
+            print(f"✅ Dependências do monitor integrado validadas")
             
-            # 🆕 INICIAR MONITOR AUTOMÁTICO
+            # 🆕 INICIAR MONITOR INTEGRADO (substitui monitor 10min + scheduler 06:00h)
             monitor = iniciar_monitoramento_automatico(processor)
             
             if monitor:
-                print(f"✅ Monitor automático ativo (verifica a cada 10 min)")
+                print(f"✅ Monitor integrado ativo:")
+                print(f"   📧 Processamento emails: a cada 30 min")
+                print(f"   📊 Planilha BRK: atualizada automaticamente")
+                print(f"   💾 Backup inteligente: pasta .brk_system (invisível)")
+                print(f"   🧹 Limpeza automática: backups antigos")
+                print(f"   🔄 Substitui: Monitor 10min + Scheduler 06:00h")
             else:
-                print(f"⚠️ Monitor automático falhou - continuando sem ele")
+                print(f"⚠️ Monitor integrado falhou - continuando sem ele")
         else:
-            print(f"❌ Dependências do monitor faltando:")
+            print(f"❌ Dependências do monitor integrado faltando:")
             for obs in deps['observacoes']:
                 print(f"   {obs}")
             print(f"⚠️ Continuando sem monitor automático")
@@ -875,11 +942,10 @@ def inicializar_aplicacao():
     print(f"   📧 Processamento de emails ativo")
     print(f"   📁 OneDrive + DatabaseBRK configurado")
     print(f"   🔍 SEEK + detecção duplicatas ativo")
-    print(f"   📊 Monitor automático a cada 10 minutos")  # ← NOVA LINHA
+    print(f"   📊 Monitor integrado: emails + planilha a cada 30 min")  # ← NOVO
     print(f"   🌐 Interface web completa disponível")
     
     return True
-
 # ============================================================================
 # FUNÇÕES AUXILIARES DBEDIT (adicionar antes do if __name__ == '__main__')
 # ============================================================================
