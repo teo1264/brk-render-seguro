@@ -1,38 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-📁 ARQUIVO: processor/monitor_brk.py
+📁 ARQUIVO: processor/monitor_brk.py - VERSÃO LIMPA
 💾 ONDE SALVAR: brk-monitor-seguro/processor/monitor_brk.py
 📦 FUNÇÃO: Monitor automático BRK - orquestração simples
 🔧 DESCRIÇÃO: Usa métodos que JÁ EXISTEM em EmailProcessor
 👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
-
-🚨 DEPENDÊNCIAS OBRIGATÓRIAS:
-   📁 Este módulo DEPENDE de outros módulos na pasta processor/:
-   
-   ✅ processor/email_processor.py (OBRIGATÓRIO)
-      └─ Métodos usados:
-         • diagnosticar_pasta_brk() - estatísticas da pasta
-         • buscar_emails_novos() - busca emails por período  
-         • extrair_pdfs_do_email() - extração completa PDFs
-         • log_consolidado_email() - logs estruturados bonitos
-         • obter_estatisticas_avancadas() - stats do sistema
-   
-   ✅ processor/database_brk.py (OPCIONAL - via EmailProcessor)
-      └─ Usado indiretamente se EmailProcessor tem DatabaseBRK integrado
-      └─ Métodos: salvar_fatura(), obter_estatisticas()
-   
-   ⚠️ IMPORTANTE:
-   - Este monitor NÃO cria funcionalidades novas
-   - Apenas ORQUESTRA métodos que já existem
-   - Se EmailProcessor falhar, este monitor falha também
-   - Estrutura modular: auth/ + processor/ + admin/
-
-📋 FUNCIONAMENTO:
-   • Roda em thread daemon (não bloqueia Flask)
-   • Verifica emails a cada 10 minutos automaticamente
-   • Exibe logs estruturados no Render
-   • Usa apenas métodos seguros e testados
 """
 
 import time
@@ -129,13 +102,13 @@ class MonitorBRK:
 
     def processar_emails_novos(self):
         """
-        Processa emails novos dos últimos 10 minutos.
+        Processa emails novos dos últimos minutos.
         USA: buscar_emails_novos() + extrair_pdfs_do_email() que JÁ EXISTEM
         """
         try:
             print(f"🔍 Processando emails novos (últimos {self.intervalo_minutos} min)...")
             
-            # ✅ USAR método que JÁ EXISTE - 10 minutos = 0.0069 dias
+            # ✅ USAR método que JÁ EXISTE - converter minutos para dias
             dias_atras = self.intervalo_minutos / (24 * 60)  # Converter minutos para dias
             emails = self.processor.buscar_emails_novos(dias_atras)
             
@@ -213,12 +186,6 @@ class MonitorBRK:
         
         ANTES: Gerava apenas planilha do mês atual
         AGORA: Detecta TODOS os meses com faturas e gera planilha para cada um
-        
-        ✅ SOLUÇÃO COMPLETA:
-           1. Consulta database para detectar meses únicos
-           2. Gera planilha específica para cada mês encontrado
-           3. Sistema backup inteligente para cada planilha
-           4. Logs detalhados para cada operação
         """
         try:
             print("📊 Iniciando atualização MÚLTIPLAS planilhas BRK...")
@@ -228,7 +195,7 @@ class MonitorBRK:
             from processor.planilha_backup import salvar_planilha_inteligente
             
             # ✅ Verificar se DatabaseBRK está disponível
-            if not self.processor.database_brk:
+            if not hasattr(self.processor, 'database_brk') or not self.processor.database_brk:
                 print("❌ DatabaseBRK não disponível - não é possível detectar meses")
                 print("⚠️ Usando fallback: apenas mês atual")
                 self._atualizar_planilha_mes_atual_fallback()
@@ -246,7 +213,7 @@ class MonitorBRK:
             
             print(f"✅ {len(meses_com_faturas)} mês(es) com faturas detectado(s)")
             
-            # ✅ Criar generator COM autenticação (correção existente mantida)
+            # ✅ Criar generator COM autenticação
             excel_generator = ExcelGeneratorBRK()
             excel_generator.auth = self.processor.auth
             
@@ -305,10 +272,11 @@ class MonitorBRK:
             # Listar planilhas processadas
             if planilhas_processadas > 0:
                 print(f"\n📄 PLANILHAS ATUALIZADAS:")
-                for mes, ano in meses_com_faturas[:planilhas_processadas]:
-                    nome_arquivo = f"BRK-Planilha-{ano}-{mes:02d}.xlsx"
-                    pasta_destino = f"/BRK/Faturas/{ano}/{mes:02d}/"
-                    print(f"   📊 {self._nome_mes(mes)}/{ano} → {pasta_destino}{nome_arquivo}")
+                for i, (mes, ano) in enumerate(meses_com_faturas):
+                    if i < planilhas_processadas:
+                        nome_arquivo = f"BRK-Planilha-{ano}-{mes:02d}.xlsx"
+                        pasta_destino = f"/BRK/Faturas/{ano}/{mes:02d}/"
+                        print(f"   📊 {self._nome_mes(mes)}/{ano} → {pasta_destino}{nome_arquivo}")
             
             if planilhas_processadas > 0:
                 print(f"🎯 MISSÃO CUMPRIDA: {planilhas_processadas} planilha(s) atualizada(s)")
@@ -374,7 +342,7 @@ class MonitorBRK:
             print(f"\n🔍 DIAGNÓSTICO MÚLTIPLAS PLANILHAS BRK")
             print(f"=" * 55)
             
-            if not self.processor.database_brk:
+            if not hasattr(self.processor, 'database_brk') or not self.processor.database_brk:
                 print("❌ DatabaseBRK não disponível")
                 return
             
@@ -443,17 +411,12 @@ class MonitorBRK:
             self.thread_monitor.start()
             print(f"✅ Monitor BRK iniciado em background")
             
-            # Executar primeiro ciclo imediatamente (opcional)
-            # threading.Thread(target=self.executar_ciclo_completo, daemon=True).start()
-            
         except Exception as e:
             print(f"❌ Erro iniciando monitor: {e}")
             self.ativo = False
 
     def parar_monitoramento(self):
-        """
-        Para o monitoramento.
-        """
+        """Para o monitoramento."""
         if not self.ativo:
             print(f"⚠️ Monitor não está ativo")
             return
@@ -609,38 +572,3 @@ def iniciar_monitoramento_automatico(email_processor) -> Optional[MonitorBRK]:
     except Exception as e:
         print(f"❌ Erro criando monitor automático: {e}")
         return None
-
-
-# ============================================================================
-# EXEMPLO DE USO (para testes e debug)
-# ============================================================================
-
-if __name__ == "__main__":
-    print(f"🧪 TESTE DO MONITOR BRK")
-    print(f"Este módulo deve ser importado pelo app.py")
-    print(f"")
-    print(f"📋 DEPENDÊNCIAS NECESSÁRIAS:")
-    print(f"   ✅ processor/email_processor.py → métodos de processamento")
-    print(f"   ✅ processor/database_brk.py → integração database (opcional)")
-    print(f"   ✅ auth/microsoft_auth.py → autenticação Microsoft")
-    print(f"")
-    print(f"🔧 EXEMPLO DE USO NO APP.PY:")
-    print(f"")
-    print(f"  # 1. Import no topo")
-    print(f"  from processor.monitor_brk import verificar_dependencias_monitor, iniciar_monitoramento_automatico")
-    print(f"  ")
-    print(f"  # 2. Verificar dependências (opcional - para debug)")
-    print(f"  processor = EmailProcessor(auth_manager)")
-    print(f"  deps = verificar_dependencias_monitor(processor)")
-    print(f"  if not deps['dependencias_ok']:")
-    print(f"      print('❌ Dependências faltando:', deps['observacoes'])")
-    print(f"  ")
-    print(f"  # 3. Iniciar monitor automático")
-    print(f"  monitor = iniciar_monitoramento_automatico(processor)")
-    print(f"")
-    print(f"📊 LOGS ESPERADOS NO RENDER:")
-    print(f"   🔄 [14:35:00] MONITOR BRK - Verificação automática")
-    print(f"   📊 ESTATÍSTICAS PASTA BRK: 1,247 emails total, 23 mês atual")
-    print(f"   📧 Email processado: CDC 513-01 → Igreja Central → R$ 127,45")
-    print(f"   ✅ Processamento concluído: 1 email, 1 PDF")
-    print(f"   ⏰ Próxima verificação em 10 minutos")
