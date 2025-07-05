@@ -210,6 +210,7 @@ class MonitorBRK:
     def atualizar_planilha_automatica(self):
         """
         NOVA FUNÇÃO: Atualizar planilha com sistema backup inteligente
+        ✅ CORRIGIDO: Autenticação passada para ExcelGeneratorBRK
         """
         try:
             print("📊 Gerando planilha atualizada...")
@@ -218,19 +219,15 @@ class MonitorBRK:
             from processor.excel_brk import ExcelGeneratorBRK
             from processor.planilha_backup import salvar_planilha_inteligente
             
-            # Gerar dados da planilha
-            # excel_generator = ExcelGeneratorBRK()
-            # dados_planilha = excel_generator.gerar_excel_bytes()
-
-            # Gerar dados da planilha
+            # ✅ CORREÇÃO: Criar generator COM autenticação
             excel_generator = ExcelGeneratorBRK()
-
-            # ✅ MÉTODO CORRETO: gerar_planilha_mensal(mes, ano)
+            excel_generator.auth = self.processor.auth  # Passar auth do sistema
+            
+            # Gerar dados da planilha com método correto
             from datetime import datetime
             hoje = datetime.now()
             dados_planilha = excel_generator.gerar_planilha_mensal(hoje.month, hoje.year)
-
-           
+            
             if dados_planilha:
                 print("📊 Dados da planilha gerados com sucesso")
                 
@@ -249,7 +246,7 @@ class MonitorBRK:
             print("⚠️ Verifique se processor/excel_brk.py e processor/planilha_backup.py existem")
         except Exception as e:
             print(f"❌ Erro atualizando planilha: {e}")
-
+           
     def loop_monitoramento(self):
         """
         Loop principal do monitoramento.
