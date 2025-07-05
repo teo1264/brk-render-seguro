@@ -6,210 +6,91 @@
 👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
 
 🔧 LÓGICA SIMPLES:
-   1. Detectar mês/ano atual (julho/2025)
+   1. Detectar mês/ano atual (julho/2025) ou específico
    2. Tentar salvar /BRK/Faturas/2025/07/BRK-Planilha-2025-07.xlsx
    3. Se ocupada → /BRK/Faturas/2025/07/BRK-Planilha-2025-07_TEMPORARIA_05Jul_15h30.xlsx
    4. A cada 30min → tentar principal + limpar temporárias na pasta correta
    5. Usuário vê claramente os arquivos temporários na pasta do mês
-   
-✅ CORREÇÃO: Estrutura de pastas corrigida para seguir padrão existente
 """
 
 import os
 import requests
 from datetime import datetime
-def atualizar_planilha_automatica(self):
-        """
-        🆕 FUNÇÃO CORRIGIDA: Atualizar MÚLTIPLAS planilhas automaticamente
-        
-        ANTES: Gerava apenas planilha do mês atual
-        AGORA: Detecta TODOS os meses com faturas e gera planilha para cada um
-        
-        ✅ SOLUÇÃO COMPLETA:
-           1. Consulta database para detectar meses únicos
-           2. Gera planilha específica para cada mês encontrado
-           3. Sistema backup inteligente para cada planilha
-           4. Logs detalhados para cada operação
-        """
-        try:
-            print("📊 Iniciando atualização MÚLTIPLAS planilhas BRK...")
-            
-            # Importar módulos necessários
-            from processor.excel_brk import ExcelGeneratorBRK
-            from processor.planilha_backup import salvar_planilha_inteligente
-            
-            # ✅ Verificar se DatabaseBRK está disponível
-            if not self.processor.database_brk:
-                print("❌ DatabaseBRK não disponível - não é possível detectar meses")
-                print("⚠️ Usando fallback: apenas mês atual")
-                self._atualizar_planilha_mes_atual_fallback()
-                return
-            
-            # ✅ NOVA LÓGICA: Detectar TODOS os meses com faturas
-            print("🔍 Detectando meses com faturas no database...")
-            meses_com_faturas = self.processor.database_brk.obter_meses_com_faturas()
-            
-            if not meses_com_faturas:
-                print("❌ Nenhum mês com faturas detectado")
-                print("⚠️ Usando fallback: apenas mês atual")
-                self._atualizar_planilha_mes_atual_fallback()
-                return
-            
-            print(f"✅ {len(meses_com_faturas)} mês(es) com faturas detectado(s)")
-            
-            # ✅ Criar generator COM autenticação (correção existente mantida)
-            excel_generator = ExcelGeneratorBRK()
-            excel_generator.auth = self.processor.auth
-            
-            # ✅ PROCESSAR CADA MÊS INDIVIDUALMENTE
-            planilhas_processadas = 0
-            planilhas_com_erro = 0
-            
-            for mes, ano in meses_com_faturas:
-                try:
-                    print(f"\n📊 PROCESSANDO MÊS: {self._nome_mes(mes)}/{ano}")
-                    print(f"=" * 50)
-                    
-                    # Obter estatísticas do mês para validação
-                    stats_mes = self.processor.database_brk.obter_estatisticas_por_mes(mes, ano)
-                    if stats_mes.get('status') == 'sucesso':
-                        print(f"📈 Faturas encontradas: {stats_mes.get('total_faturas', 0)} (Normais: {stats_mes.get('normais', 0)})")
-                    
-                    # Gerar dados da planilha específica do mês
-                    print(f"🔄 Gerando planilha {mes:02d}/{ano}...")
-                    dados_planilha = excel_generator.gerar_planilha_mensal(mes, ano)
-                    
-                    if dados_planilha:
-                        print(f"✅ Planilha {mes:02d}/{ano} gerada: {len(dados_planilha)} bytes")
-                        
-                        # ✅ USAR SISTEMA BACKUP INTELIGENTE ESPECÍFICO PARA O MÊS
-                        print(f"💾 Salvando planilha {mes:02d}/{ano}...")
-                        sucesso = salvar_planilha_inteligente(
-                            self.processor.auth, 
-                            dados_planilha, 
-                            mes, 
-                            ano
-                        )
-                        
-                        if sucesso:
-                            print(f"✅ Planilha {mes:02d}/{ano} atualizada com sucesso")
-                            planilhas_processadas += 1
-                        else:
-                            print(f"❌ Falha salvando planilha {mes:02d}/{ano}")
-                            planilhas_com_erro += 1
-                    else:
-                        print(f"❌ Erro gerando dados da planilha {mes:02d}/{ano}")
-                        planilhas_com_erro += 1
-                        
-                except Exception as e:
-                    print(f"❌ Erro processando mês {mes:02d}/{ano}: {e}")
-                    planilhas_com_erro += 1
-                    continue
-            
-            # ✅ RESUMO FINAL
-            print(f"\n📊 RESUMO ATUALIZAÇÃO MÚLTIPLAS PLANILHAS:")
-            print(f"=" * 50)
-            print(f"📈 Meses detectados: {len(meses_com_faturas)}")
-            print(f"✅ Planilhas atualizadas: {planilhas_processadas}")
-            print(f"❌ Planilhas com erro: {planilhas_com_erro}")
-            
-            # Listar planilhas processadas
-            if planilhas_processadas > 0:
-                print(f"\n📄 PLANILHAS ATUALIZADAS:")
-                for mes, ano in meses_com_faturas[:planilhas_processadas]:
-                    nome_arquivo = f"BRK-Planilha-{ano}-{mes:02d}.xlsx"
-                    pasta_destino = f"/BRK/Faturas/{ano}/{mes:02d}/"
-                    print(f"   📊 {self._nome_mes(mes)}/{ano} → {pasta_destino}{nome_arquivo}")
-            
-            if planilhas_processadas > 0:
-                print(f"🎯 MISSÃO CUMPRIDA: {planilhas_processadas} planilha(s) atualizada(s)")
-            else:
-                print(f"⚠️ NENHUMA PLANILHA FOI ATUALIZADA")
-                
-        except ImportError as e:
-            print(f"❌ Módulo não encontrado: {e}")
-            print("⚠️ Verifique se processor/excel_brk.py e processor/planilha_backup.py existem")
-        except Exception as e:
-            print(f"❌ Erro geral atualização múltiplas planilhas: {e}")
 
-    def _atualizar_planilha_mes_atual_fallback(self):
-        """
-        🔄 FALLBACK: Atualizar apenas planilha do mês atual (lógica original)
-        Usado quando detector de meses falha ou DatabaseBRK indisponível
-        """
-        try:
-            print("🔄 FALLBACK: Atualizando apenas planilha do mês atual...")
-            
-            from processor.excel_brk import ExcelGeneratorBRK
-            from processor.planilha_backup import salvar_planilha_inteligente
-            
-            excel_generator = ExcelGeneratorBRK()
-            excel_generator.auth = self.processor.auth
-            
-            # Usar mês atual (lógica original)
-            from datetime import datetime
+
+def salvar_planilha_inteligente(auth_manager, dados_planilha, mes=None, ano=None):
+    """
+    🆕 FUNÇÃO CORRIGIDA: Salvar planilha com backup para MÊS/ANO ESPECÍFICO
+    
+    ANTES: Sempre usava mês/ano atual
+    AGORA: Aceita mês/ano específico para múltiplas planilhas
+    
+    ✅ MUDANÇAS:
+       - Parâmetros mes/ano opcionais
+       - Se não informado, usa mês/ano atual (compatibilidade)
+       - Nomes de arquivo específicos para cada mês/ano
+       - Backup na pasta correta de cada mês
+    
+    Args:
+        auth_manager: Gerenciador de autenticação
+        dados_planilha: Bytes da planilha Excel
+        mes (int, optional): Mês específico (1-12). Se None, usa atual
+        ano (int, optional): Ano específico. Se None, usa atual
+        
+    Returns:
+        bool: True se salvamento bem-sucedido
+    """
+    try:
+        # ✅ DETECTAR MÊS/ANO ESPECÍFICO OU USAR ATUAL
+        if mes is None or ano is None:
+            # Fallback para compatibilidade (lógica original)
             hoje = datetime.now()
-            dados_planilha = excel_generator.gerar_planilha_mensal(hoje.month, hoje.year)
+            mes_usado = mes if mes is not None else hoje.month
+            ano_usado = ano if ano is not None else hoje.year
+            print(f"📊 Salvamento planilha BRK - Usando mês/ano atual: {mes_usado:02d}/{ano_usado}")
+        else:
+            # Usar mês/ano específico informado
+            mes_usado = mes
+            ano_usado = ano
+            print(f"📊 Salvamento planilha BRK - Mês/ano específico: {mes_usado:02d}/{ano_usado}")
+        
+        # ✅ NOMES CORRETOS PARA O MÊS/ANO ESPECÍFICO
+        nome_principal = f"BRK-Planilha-{ano_usado}-{mes_usado:02d}.xlsx"
+        pasta_destino = f"/BRK/Faturas/{ano_usado}/{mes_usado:02d}/"
+        
+        print(f"📁 Pasta destino: {pasta_destino}")
+        print(f"📄 Arquivo principal: {nome_principal}")
+        
+        # 1. Tentar salvar planilha principal
+        if tentar_salvar_principal(auth_manager, dados_planilha, pasta_destino, nome_principal):
+            print(f"✅ Planilha principal {mes_usado:02d}/{ano_usado} atualizada com sucesso")
             
-            if dados_planilha:
-                print("📊 Planilha mês atual gerada com sucesso")
-                
-                # Sistema backup (sem especificar mês/ano = usa atual)
-                sucesso = salvar_planilha_inteligente(self.processor.auth, dados_planilha)
-                
-                if sucesso:
-                    print("✅ Planilha mês atual atualizada com sucesso")
-                else:
-                    print("❌ Falha no salvamento da planilha mês atual")
-            else:
-                print("❌ Erro gerando dados da planilha mês atual")
-                
-        except Exception as e:
-            print(f"❌ Erro fallback planilha mês atual: {e}")
+            # 2. Principal salvou → limpar temporárias da pasta correta
+            limpar_planilhas_temporarias(auth_manager, pasta_destino, ano_usado, mes_usado)
+            return True
+        
+        # 3. Principal ocupada → salvar temporária VISÍVEL na mesma pasta
+        print(f"⚠️ Planilha principal {mes_usado:02d}/{ano_usado} ocupada, criando versão temporária...")
+        
+        nome_temporaria = gerar_nome_temporaria(ano_usado, mes_usado)
+        
+        if salvar_planilha_temporaria(auth_manager, dados_planilha, pasta_destino, nome_temporaria):
+            print(f"💾 Planilha temporária criada: {nome_temporaria}")
+            print(f"📁 Arquivo visível em: {pasta_destino}")
+            print(f"🔄 Sistema tentará atualizar principal em 30 minutos")
+            
+            # 4. Notificar admin se configurado
+            notificar_planilha_temporaria(nome_temporaria, pasta_destino, mes_usado, ano_usado)
+            
+            return True
+        else:
+            print(f"❌ Falha criando planilha temporária {mes_usado:02d}/{ano_usado}")
+            return False
+            
+    except Exception as e:
+        print(f"❌ Erro salvamento planilha {mes_usado:02d}/{ano_usado}: {e}")
+        return False
 
-    def _nome_mes(self, numero_mes):
-        """Helper: Converte número do mês para nome"""
-        meses = {
-            1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
-            5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 
-            9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-        }
-        return meses.get(numero_mes, f"Mês{numero_mes}")
-
-    def diagnosticar_multiplas_planilhas(self):
-        """
-        🆕 NOVA FUNÇÃO: Diagnóstico das múltiplas planilhas
-        Útil para debug e validação do sistema
-        """
-        try:
-            print(f"\n🔍 DIAGNÓSTICO MÚLTIPLAS PLANILHAS BRK")
-            print(f"=" * 55)
-            
-            if not self.processor.database_brk:
-                print("❌ DatabaseBRK não disponível")
-                return
-            
-            # Detectar meses
-            meses_detectados = self.processor.database_brk.obter_meses_com_faturas()
-            
-            print(f"📊 Meses detectados: {len(meses_detectados)}")
-            
-            for mes, ano in meses_detectados:
-                stats = self.processor.database_brk.obter_estatisticas_por_mes(mes, ano)
-                nome_arquivo = f"BRK-Planilha-{ano}-{mes:02d}.xlsx"
-                pasta = f"/BRK/Faturas/{ano}/{mes:02d}/"
-                
-                print(f"\n📊 {self._nome_mes(mes)}/{ano}:")
-                print(f"   📁 Arquivo: {pasta}{nome_arquivo}")
-                print(f"   📈 Faturas: {stats.get('total_faturas', 0)} total")
-                print(f"   ✅ Normais: {stats.get('normais', 0)}")
-                print(f"   🔄 Duplicatas: {stats.get('duplicatas', 0)}")
-                print(f"   ❌ Faltantes: {stats.get('faltantes', 0)}")
-            
-            print(f"=" * 55)
-            
-        except Exception as e:
-            print(f"❌ Erro diagnóstico múltiplas planilhas: {e}")
 
 def tentar_salvar_principal(auth_manager, dados_planilha, pasta_destino, nome_arquivo):
     """Tentar salvar na planilha principal na pasta correta"""
@@ -245,6 +126,7 @@ def tentar_salvar_principal(auth_manager, dados_planilha, pasta_destino, nome_ar
         print(f"❌ Erro salvando principal: {e}")
         return False
 
+
 def salvar_planilha_temporaria(auth_manager, dados_planilha, pasta_destino, nome_temporaria):
     """Salvar planilha temporária na pasta correta do mês/ano"""
     try:
@@ -267,6 +149,7 @@ def salvar_planilha_temporaria(auth_manager, dados_planilha, pasta_destino, nome
     except Exception as e:
         print(f"❌ Erro salvando temporária: {e}")
         return False
+
 
 def limpar_planilhas_temporarias(auth_manager, pasta_destino, ano, mes):
     """Limpar planilhas temporárias da pasta específica do mês/ano"""
@@ -306,23 +189,53 @@ def limpar_planilhas_temporarias(auth_manager, pasta_destino, ano, mes):
     except Exception as e:
         print(f"❌ Erro limpando temporárias: {e}")
 
+
 def gerar_nome_temporaria(ano, mes):
-    """Gerar nome claro para planilha temporária baseado no padrão existente"""
+    """
+    🔧 FUNÇÃO CORRIGIDA: Gerar nome temporário para mês/ano específico
+    
+    ANTES: Sempre baseado no mês atual para timestamp
+    AGORA: Nome baseado no mês/ano da planilha + timestamp atual
+    
+    Args:
+        ano (int): Ano da planilha (ex: 2025)
+        mes (int): Mês da planilha (ex: 7 para julho)
+        
+    Returns:
+        str: Nome do arquivo temporário
+    """
     agora = datetime.now()
     
-    # ✅ PADRÃO: BRK-Planilha-2025-07_TEMPORARIA_05Jul_15h30.xlsx
+    # ✅ PADRÃO CORRIGIDO: BRK-Planilha-{ANO}-{MES}_TEMPORARIA_{dia_atual}{mes_atual}_{hora}
+    # Exemplo: BRK-Planilha-2025-08_TEMPORARIA_05Jul_15h30.xlsx
+    
     # Meses em português abreviado
     meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
              'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     
-    dia = agora.day
-    mes_abrev = meses[agora.month - 1]  # Usar mês atual, não o da planilha
-    hora = agora.strftime('%Hh%M')
+    dia_atual = agora.day
+    mes_atual_abrev = meses[agora.month - 1]  # Mês atual para timestamp
+    hora_atual = agora.strftime('%Hh%M')
     
-    return f"BRK-Planilha-{ano}-{mes:02d}_TEMPORARIA_{dia:02d}{mes_abrev}_{hora}.xlsx"
+    # Nome: Planilha do mês/ano específico + timestamp atual
+    nome = f"BRK-Planilha-{ano}-{mes:02d}_TEMPORARIA_{dia_atual:02d}{mes_atual_abrev}_{hora_atual}.xlsx"
+    
+    return nome
 
-def notificar_planilha_temporaria(nome_temporaria, pasta_destino):
-    """Notificar admin sobre planilha temporária (opcional)"""
+
+def notificar_planilha_temporaria(nome_temporaria, pasta_destino, mes, ano):
+    """
+    🔧 FUNÇÃO CORRIGIDA: Notificar admin sobre planilha temporária específica
+    
+    ANTES: Mensagem genérica
+    AGORA: Mensagem específica para o mês/ano da planilha
+    
+    Args:
+        nome_temporaria (str): Nome do arquivo temporário
+        pasta_destino (str): Pasta onde foi salvo
+        mes (int): Mês específico da planilha
+        ano (int): Ano específico da planilha
+    """
     try:
         # Import opcional - não quebra se módulo não existir
         from processor.alertas.telegram_sender import enviar_telegram
@@ -330,37 +243,74 @@ def notificar_planilha_temporaria(nome_temporaria, pasta_destino):
         admin_ids = os.getenv("ADMIN_IDS", "").split(",")
         
         if admin_ids and admin_ids[0].strip():
+            # ✅ Converter número do mês para nome
+            meses_nomes = {
+                1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
+                5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 
+                9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
+            }
+            
+            nome_mes = meses_nomes.get(mes, f"Mês{mes}")
+            
             mensagem = f"""📊 PLANILHA BRK - VERSÃO TEMPORÁRIA
 
-⚠️ Planilha principal estava em uso
+📅 Planilha: {nome_mes}/{ano}
+⚠️ Arquivo principal estava em uso
 💾 Dados salvos em: {nome_temporaria}
 📁 Localização: {pasta_destino}
 🔄 Sistema tentará atualizar principal em 30 min
 
-📄 Feche a planilha principal quando possível
+📄 Feche BRK-Planilha-{ano}-{mes:02d}.xlsx quando possível
 ✅ Processamento continua normalmente"""
             
             enviar_telegram(admin_ids[0].strip(), mensagem)
-            print("📱 Admin notificado via Telegram")
+            print(f"📱 Admin notificado via Telegram sobre planilha {mes:02d}/{ano}")
             
     except ImportError:
         print("⚠️ Telegram não configurado - seguindo sem notificação")
     except Exception as e:
         print(f"⚠️ Falha notificação Telegram: {e}")
 
+
 # ============================================================================
-# FUNÇÕES REMOVIDAS (comentário para referência):
-# 
-# ❌ obter_pasta_sistema_brk() - criava pasta .brk_system (removida)
-# ❌ salvar_backup_invisivel() - backup oculto (removida) 
-# ❌ limpar_backups_antigos() - lógica pasta oculta (removida)
-# ❌ import hashlib - não mais necessário (removido)
-#
-# ✅ CORREÇÃO ESTRUTURA DE PASTAS:
-# - ANTES: Salvava na pasta raiz /BRK/ (ERRADO)
-# - DEPOIS: Salva na pasta correta /BRK/Faturas/YYYY/MM/ (CORRETO)
-# - Principal: BRK-Planilha-2025-07.xlsx
-# - Temporária: BRK-Planilha-2025-07_TEMPORARIA_05Jul_15h30.xlsx
-#
-# Total reduzido: 180 → 60 linhas (economia de 67%)
+# FUNÇÕES DE COMPATIBILIDADE (MANTIDAS PARA NÃO QUEBRAR SISTEMA EXISTENTE)
 # ============================================================================
+
+def salvar_planilha_backup(auth_manager, dados_planilha):
+    """
+    🔄 COMPATIBILIDADE: Função original que usava apenas mês atual
+    Agora redireciona para a nova função com mês/ano atual
+    """
+    print("🔄 Usando função de compatibilidade - redirecionando para nova versão")
+    return salvar_planilha_inteligente(auth_manager, dados_planilha)
+
+
+def criar_backup_planilha(auth_manager, dados_planilha, nome_arquivo=None):
+    """
+    🔄 COMPATIBILIDADE: Outra possível função que pode existir no sistema
+    """
+    print("🔄 Usando função de compatibilidade - redirecionando para nova versão")
+    return salvar_planilha_inteligente(auth_manager, dados_planilha)
+
+
+# ============================================================================
+# EXEMPLO DE USO E TESTES
+# ============================================================================
+
+if __name__ == "__main__":
+    print(f"🧪 TESTE DO SISTEMA BACKUP PLANILHA BRK")
+    print(f"Este módulo deve ser importado pelo monitor_brk.py")
+    print(f"")
+    print(f"📋 EXEMPLO DE USO:")
+    print(f"")
+    print(f"# Para planilha do mês atual:")
+    print(f"sucesso = salvar_planilha_inteligente(auth, dados_planilha)")
+    print(f"")
+    print(f"# Para planilha de mês específico:")
+    print(f"sucesso = salvar_planilha_inteligente(auth, dados_planilha, mes=8, ano=2025)")
+    print(f"")
+    print(f"📊 RESULTADO ESPERADO:")
+    print(f"   ✅ Planilha principal: /BRK/Faturas/2025/08/BRK-Planilha-2025-08.xlsx")
+    print(f"   💾 Se ocupada: /BRK/Faturas/2025/08/BRK-Planilha-2025-08_TEMPORARIA_05Jul_15h30.xlsx")
+    print(f"   🧹 Limpeza automática de temporárias antigas")
+    print(f"   📱 Notificação admin via Telegram (opcional)")
