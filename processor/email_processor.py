@@ -1002,169 +1002,191 @@ class EmailProcessor:
         
         return self.relacionamento_carregado
 
-    def extrair_pdfs_do_email(self, email):
-        """
-        MÉTODO PRINCIPAL compatível com app.py existente.
+    # ============================================================================
+# MODIFICAÇÃO 1: processor/email_processor.py
+# LOCALIZAR: Função extrair_pdfs_do_email() - linha ~830
+# AÇÃO: SUBSTITUIR toda a função por esta versão
+# ============================================================================
+
+def extrair_pdfs_do_email(self, email):
+    """
+    MÉTODO PRINCIPAL compatível com app.py existente.
+    
+    ✅ VERSÃO COMPLETA COM UPLOAD ONEDRIVE INTEGRADO + PDF ANEXO
+    
+    Agora usa a nova funcionalidade de extração completa,
+    mas mantém interface TOTALMENTE compatível com código existente.
+    
+    Args:
+        email (Dict): Dados do email do Microsoft Graph
         
-        ✅ VERSÃO COMPLETA COM UPLOAD ONEDRIVE INTEGRADO
+    Returns:
+        List[Dict]: Lista de PDFs (compatível + dados expandidos)
+    """
+    pdfs_com_dados = []
+    
+    try:
+        attachments = email.get('attachments', [])
+        email_id = email.get('id', 'unknown')
         
-        Agora usa a nova funcionalidade de extração completa,
-        mas mantém interface TOTALMENTE compatível com código existente.
+        if not attachments:
+            print("📎 Nenhum anexo encontrado no email")
+            return []
         
-        Args:
-            email (Dict): Dados do email do Microsoft Graph
-            
-        Returns:
-            List[Dict]: Lista de PDFs (compatível + dados expandidos)
-        """
-        pdfs_com_dados = []
+        pdfs_brutos = 0
+        pdfs_processados = 0
         
-        try:
-            attachments = email.get('attachments', [])
-            email_id = email.get('id', 'unknown')
+        # Garantir que relacionamento está carregado
+        relacionamento_ok = self.garantir_relacionamento_carregado()
+        if relacionamento_ok:
+            print(f"✅ Relacionamento disponível: {len(self.cdc_brk_vetor)} registros")
+        else:
+            print("⚠️ Relacionamento não disponível - processará apenas dados básicos")
+        
+        for attachment in attachments:
+            filename = attachment.get('name', '').lower()
             
-            if not attachments:
-                print("📎 Nenhum anexo encontrado no email")
-                return []
-            
-            pdfs_brutos = 0
-            pdfs_processados = 0
-            
-            # Garantir que relacionamento está carregado
-            relacionamento_ok = self.garantir_relacionamento_carregado()
-            if relacionamento_ok:
-                print(f"✅ Relacionamento disponível: {len(self.cdc_brk_vetor)} registros")
-            else:
-                print("⚠️ Relacionamento não disponível - processará apenas dados básicos")
-            
-            for attachment in attachments:
-                filename = attachment.get('name', '').lower()
+            # Verificar se é PDF
+            if filename.endswith('.pdf'):
+                pdfs_brutos += 1
+                nome_original = attachment.get('name', 'unnamed.pdf')
                 
-                # Verificar se é PDF
-                if filename.endswith('.pdf'):
-                    pdfs_brutos += 1
-                    nome_original = attachment.get('name', 'unnamed.pdf')
+                try:
+                    # Informações básicas do PDF (COMPATIBILIDADE 100% com código existente)
+                    pdf_info_basico = {
+                        'email_id': email_id,
+                        'filename': nome_original,
+                        'size': attachment.get('size', 0),
+                        'content_bytes': attachment.get('contentBytes', ''),
+                        'received_date': email.get('receivedDateTime', ''),
+                        'email_subject': email.get('subject', ''),
+                        'sender': email.get('from', {}).get('emailAddress', {}).get('address', 'unknown')
+                    }
                     
-                    try:
-                        # Informações básicas do PDF (COMPATIBILIDADE 100% com código existente)
-                        pdf_info_basico = {
-                            'email_id': email_id,
-                            'filename': nome_original,
-                            'size': attachment.get('size', 0),
-                            'content_bytes': attachment.get('contentBytes', ''),
-                            'received_date': email.get('receivedDateTime', ''),
-                            'email_subject': email.get('subject', ''),
-                            'sender': email.get('from', {}).get('emailAddress', {}).get('address', 'unknown')
-                        }
-                        
-                        # NOVA FUNCIONALIDADE: Extrair dados completos do PDF
-                        content_bytes = attachment.get('contentBytes', '')
-                        if content_bytes:
-                            try:
-                                # Decodificar PDF bytes
-                                pdf_bytes = base64.b64decode(content_bytes)
+                    # NOVA FUNCIONALIDADE: Extrair dados completos do PDF
+                    content_bytes = attachment.get('contentBytes', '')
+                    if content_bytes:
+                        try:
+                            # Decodificar PDF bytes
+                            pdf_bytes = base64.b64decode(content_bytes)
+                            
+                            # Extrair dados completos usando nova função
+                            dados_extraidos = self.extrair_dados_fatura_pdf(pdf_bytes, nome_original)
+                            
+                            if dados_extraidos:
+                                # 🆕 MODIFICAÇÃO: Combinar informações básicas + dados extraídos + PDF
+                                pdf_completo = {
+                                    **pdf_info_basico,  # Informações básicas (COMPATIBILIDADE)
+                                    **dados_extraidos,  # Dados extraídos do PDF (NOVA FUNCIONALIDADE)
+                                    'hash_arquivo': hashlib.sha256(pdf_bytes).hexdigest(),
+                                    'dados_extraidos_ok': True,
+                                    'relacionamento_usado': relacionamento_ok,
+                                    'pdf_bytes': pdf_bytes,  # ← NOVA LINHA PARA ANEXO
+                                    'nome_arquivo_pdf': nome_original  # ← NOVA LINHA PARA ANEXO
+                                }
                                 
-                                # Extrair dados completos usando nova função
-                                dados_extraidos = self.extrair_dados_fatura_pdf(pdf_bytes, nome_original)
+                                pdfs_com_dados.append(pdf_completo)
+                                pdfs_processados += 1
                                 
-                                if dados_extraidos:
-                                    # Combinar informações básicas + dados extraídos
-                                    pdf_completo = {
-                                        **pdf_info_basico,  # Informações básicas (COMPATIBILIDADE)
-                                        **dados_extraidos,  # Dados extraídos do PDF (NOVA FUNCIONALIDADE)
-                                        'hash_arquivo': hashlib.sha256(pdf_bytes).hexdigest(),
-                                        'dados_extraidos_ok': True,
-                                        'relacionamento_usado': relacionamento_ok
-                                    }
-                                    
-                                    pdfs_com_dados.append(pdf_completo)
-                                    pdfs_processados += 1
-                                    
-                                    print(f"✅ PDF processado: {nome_original}")
-                                    
-                                    # 🆕 SALVAMENTO AUTOMÁTICO NO DatabaseBRK + UPLOAD ONEDRIVE
-                                    if self.database_brk and dados_extraidos:
-                                        try:
-                                            resultado_db = self.salvar_fatura_database(pdf_completo)
-                                            if resultado_db.get('status') == 'sucesso':
-                                                pdf_completo['database_salvo'] = True
-                                                pdf_completo['database_id'] = resultado_db.get('id_salvo')
-                                                pdf_completo['database_status'] = resultado_db.get('status_duplicata', 'NORMAL')
+                                print(f"✅ PDF processado: {nome_original}")
+                                
+                                # 🆕 SALVAMENTO AUTOMÁTICO NO DatabaseBRK + UPLOAD ONEDRIVE
+                                if self.database_brk and dados_extraidos:
+                                    try:
+                                        resultado_db = self.salvar_fatura_database(pdf_completo)
+                                        if resultado_db.get('status') == 'sucesso':
+                                            pdf_completo['database_salvo'] = True
+                                            pdf_completo['database_id'] = resultado_db.get('id_salvo')
+                                            pdf_completo['database_status'] = resultado_db.get('status_duplicata', 'NORMAL')
+                                            
+                                            # ✅ UPLOAD ONEDRIVE - ELEGANTE (reutiliza DatabaseBRK)
+                                            try:
+                                                print(f"☁️ Iniciando upload OneDrive após database...")
+                                                # Usar dados já mapeados para database
+                                                dados_mapeados = self.preparar_dados_para_database(pdf_completo)
+                                                resultado_upload = self.upload_fatura_onedrive(pdf_bytes, dados_mapeados)
                                                 
-                                                # ✅ UPLOAD ONEDRIVE - ELEGANTE (reutiliza DatabaseBRK)
-                                                try:
-                                                    print(f"☁️ Iniciando upload OneDrive após database...")
-                                                    # Usar dados já mapeados para database
-                                                    dados_mapeados = self.preparar_dados_para_database(pdf_completo)
-                                                    resultado_upload = self.upload_fatura_onedrive(pdf_bytes, dados_mapeados)
-                                                    
-                                                    if resultado_upload.get('status') == 'sucesso':
-                                                        pdf_completo['onedrive_upload'] = True
-                                                        pdf_completo['onedrive_url'] = resultado_upload.get('url_arquivo')
-                                                        pdf_completo['onedrive_pasta'] = resultado_upload.get('pasta_path')
-                                                        pdf_completo['nome_onedrive'] = resultado_upload.get('nome_arquivo')
-                                                        print(f"📁 OneDrive: {resultado_upload.get('pasta_path')}{resultado_upload.get('nome_arquivo')}")
-                                                    else:
-                                                        pdf_completo['onedrive_upload'] = False
-                                                        pdf_completo['onedrive_erro'] = resultado_upload.get('mensagem')
-                                                        print(f"⚠️ Upload OneDrive falhou: {resultado_upload.get('mensagem')}")
-                                                        
-                                                except Exception as e:
-                                                    print(f"⚠️ Erro upload OneDrive: {e}")
+                                                if resultado_upload.get('status') == 'sucesso':
+                                                    pdf_completo['onedrive_upload'] = True
+                                                    pdf_completo['onedrive_url'] = resultado_upload.get('url_arquivo')
+                                                    pdf_completo['onedrive_pasta'] = resultado_upload.get('pasta_path')
+                                                    pdf_completo['nome_onedrive'] = resultado_upload.get('nome_arquivo')
+                                                    print(f"📁 OneDrive: {resultado_upload.get('pasta_path')}{resultado_upload.get('nome_arquivo')}")
+                                                else:
                                                     pdf_completo['onedrive_upload'] = False
-                                                    pdf_completo['onedrive_erro'] = str(e)
-                                            else:
-                                                pdf_completo['database_salvo'] = False
-                                                pdf_completo['database_erro'] = resultado_db.get('mensagem', 'Erro desconhecido')
-                                                print(f"⚠️ Database falhou - pulando upload OneDrive")
-                                        except Exception as e:
-                                            print(f"⚠️ Erro salvamento automático: {e}")
+                                                    pdf_completo['onedrive_erro'] = resultado_upload.get('mensagem')
+                                                    print(f"⚠️ Upload OneDrive falhou: {resultado_upload.get('mensagem')}")
+                                                    
+                                            except Exception as e:
+                                                print(f"⚠️ Erro upload OneDrive: {e}")
+                                                pdf_completo['onedrive_upload'] = False
+                                                pdf_completo['onedrive_erro'] = str(e)
+                                        else:
                                             pdf_completo['database_salvo'] = False
-                                            pdf_completo['database_erro'] = str(e)
-                                    
-                                else:
-                                    # Falha na extração - manter dados básicos (COMPATIBILIDADE)
-                                    pdf_completo = {
-                                        **pdf_info_basico,
-                                        'dados_extraidos_ok': False,
-                                        'erro_extracao': 'Falha na extração de dados',
-                                        'relacionamento_usado': False
-                                    }
-                                    pdfs_com_dados.append(pdf_completo)
-                                    print(f"⚠️ PDF básico (falha extração): {nome_original}")
-                                    
-                            except Exception as e:
-                                print(f"❌ Erro extraindo dados do PDF {nome_original}: {e}")
-                                # Manter dados básicos em caso de erro (COMPATIBILIDADE)
+                                            pdf_completo['database_erro'] = resultado_db.get('mensagem', 'Erro desconhecido')
+                                            print(f"⚠️ Database falhou - pulando upload OneDrive")
+                                    except Exception as e:
+                                        print(f"⚠️ Erro salvamento automático: {e}")
+                                        pdf_completo['database_salvo'] = False
+                                        pdf_completo['database_erro'] = str(e)
+                                
+                            else:
+                                # Falha na extração - manter dados básicos (COMPATIBILIDADE)
                                 pdf_completo = {
                                     **pdf_info_basico,
                                     'dados_extraidos_ok': False,
-                                    'erro_extracao': str(e),
+                                    'erro_extracao': 'Falha na extração de dados',
                                     'relacionamento_usado': False
                                 }
                                 pdfs_com_dados.append(pdf_completo)
-                        else:
-                            print(f"⚠️ PDF sem conteúdo: {nome_original}")
-                            # Ainda assim retorna estrutura básica (COMPATIBILIDADE)
-                            pdfs_com_dados.append(pdf_info_basico)
-                            
-                    except Exception as e:
-                        print(f"❌ Erro processando anexo {nome_original}: {e}")
+                                print(f"⚠️ PDF básico (falha extração): {nome_original}")
+                                
+                        except Exception as e:
+                            print(f"❌ Erro extraindo dados do PDF {nome_original}: {e}")
+                            # Manter dados básicos em caso de erro (COMPATIBILIDADE)
+                            pdf_completo = {
+                                **pdf_info_basico,
+                                'dados_extraidos_ok': False,
+                                'erro_extracao': str(e),
+                                'relacionamento_usado': False
+                            }
+                            pdfs_com_dados.append(pdf_completo)
+                    else:
+                        print(f"⚠️ PDF sem conteúdo: {nome_original}")
+                        # Ainda assim retorna estrutura básica (COMPATIBILIDADE)
+                        pdfs_com_dados.append(pdf_info_basico)
+                        
+                except Exception as e:
+                    print(f"❌ Erro processando anexo {nome_original}: {e}")
+        
+        # Log resumo do processamento
+        if pdfs_brutos > 0:
+            print(f"\n📊 RESUMO PROCESSAMENTO:")
+            print(f"   📎 PDFs encontrados: {pdfs_brutos}")
+            print(f"   ✅ PDFs processados: {pdfs_processados}")
+            print(f"   📋 Relacionamento: {'✅ Usado' if relacionamento_ok else '❌ Indisponível'}")
+            print(f"   🔄 Extração avançada: {'✅ Ativa' if pdfs_processados > 0 else '❌ Falhou'}")
+            print(f"   ☁️ Upload OneDrive: {'✅ Integrado' if self.database_brk else '❌ DatabaseBRK indisponível'}")
+            print(f"   📎 PDF Anexo: ✅ Disponível para alertas")  # ← NOVA LINHA
             
-            # Log resumo do processamento
-            if pdfs_brutos > 0:
-                print(f"\n📊 RESUMO PROCESSAMENTO:")
-                print(f"   📎 PDFs encontrados: {pdfs_brutos}")
-                print(f"   ✅ PDFs processados: {pdfs_processados}")
-                print(f"   📋 Relacionamento: {'✅ Usado' if relacionamento_ok else '❌ Indisponível'}")
-                print(f"   🔄 Extração avançada: {'✅ Ativa' if pdfs_processados > 0 else '❌ Falhou'}")
-                print(f"   ☁️ Upload OneDrive: {'✅ Integrado' if self.database_brk else '❌ DatabaseBRK indisponível'}")
-                
-            return pdfs_com_dados
-            
-        except Exception as e:
-            print(f"❌ Erro extraindo PDFs do email: {e}")
-            return []        
+        return pdfs_com_dados
+        
+    except Exception as e:
+        print(f"❌ Erro extraindo PDFs do email: {e}")
+        return []
+
+# ============================================================================
+# 🎯 INSTRUÇÕES PARA APLICAR:
+# 
+# 1. Abrir: processor/email_processor.py no GitHub
+# 2. Procurar: def extrair_pdfs_do_email(self, email):
+# 3. Selecionar: Toda a função (até o último return [])
+# 4. Substituir: Por esta versão completa
+# 5. Salvar: Commit com mensagem "EmailProcessor: Adicionar PDF anexo"
+# 
+# ✅ RESULTADO: PDF disponível em dados_fatura['pdf_bytes']
+# ============================================================================
+    
     def log_consolidado_email(self, email_data, pdfs_processados):
         """
         Exibe log consolidado bonito de um email processado.
