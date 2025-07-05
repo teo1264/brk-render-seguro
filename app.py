@@ -361,7 +361,7 @@ def processar_emails_novos():
 
 @app.route('/processar-emails-form', methods=['GET'])
 def processar_emails_form():
-    """Formulário original para processar emails"""
+    """Formulário corrigido para processar emails"""
     try:
         if not auth_manager.access_token:
             return redirect('/login')
@@ -442,7 +442,6 @@ def processar_emails_form():
             </div>
             
             <script>
-                <script>
                 // HABILITAR/DESABILITAR CAMPOS BASEADO NA SELEÇÃO
                 document.querySelectorAll('input[name="tipoProcessamento"]').forEach(radio => {
                     radio.addEventListener('change', function() {
@@ -568,45 +567,6 @@ def processar_emails_form():
                     }
                 });
             </script>
-                    const resultadoDiv = document.getElementById('resultado');
-                    
-                    resultadoDiv.innerHTML = '<div class="status info">🔄 Processando emails... Aguarde...</div>';
-                    
-                    try {
-                        const response = await fetch('/processar-emails-novos', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ dias_atras: parseInt(diasAtras) })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.status === 'sucesso') {
-                            let html = '<div class="status success">';
-                            html += '<h3>✅ Processamento Completo Finalizado!</h3>';
-                            html += `<p><strong>📧 Emails processados:</strong> ${data.processamento?.emails_processados || 0}</p>`;
-                            html += `<p><strong>📎 PDFs extraídos:</strong> ${data.processamento?.pdfs_extraidos || 0}</p>`;
-                            
-                            if (data.database_brk?.integrado) {
-                                html += '<h4>🗃️ DatabaseBRK (SEEK):</h4>';
-                                html += `<p><strong>💾 Faturas novas (NORMAL):</strong> ${data.database_brk.faturas_salvas || 0}</p>`;
-                                html += `<p><strong>🔄 Duplicatas detectadas:</strong> ${data.database_brk.faturas_duplicatas || 0}</p>`;
-                                html += `<p><strong>⚠️ Requer atenção (CUIDADO):</strong> ${data.database_brk.faturas_cuidado || 0}</p>`;
-                                html += `<p><strong>📊 Total database:</strong> ${data.database_brk.total_database || 0}</p>`;
-                            } else {
-                                html += '<p><strong>💾 OneDrive:</strong> Dados extraídos (DatabaseBRK não ativo)</p>';
-                            }
-                            
-                            html += '</div>';
-                            resultadoDiv.innerHTML = html;
-                        } else {
-                            resultadoDiv.innerHTML = `<div class="status error">❌ Erro: ${data.erro || 'Erro desconhecido'}</div>`;
-                        }
-                    } catch (error) {
-                        resultadoDiv.innerHTML = `<div class="status error">❌ Erro de conexão: ${error.message}</div>`;
-                    }
-                });
-            </script>
         </body>
         </html>
         """
@@ -615,7 +575,7 @@ def processar_emails_form():
     except Exception as e:
         logger.error(f"Erro no formulário: {e}")
         return f"Erro: {e}", 500
-
+        
 @app.route('/estatisticas-database', methods=['GET'])
 def estatisticas_database():
     """Estatísticas do DatabaseBRK usando processor/"""
