@@ -75,15 +75,17 @@ def index():
                     <div class="status">✅ Sistema autenticado e funcionando!</div>
                     
                     <div class="info">
-                        <h3>📊 Sistema Integrado com Processor/:</h3>
-                        <ul>
-                            <li>✅ Leitura automática de emails BRK</li>
-                            <li>✅ Extração completa de dados PDF (sem pandas)</li>
-                            <li>✅ Relacionamento CDC → Casa de Oração via OneDrive</li>
-                            <li>✅ DatabaseBRK com lógica SEEK (detecção duplicatas)</li>
-                            <li>✅ Salvamento organizado /BRK/Faturas/YYYY/MM/</li>
-                            <li>✅ Logs estruturados para Render</li>
-                        </ul>
+                       <h3>📊 Sistema Integrado com Processor/:</h3>
+                       <ul>
+                           <li>✅ Leitura automática de emails BRK</li>
+                           <li>✅ Extração completa de dados PDF (sem pandas)</li>
+                           <li>✅ Relacionamento CDC → Casa de Oração via OneDrive</li>
+                           <li>✅ DatabaseBRK com lógica SEEK (detecção duplicatas)</li>
+                           <li>✅ Salvamento organizado /BRK/Faturas/YYYY/MM/</li>
+                           <li>✅ Monitor integrado: emails + planilha a cada 30 min</li>
+                           <li>✅ Sistema backup invisível (.brk_system)</li>
+                           <li>✅ Logs estruturados para Render</li>
+                      </ul>
                     </div>
                         <h3>🔧 Ações Disponíveis:</h3>
                         <a href="/diagnostico-pasta" class="button">📊 Diagnóstico Pasta</a>
@@ -92,7 +94,7 @@ def index():
                         <a href="/test-onedrive" class="button">🧪 Teste OneDrive</a>
                         <a href="/estatisticas-database" class="button">📈 DatabaseBRK</a>
                         <a href="/dbedit" class="button">🗃️ DBEDIT Clipper</a>
-                        <a href="/status" class="button">📋 Status JSON</a>
+                        <a href="/status-monitor-integrado" class="button">🔄 Monitor Integrado</a>
                         <a href="/logout" class="button" style="background: #dc3545;">🚪 Logout</a>                
      
                     <div class="info">
