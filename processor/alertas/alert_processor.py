@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🚨 ALERT PROCESSOR - VERSÃO COMPLETA COM ANEXO PDF
+🚨 ALERT PROCESSOR - VERSÃO CORRIGIDA (AUTENTICAÇÃO)
 📧 FUNÇÃO: Processar alertas automáticos + anexar fatura PDF
 👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
-🆕 FUNCIONALIDADE: Baixa PDF do OneDrive e anexa no Telegram
+🔧 CORREÇÃO: Reutilizar autenticação do sistema principal
 """
 
 import os
@@ -18,12 +18,7 @@ from .message_formatter import formatar_mensagem_alerta
 def processar_alerta_fatura(dados_fatura):
     """
     FUNÇÃO PRINCIPAL - Processar alerta COM ANEXO PDF
-    
-    🆕 NOVA FUNCIONALIDADE:
-    1. Baixa PDF do OneDrive usando estrutura conhecida
-    2. Envia mensagem + PDF anexado via Telegram
-    3. Fallback para só mensagem se PDF falhar
-    4. Limpeza automática da memória
+    🔧 CORREÇÃO: Reutilizar autenticação do sistema principal
     """
     try:
         print(f"\n🚨 INICIANDO PROCESSAMENTO ALERTA COM ANEXO")
@@ -65,9 +60,9 @@ def processar_alerta_fatura(dados_fatura):
         
         print(f"✅ Mensagem formatada: {len(mensagem)} caracteres")
         
-        # 4. 🆕 BAIXAR PDF DO ONEDRIVE PARA ANEXAR
+        # 4. 🔧 CORREÇÃO: BAIXAR PDF COM AUTENTICAÇÃO CORRETA
         print(f"📎 Tentando baixar PDF do OneDrive...")
-        pdf_bytes = _baixar_pdf_onedrive(dados_fatura)
+        pdf_bytes = _baixar_pdf_onedrive_corrigido(dados_fatura)
         nome_arquivo = _gerar_nome_arquivo_pdf(dados_fatura)
         
         if pdf_bytes:
@@ -129,17 +124,11 @@ def processar_alerta_fatura(dados_fatura):
         print(f"❌ Erro processando alerta: {e}")
         return False
 
-def _baixar_pdf_onedrive(dados_fatura):
+def _baixar_pdf_onedrive_corrigido(dados_fatura):
     """
-    🆕 FUNÇÃO: Baixar PDF do OneDrive usando estrutura conhecida
+    🔧 FUNÇÃO CORRIGIDA: Baixar PDF usando autenticação do sistema principal
     
-    ESTRUTURA OneDrive: /BRK/Faturas/YYYY/MM/nome-padronizado.pdf
-    
-    Args:
-        dados_fatura (dict): Dados da fatura processada
-        
-    Returns:
-        bytes: Conteúdo do PDF ou None se erro
+    CORREÇÃO: Reutilizar auth_manager global ao invés de criar nova instância
     """
     try:
         # 1. Construir caminho do arquivo
@@ -151,12 +140,11 @@ def _baixar_pdf_onedrive(dados_fatura):
         
         print(f"📁 Caminho construído: {caminho_arquivo}")
         
-        # 2. Obter autenticação (reutilizar do sistema principal)
-        from auth.microsoft_auth import MicrosoftAuth
-        auth_manager = MicrosoftAuth()
+        # 2. 🔧 CORREÇÃO: Reutilizar autenticação do sistema principal
+        auth_manager = _obter_auth_manager_global()
         
-        if not auth_manager.access_token:
-            print(f"❌ Autenticação não disponível")
+        if not auth_manager or not auth_manager.access_token:
+            print(f"❌ Autenticação global não disponível")
             return None
         
         headers = auth_manager.obter_headers_autenticados()
@@ -164,7 +152,7 @@ def _baixar_pdf_onedrive(dados_fatura):
         # 3. Baixar via Microsoft Graph API
         url = f"https://graph.microsoft.com/v1.0/me/drive/root:{caminho_arquivo}:/content"
         
-        print(f"📥 Baixando PDF via Graph API...")
+        print(f"📥 Baixando PDF via Graph API (auth corrigida)...")
         response = requests.get(url, headers=headers, timeout=30)
         
         if response.status_code == 200:
@@ -172,34 +160,74 @@ def _baixar_pdf_onedrive(dados_fatura):
             return response.content
         else:
             print(f"❌ Erro baixando PDF: HTTP {response.status_code}")
+            
+            # 🔧 CORREÇÃO: Tentar renovar token se 401
+            if response.status_code == 401:
+                print(f"🔄 Tentando renovar token...")
+                if auth_manager.atualizar_token():
+                    headers = auth_manager.obter_headers_autenticados()
+                    response = requests.get(url, headers=headers, timeout=30)
+                    
+                    if response.status_code == 200:
+                        print(f"✅ PDF baixado após renovação: {len(response.content)} bytes")
+                        return response.content
+                    else:
+                        print(f"❌ Erro mesmo após renovação: HTTP {response.status_code}")
+                        return None
+                else:
+                    print(f"❌ Falha renovando token")
+                    return None
+            
             return None
             
     except Exception as e:
         print(f"❌ Erro baixando PDF do OneDrive: {e}")
         return None
 
-def _construir_caminho_onedrive(dados_fatura):
+def _obter_auth_manager_global():
     """
-    🆕 FUNÇÃO: Construir caminho completo do PDF no OneDrive
+    🔧 FUNÇÃO CORRIGIDA: Obter auth_manager do sistema principal
     
-    Usa mesma lógica do email_processor.py:
-    - Extrai ano/mês de competência ou vencimento
-    - Gera nome padronizado igual ao upload
-    
-    Args:
-        dados_fatura (dict): Dados da fatura
-        
-    Returns:
-        str: Caminho completo no OneDrive
+    CORREÇÃO: Reutilizar instância global ao invés de criar nova
     """
     try:
-        # 1. Extrair ano e mês (reutilizar lógica do email_processor.py)
+        # Método 1: Importar do app.py global
+        import sys
+        if 'app' in sys.modules:
+            app_module = sys.modules['app']
+            if hasattr(app_module, 'auth_manager'):
+                print(f"🔐 Usando auth_manager do app.py")
+                return app_module.auth_manager
+        
+        # Método 2: Tentar importar diretamente
+        try:
+            from app import auth_manager
+            print(f"🔐 Usando auth_manager importado")
+            return auth_manager
+        except ImportError:
+            pass
+        
+        # Método 3: Criar nova instância (fallback)
+        print(f"🔐 Criando nova instância auth (fallback)")
+        from auth.microsoft_auth import MicrosoftAuth
+        return MicrosoftAuth()
+        
+    except Exception as e:
+        print(f"❌ Erro obtendo auth_manager: {e}")
+        return None
+
+def _construir_caminho_onedrive(dados_fatura):
+    """
+    🔄 FUNÇÃO MANTIDA: Construir caminho completo do PDF no OneDrive
+    """
+    try:
+        # 1. Extrair ano e mês
         ano, mes = _extrair_ano_mes(
             dados_fatura.get('competencia', ''),
             dados_fatura.get('vencimento', '')
         )
         
-        # 2. Gerar nome padronizado (reutilizar lógica do email_processor.py)
+        # 2. Gerar nome padronizado
         nome_arquivo = _gerar_nome_padronizado(dados_fatura)
         
         # 3. Construir caminho completo
@@ -214,19 +242,11 @@ def _construir_caminho_onedrive(dados_fatura):
 
 def _extrair_ano_mes(competencia, vencimento):
     """
-    🔄 FUNÇÃO REUTILIZADA: Extrair ano e mês (mesma lógica email_processor.py)
-    
-    Args:
-        competencia (str): Competência da fatura (ex: "Julho/2025")
-        vencimento (str): Data vencimento (ex: "27/07/2025")
-        
-    Returns:
-        tuple: (ano, mes) como integers
+    🔄 FUNÇÃO MANTIDA: Extrair ano e mês
     """
     try:
         # Prioridade 1: Competência
         if competencia:
-            # Formatos possíveis: "Julho/2025", "Jul/2025", "07/2025"
             meses_nome = {
                 'janeiro': 1, 'jan': 1, 'fevereiro': 2, 'fev': 2,
                 'março': 3, 'mar': 3, 'abril': 4, 'abr': 4,
@@ -236,23 +256,19 @@ def _extrair_ano_mes(competencia, vencimento):
                 'novembro': 11, 'nov': 11, 'dezembro': 12, 'dez': 12
             }
             
-            # Tentar formato "Mês/Ano"
             if '/' in competencia:
                 mes_parte, ano_parte = competencia.split('/')
                 mes_parte = mes_parte.strip().lower()
                 ano_parte = ano_parte.strip()
                 
-                # Mês por nome
                 if mes_parte in meses_nome:
                     return int(ano_parte), meses_nome[mes_parte]
                 
-                # Mês por número
                 if mes_parte.isdigit():
                     return int(ano_parte), int(mes_parte)
         
         # Prioridade 2: Vencimento
         if vencimento:
-            # Formato: "DD/MM/YYYY"
             match = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', vencimento)
             if match:
                 dia, mes, ano = match.groups()
@@ -272,15 +288,7 @@ def _extrair_ano_mes(competencia, vencimento):
 
 def _gerar_nome_padronizado(dados_fatura):
     """
-    🔄 FUNÇÃO REUTILIZADA: Gerar nome padronizado (mesma lógica email_processor.py)
-    
-    Formato: "DD-MM-BRK MM-YYYY - Casa - vc. DD-MM-YYYY - R$ XXX.pdf"
-    
-    Args:
-        dados_fatura (dict): Dados da fatura
-        
-    Returns:
-        str: Nome padronizado do arquivo
+    🔄 FUNÇÃO MANTIDA: Gerar nome padronizado
     """
     try:
         # Extrair dados
@@ -291,7 +299,6 @@ def _gerar_nome_padronizado(dados_fatura):
         
         # Formatar vencimento
         if vencimento:
-            # Formato: "DD/MM/YYYY" -> "DD-MM"
             match = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', vencimento)
             if match:
                 dia, mes, ano = match.groups()
@@ -306,13 +313,12 @@ def _gerar_nome_padronizado(dados_fatura):
         
         # Formatar competência
         if competencia:
-            # Extrair mês e ano da competência
             ano, mes = _extrair_ano_mes(competencia, vencimento)
             comp_formato = f"{mes:02d}-{ano}"
         else:
             comp_formato = "XX-XXXX"
         
-        # Limpar casa (remover caracteres especiais)
+        # Limpar casa
         casa_limpa = re.sub(r'[<>:"/\\|?*]', '', casa)
         if len(casa_limpa) > 40:
             casa_limpa = casa_limpa[:40] + "..."
@@ -328,7 +334,7 @@ def _gerar_nome_padronizado(dados_fatura):
         # Construir nome final
         nome = f"{dia_mes}-BRK {comp_formato} - {casa_limpa} - vc. {venc_completo} - {valor_limpo}.pdf"
         
-        # Limitar tamanho do nome (limite Windows: 255 caracteres)
+        # Limitar tamanho
         if len(nome) > 200:
             nome = nome[:197] + "....pdf"
         
@@ -340,13 +346,7 @@ def _gerar_nome_padronizado(dados_fatura):
 
 def _gerar_nome_arquivo_pdf(dados_fatura):
     """
-    🆕 FUNÇÃO: Gerar nome amigável para anexo Telegram
-    
-    Args:
-        dados_fatura (dict): Dados da fatura
-        
-    Returns:
-        str: Nome amigável para anexo
+    🔄 FUNÇÃO MANTIDA: Gerar nome amigável para anexo Telegram
     """
     try:
         casa = dados_fatura.get('casa_oracao', 'Casa')
@@ -357,7 +357,7 @@ def _gerar_nome_arquivo_pdf(dados_fatura):
             partes = casa.split('-')
             if len(partes) >= 2:
                 codigo_casa = partes[0].strip()
-                nome_casa = partes[1].strip()[:20]  # Primeiros 20 caracteres
+                nome_casa = partes[1].strip()[:20]
             else:
                 codigo_casa = casa[:10]
                 nome_casa = casa[10:30]
