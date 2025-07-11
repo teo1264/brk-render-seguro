@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-📁 ARQUIVO: processor/database_brk.py - VERSÃO CORRIGIDA
+📁 ARQUIVO: processor/database_brk.py - VERSÃO COMPLETA COM BACKUP PREVENTIVO
 💾 ONDE SALVAR: brk-monitor-seguro/processor/database_brk.py
-🔧 CORREÇÃO: Fechamento correto das funções + novas funções nas posições certas
+🔧 FUNCIONALIDADE: Database BRK + SQLite OneDrive + Backup Preventivo Automático
+🛡️ BACKUP PREVENTIVO: Proteção contra corrupção + pasta /backup/ visível
+👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
 """
 
 import sqlite3
@@ -18,7 +20,14 @@ from pathlib import Path
 
 class DatabaseBRK:
     """
-    Database BRK com SQLite no OneDrive + cache local.
+    Database BRK com SQLite no OneDrive + cache local + BACKUP PREVENTIVO.
+    
+    FUNCIONALIDADES:
+    - SQLite híbrido: OneDrive + cache local + fallback Render
+    - SEEK estilo Clipper: CDC + Competência
+    - Backup preventivo automático com validação
+    - Proteção contra corrupção de arquivos
+    - Pasta /backup/ visível com versionamento
     """
     
     def __init__(self, auth_manager, onedrive_brk_id):
@@ -41,6 +50,7 @@ class DatabaseBRK:
         print(f"   📁 Pasta OneDrive /BRK/: configurada")
         print(f"   💾 Database: {self.db_filename} (OneDrive + cache)")
         print(f"   🔄 Fallback: Render disk")
+        print(f"   🛡️ Backup preventivo: ativo (proteção automática)")
         
         # Inicializar database no OneDrive
         self._inicializar_database_sistema()
@@ -275,9 +285,9 @@ class DatabaseBRK:
         except Exception as e:
             print(f"❌ Erro crítico no fallback: {e}")
             raise
-    
-    def sincronizar_onedrive(self):
-        """Sincroniza database local com OneDrive (backup)."""
+
+def sincronizar_onedrive(self):
+        """Sincroniza database local com OneDrive (backup) + BACKUP PREVENTIVO AUTOMÁTICO."""
         try:
             if not self.usando_onedrive:
                 print(f"⚠️ Sincronização ignorada - usando fallback Render")
@@ -299,6 +309,21 @@ class DatabaseBRK:
             
             if sucesso:
                 print(f"🔄 Database sincronizado com OneDrive")
+                
+                # 🛡️ BACKUP PREVENTIVO AUTOMÁTICO (NOVA FUNCIONALIDADE):
+                try:
+                    resultado_backup = self.executar_backup_preventivo()
+                    status_backup = resultado_backup.get('status', 'erro')
+                    print(f"🛡️ Backup preventivo: {status_backup}")
+                    
+                    if status_backup == 'cancelado':
+                        print(f"   ⚠️ Motivo: {resultado_backup.get('motivo', 'N/A')}")
+                        print(f"   🛡️ Proteção ativa: versões anteriores preservadas")
+                    elif status_backup == 'sucesso':
+                        print(f"   ✅ Backup validado salvo: /BRK/backup/database_brk_valido_01.db")
+                except Exception as e:
+                    print(f"   ⚠️ Backup preventivo falhou (sistema continua): {e}")
+                
                 return True
             else:
                 print(f"⚠️ Falha na sincronização OneDrive")
@@ -334,7 +359,7 @@ class DatabaseBRK:
             except ImportError:
                 pass  # Alertas opcionais
             
-            # 5. Sincronizar com OneDrive
+            # 5. Sincronizar com OneDrive (inclui backup preventivo automático)
             self.sincronizar_onedrive()
             
             # 6. Retornar resultado
@@ -535,7 +560,8 @@ class DatabaseBRK:
                 'usando_onedrive': self.usando_onedrive,
                 'usando_fallback': self.usando_fallback,
                 'cache_local': self.db_local_cache,
-                'onedrive_id': self.db_onedrive_id
+                'onedrive_id': self.db_onedrive_id,
+                'backup_preventivo': True
             }
             
         except Exception as e:
@@ -544,7 +570,8 @@ class DatabaseBRK:
                 'erro': str(e),
                 'database_ativo': False,
                 'usando_onedrive': self.usando_onedrive,
-                'usando_fallback': self.usando_fallback
+                'usando_fallback': self.usando_fallback,
+                'backup_preventivo': False
             }
     
     def buscar_faturas(self, filtros=None):
@@ -579,11 +606,11 @@ class DatabaseBRK:
             'cache_local_existe': bool(self.db_local_cache and os.path.exists(self.db_local_cache)),
             'conexao_ativa': bool(self.conn),
             'onedrive_id': self.db_onedrive_id,
-            'filename': self.db_filename
+            'filename': self.db_filename,
+            'backup_preventivo_ativo': True
         }
 
-    # ✅ NOVAS FUNÇÕES ADICIONADAS CORRETAMENTE APÓS status_sistema()
-    def obter_meses_com_faturas(self):
+def obter_meses_com_faturas(self):
         """
         🆕 NOVA FUNÇÃO: Detecta todos os meses/anos que possuem faturas no database.
         
@@ -801,7 +828,415 @@ class DatabaseBRK:
     def inserir_fatura(self, dados_fatura):
         """Outro alias possível para salvar_fatura."""
         return self.salvar_fatura(dados_fatura)
-    
+
+    # ============================================================================
+    # 🛡️ MÉTODOS BACKUP PREVENTIVO - PROTEÇÃO AUTOMÁTICA COMPLETA
+    # ============================================================================
+
+    def _backup_preventivo_disponivel(self):
+        """Verifica se backup preventivo está habilitado e OneDrive disponível."""
+        try:
+            return (
+                self.usando_onedrive and 
+                self.onedrive_brk_id and 
+                self.db_local_cache and 
+                os.path.exists(self.db_local_cache)
+            )
+        except Exception:
+            return False
+
+    def _validar_database_antes_backup(self, arquivo_path):
+        """
+        Valida integridade do database ANTES de fazer backup.
+        Só salva backup se arquivo estiver íntegro.
+        
+        Args:
+            arquivo_path (str): Caminho para arquivo SQLite
+            
+        Returns:
+            Tuple[bool, str]: (válido, mensagem)
+        """
+        try:
+            # VALIDAÇÃO 1: Arquivo existe e tem tamanho > 0
+            if not os.path.exists(arquivo_path):
+                return False, "Arquivo não existe"
+            
+            tamanho = os.path.getsize(arquivo_path)
+            if tamanho == 0:
+                return False, "Arquivo vazio"
+            
+            if tamanho < 1024:  # SQLite mínimo ~1KB
+                return False, f"Arquivo muito pequeno ({tamanho} bytes)"
+            
+            # VALIDAÇÃO 2: SQLite válido - testar abertura
+            import sqlite3
+            conn_test = sqlite3.connect(arquivo_path, timeout=5)
+            
+            try:
+                # VALIDAÇÃO 3: Testar query básica
+                cursor = conn_test.cursor()
+                cursor.execute("SELECT COUNT(*) FROM faturas_brk")
+                count = cursor.fetchone()[0]
+                
+                # VALIDAÇÃO 4: Verificar se tem dados razoáveis
+                if count < 0:  # Impossível ter count negativo
+                    return False, "Database corrompido (count inválido)"
+                
+                # VALIDAÇÃO 5: Testar estrutura da tabela
+                cursor.execute("PRAGMA table_info(faturas_brk)")
+                colunas = cursor.fetchall()
+                
+                if len(colunas) < 10:  # Tabela deve ter muitas colunas
+                    return False, "Estrutura da tabela incompleta"
+                
+                conn_test.close()
+                
+                return True, f"Database válido ({count} registros, {tamanho} bytes)"
+                
+            except Exception as e:
+                conn_test.close()
+                return False, f"Erro validando SQLite: {e}"
+            
+        except Exception as e:
+            return False, f"Erro abrindo database: {e}"
+
+    def _garantir_pasta_backup_onedrive(self):
+        """
+        Garante que pasta /backup/ existe no OneDrive.
+        (Pasta VISÍVEL, não oculta)
+        
+        Returns:
+            str: ID da pasta backup ou None se erro
+        """
+        try:
+            headers = self.auth.obter_headers_autenticados()
+            if not headers:
+                print("❌ Headers autenticação indisponíveis")
+                return None
+            
+            # Buscar pasta backup dentro de /BRK/
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{self.onedrive_brk_id}/children"
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                itens = response.json().get('value', [])
+                
+                # Procurar pasta backup existente
+                for item in itens:
+                    if item.get('name') == 'backup' and 'folder' in item:
+                        print(f"✅ Pasta backup encontrada: {item['id'][:15]}...")
+                        return item['id']
+                
+                # Pasta não existe - criar nova
+                print(f"📁 Criando pasta /backup/ (não existia)...")
+                return self._criar_pasta_backup_onedrive(headers)
+            else:
+                print(f"❌ Erro acessando OneDrive: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro verificando pasta backup: {e}")
+            return None
+
+    def _criar_pasta_backup_onedrive(self, headers):
+        """
+        Cria pasta backup no OneDrive.
+        
+        Args:
+            headers: Headers autenticados Microsoft Graph
+            
+        Returns:
+            str: ID da nova pasta ou None se erro
+        """
+        try:
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{self.onedrive_brk_id}/children"
+            
+            data = {
+                "name": "backup",
+                "folder": {},
+                "@microsoft.graph.conflictBehavior": "rename"
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=30)
+            
+            if response.status_code == 201:
+                nova_pasta = response.json()
+                pasta_id = nova_pasta['id']
+                print(f"✅ Pasta backup criada: {pasta_id[:15]}...")
+                return pasta_id
+            else:
+                print(f"❌ Erro criando pasta backup: HTTP {response.status_code}")
+                return None
+                
+        except Exception as e:
+            print(f"❌ Erro criando pasta backup: {e}")
+            return None
+
+    def _rotacionar_versoes_backup(self, pasta_backup_id):
+        """
+        Rotaciona versões existentes de backup.
+        
+        ANTES: database_brk_valido_01.db, database_brk_valido_02.db
+        DEPOIS: database_brk_valido_02.db, database_brk_valido_03.db
+        (Remove a mais antiga, move as outras)
+        
+        Args:
+            pasta_backup_id (str): ID da pasta backup no OneDrive
+        """
+        try:
+            headers = self.auth.obter_headers_autenticados()
+            if not headers:
+                return
+            
+            # Buscar arquivos na pasta backup
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_backup_id}/children"
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code != 200:
+                print(f"⚠️ Não foi possível acessar pasta backup para rotação")
+                return
+            
+            arquivos = response.json().get('value', [])
+            
+            # Encontrar versões existentes
+            versoes = {}
+            for arquivo in arquivos:
+                nome = arquivo.get('name', '')
+                if nome.startswith('database_brk_valido_') and nome.endswith('.db'):
+                    # Extrair número da versão
+                    try:
+                        num_versao = nome.replace('database_brk_valido_', '').replace('.db', '')
+                        versoes[int(num_versao)] = arquivo
+                    except:
+                        pass
+            
+            # Rotacionar versões (3 → deletar, 2 → 3, 1 → 2)
+            if 3 in versoes:
+                # Deletar versão 03 (mais antiga)
+                try:
+                    url_delete = f"https://graph.microsoft.com/v1.0/me/drive/items/{versoes[3]['id']}"
+                    requests.delete(url_delete, headers=headers, timeout=30)
+                    print(f"🗑️ Versão 03 removida (rotação)")
+                except Exception as e:
+                    print(f"⚠️ Erro removendo versão 03: {e}")
+            
+            if 2 in versoes:
+                # Renomear versão 02 → 03
+                try:
+                    url_rename = f"https://graph.microsoft.com/v1.0/me/drive/items/{versoes[2]['id']}"
+                    data_rename = {"name": "database_brk_valido_03.db"}
+                    requests.patch(url_rename, headers=headers, json=data_rename, timeout=30)
+                    print(f"📝 Versão 02 → 03 (rotação)")
+                except Exception as e:
+                    print(f"⚠️ Erro renomeando 02→03: {e}")
+            
+            if 1 in versoes:
+                # Renomear versão 01 → 02
+                try:
+                    url_rename = f"https://graph.microsoft.com/v1.0/me/drive/items/{versoes[1]['id']}"
+                    data_rename = {"name": "database_brk_valido_02.db"}
+                    requests.patch(url_rename, headers=headers, json=data_rename, timeout=30)
+                    print(f"📝 Versão 01 → 02 (rotação)")
+                except Exception as e:
+                    print(f"⚠️ Erro renomeando 01→02: {e}")
+            
+        except Exception as e:
+            print(f"⚠️ Erro na rotação de versões: {e}")
+
+    def _salvar_backup_validado(self, pasta_backup_id, database_bytes):
+        """
+        Salva nova versão validada como database_brk_valido_01.db
+        
+        Args:
+            pasta_backup_id (str): ID da pasta backup
+            database_bytes (bytes): Conteúdo do database válido
+            
+        Returns:
+            bool: True se salvamento bem-sucedido
+        """
+        try:
+            headers = self.auth.obter_headers_autenticados()
+            headers['Content-Type'] = 'application/octet-stream'
+            
+            # Salvar como versão 01 (mais recente)
+            nome_backup = "database_brk_valido_01.db"
+            nome_encodado = requests.utils.quote(nome_backup)
+            url = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_backup_id}:/{nome_encodado}:/content"
+            
+            response = requests.put(url, headers=headers, data=database_bytes, timeout=120)
+            
+            if response.status_code in [200, 201]:
+                arquivo_info = response.json()
+                print(f"✅ BACKUP VALIDADO salvo: {nome_backup} ({len(database_bytes)} bytes)")
+                return True
+            else:
+                print(f"❌ Erro salvando backup: HTTP {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Erro salvando backup validado: {e}")
+            return False
+
+    def _salvar_log_backup(self, pasta_backup_id, validacao_info, sucesso):
+        """
+        Salva log do backup em backup_log.txt
+        
+        Args:
+            pasta_backup_id (str): ID da pasta backup
+            validacao_info (str): Informações da validação
+            sucesso (bool): Se backup foi bem-sucedido
+        """
+        try:
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            status = "SUCESSO" if sucesso else "FALHA"
+            
+            log_content = f"[{timestamp}] BACKUP {status}: {validacao_info}\n"
+            
+            headers = self.auth.obter_headers_autenticados()
+            headers['Content-Type'] = 'text/plain'
+            
+            # Tentar baixar log existente primeiro
+            nome_log = "backup_log.txt"
+            url_download = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_backup_id}:/{nome_log}:/content"
+            
+            try:
+                response_download = requests.get(url_download, headers=headers, timeout=30)
+                if response_download.status_code == 200:
+                    log_existente = response_download.text
+                    log_content = log_existente + log_content
+            except:
+                pass  # Se não conseguir baixar, criar novo
+            
+            # Salvar log atualizado
+            url_upload = f"https://graph.microsoft.com/v1.0/me/drive/items/{pasta_backup_id}:/{nome_log}:/content"
+            response = requests.put(url_upload, headers=headers, data=log_content.encode('utf-8'), timeout=60)
+            
+            if response.status_code in [200, 201]:
+                print(f"📝 Log backup atualizado")
+            
+        except Exception as e:
+            print(f"⚠️ Erro salvando log backup: {e}")
+
+    def executar_backup_preventivo(self):
+        """
+        ✅ MÉTODO PRINCIPAL: Executa backup preventivo com validação.
+        
+        FLUXO:
+        1. Verifica se backup está disponível
+        2. Valida database atual ANTES de fazer backup
+        3. Se válido: rotaciona versões e salva novo backup
+        4. Se inválido: mantém versões anteriores (proteção)
+        5. Registra resultado em log
+        
+        Returns:
+            Dict: Resultado do backup preventivo
+        """
+        try:
+            # ETAPA 1: Verificar disponibilidade
+            if not self._backup_preventivo_disponivel():
+                return {
+                    'status': 'pulado',
+                    'motivo': 'Backup preventivo não disponível (OneDrive ou cache)',
+                    'protecao_ativa': False
+                }
+            
+            print(f"🛡️ Iniciando backup preventivo...")
+            
+            # ETAPA 2: Validar database ANTES do backup
+            valido, validacao_info = self._validar_database_antes_backup(self.db_local_cache)
+            
+            if not valido:
+                print(f"⚠️ BACKUP CANCELADO: {validacao_info}")
+                print(f"   🛡️ Versões anteriores preservadas (proteção contra corrupção)")
+                
+                return {
+                    'status': 'cancelado',
+                    'motivo': validacao_info,
+                    'protecao_ativa': True,
+                    'versoes_preservadas': True
+                }
+            
+            # ETAPA 3: Garantir pasta backup existe
+            pasta_backup_id = self._garantir_pasta_backup_onedrive()
+            if not pasta_backup_id:
+                return {
+                    'status': 'erro',
+                    'motivo': 'Não foi possível criar/acessar pasta backup',
+                    'protecao_ativa': False
+                }
+            
+            # ETAPA 4: Ler database validado
+            with open(self.db_local_cache, 'rb') as f:
+                database_bytes = f.read()
+            
+            # ETAPA 5: Rotacionar versões existentes
+            self._rotacionar_versoes_backup(pasta_backup_id)
+            
+            # ETAPA 6: Salvar nova versão validada
+            sucesso = self._salvar_backup_validado(pasta_backup_id, database_bytes)
+            
+            # ETAPA 7: Registrar resultado em log
+            self._salvar_log_backup(pasta_backup_id, validacao_info, sucesso)
+            
+            if sucesso:
+                print(f"✅ BACKUP PREVENTIVO CONCLUÍDO")
+                print(f"   📊 Status: {validacao_info}")
+                print(f"   💾 Salvo: /BRK/backup/database_brk_valido_01.db")
+                print(f"   🔄 Versões mantidas: 01, 02, 03 (últimas 3 válidas)")
+                
+                return {
+                    'status': 'sucesso',
+                    'validacao': validacao_info,
+                    'protecao_ativa': True,
+                    'versoes_mantidas': 3,
+                    'pasta_backup': '/BRK/backup/'
+                }
+            else:
+                return {
+                    'status': 'erro',
+                    'motivo': 'Falha salvando backup validado',
+                    'protecao_ativa': True
+                }
+            
+        except Exception as e:
+            print(f"❌ Erro backup preventivo: {e}")
+            return {
+                'status': 'erro',
+                'motivo': str(e),
+                'protecao_ativa': False
+            }
+
+    def restaurar_backup_manual_instrucoes(self):
+        """
+        Exibe instruções para restauração manual via OneDrive.
+        Útil quando usuário reporta problemas no database.
+        """
+        print(f"\n🛡️ INSTRUÇÕES RESTAURAÇÃO MANUAL - BACKUP PREVENTIVO")
+        print(f"="*60)
+        print(f"📍 LOCALIZAÇÃO DOS BACKUPS:")
+        print(f"   🌐 OneDrive Web: /BRK/backup/")
+        print(f"   📄 Versões disponíveis:")
+        print(f"      • database_brk_valido_01.db  (mais recente)")
+        print(f"      • database_brk_valido_02.db  (anterior)")
+        print(f"      • database_brk_valido_03.db  (mais antiga)")
+        print(f"")
+        print(f"🔧 COMO RESTAURAR:")
+        print(f"   1. Acesse OneDrive web")
+        print(f"   2. Navegue para pasta /BRK/backup/")
+        print(f"   3. Selecione database_brk_valido_01.db")
+        print(f"   4. Clique 'Baixar'")
+        print(f"   5. Renomeie para: database_brk.db")
+        print(f"   6. Vá para pasta /BRK/")
+        print(f"   7. Arraste e solte o arquivo renomeado")
+        print(f"   8. Confirme substituição")
+        print(f"   9. Sistema voltará a funcionar no próximo ciclo")
+        print(f"")
+        print(f"📊 STATUS ATUAL:")
+        print(f"   📁 OneDrive configurado: {'✅' if self.usando_onedrive else '❌'}")
+        print(f"   💾 Cache local: {'✅' if self.db_local_cache else '❌'}")
+        print(f"   🔗 Conexão ativa: {'✅' if self.conn else '❌'}")
+        print(f"="*60)
+
     def fechar_conexao(self):
         """Fecha conexão SQLite e limpa cache temporário."""
         try:
