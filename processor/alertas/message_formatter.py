@@ -41,7 +41,7 @@ def formatar_mensagem_alerta(dados_fatura):
         
         # Formatar mensagem baseada no tipo
         if tipo_alerta == "Consumo Normal":
-            mensagem = f"""*A Paz de Deus!* 🕊️
+            mensagem = f"""*A Paz de Deus!* 
 
 📍 Casa de Oração: {casa}  
 📆 Vencimento: {venc}  
@@ -60,7 +60,7 @@ def formatar_mensagem_alerta(dados_fatura):
             perc = dados_fatura.get('porcentagem_consumo', 'N/A')
             dif_str = calcular_diferenca_m3(dados_fatura)
             
-            mensagem = f"""*A Paz de Deus!* 🕊️
+            mensagem = f"""*A Paz de Deus!* 
 
 🟡 AVISO IMPORTANTE 🟡  
 📢 ALERTA DE ALTO CONSUMO DE ÁGUA  
@@ -88,7 +88,7 @@ def formatar_mensagem_alerta(dados_fatura):
             perc = dados_fatura.get('porcentagem_consumo', 'N/A')
             dif_str = calcular_diferenca_m3(dados_fatura)
             
-            mensagem = f"""*A Paz de Deus!* 🕊️
+            mensagem = f"""*A Paz de Deus!* 
 
 🔴 EMERGÊNCIA 🔴  
 📢 ALERTA DE EMERGÊNCIA DE CONSUMO DE ÁGUA  
@@ -118,7 +118,7 @@ def formatar_mensagem_alerta(dados_fatura):
             perc = dados_fatura.get('porcentagem_consumo', 'N/A')
             dif_str = calcular_diferenca_m3(dados_fatura)
             
-            mensagem = f"""*A Paz de Deus!* 🕊️
+            mensagem = f"""*A Paz de Deus!* 
 
 📉 *AVISO DE CONSUMO REDUZIDO*  
 
@@ -142,7 +142,7 @@ def formatar_mensagem_alerta(dados_fatura):
             
         else:
             # Fallback para casos não identificados
-            mensagem = f"""*A Paz de Deus!* 🕊️
+            mensagem = f"""*A Paz de Deus!* 
 
 📍 Casa de Oração: {casa}  
 📆 Vencimento: {venc}  
