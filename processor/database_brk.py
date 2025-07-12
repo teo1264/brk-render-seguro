@@ -286,7 +286,7 @@ class DatabaseBRK:
             print(f"❌ Erro crítico no fallback: {e}")
             raise
 
-def sincronizar_onedrive(self):
+    def sincronizar_onedrive(self):
         """Sincroniza database local com OneDrive (backup) + BACKUP PREVENTIVO AUTOMÁTICO."""
         try:
             if not self.usando_onedrive:
