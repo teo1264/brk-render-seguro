@@ -4,6 +4,7 @@
 🏢 APP.PY ORIGINAL SIMPLES - Sistema BRK funcionando
 📦 FUNCIONALIDADE: emails → extração → OneDrive → logs
 👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
+🔧 CORREÇÃO APLICADA: Remove duplicidade de salvamento (apenas linhas ~355-385)
 """
 
 import os
@@ -216,7 +217,7 @@ def diagnostico_pasta():
 
 @app.route('/processar-emails-novos', methods=['POST'])
 def processar_emails_novos():
-    """Processamento REAL usando processor/ completo"""
+    """🔧 PROCESSAMENTO CORRIGIDO - Remove duplicidade de salvamento"""
     try:
         if not auth_manager.access_token:
             return jsonify({"erro": "Token não disponível"}), 401
@@ -284,39 +285,23 @@ def processar_emails_novos():
                 email_subject = email.get('subject', 'Sem assunto')[:50]
                 print(f"\n📧 Processando email {i}/{len(emails)}: {email_subject}")
                 
-                # ✅ USAR FUNCIONALIDADE REAL: Extrair PDFs completo
+                # ✅ USAR FUNCIONALIDADE REAL: Extrair PDFs completo (JÁ SALVA AUTOMATICAMENTE)
                 pdfs_dados = processor.extrair_pdfs_do_email(email)
                 
                 if pdfs_dados:
                     pdfs_extraidos += len(pdfs_dados)
                     print(f"📎 {len(pdfs_dados)} PDF(s) extraído(s)")
                     
-                    # ✅ USAR DatabaseBRK REAL se ativo
-                    if database_ativo and hasattr(processor, 'database_brk'):
-                        for pdf_data in pdfs_dados:
-                            try:
-                                # Preparar dados para database
-                                if hasattr(processor, 'preparar_dados_para_database'):
-                                    dados_db = processor.preparar_dados_para_database(pdf_data)
-                                else:
-                                    dados_db = pdf_data
-                                
-                                # ✅ SALVAR COM SEEK REAL
-                                resultado = processor.database_brk.salvar_fatura(dados_db)
-                                
-                                if resultado.get('status') == 'sucesso':
-                                    status = resultado.get('status_duplicata', 'NORMAL')
-                                    if status == 'NORMAL':
-                                        faturas_salvas += 1
-                                    elif status == 'DUPLICATA':
-                                        faturas_duplicatas += 1
-                                    elif status == 'CUIDADO':
-                                        faturas_cuidado += 1
-                                    
-                                    print(f"  💾 DatabaseBRK: {status} - {resultado.get('nome_arquivo', 'arquivo')}")
-                                
-                            except Exception as e:
-                                print(f"  ❌ Erro DatabaseBRK: {e}")
+                    # 🔧 CORREÇÃO: Contadores baseados em dados JÁ SALVOS (remove duplicidade)
+                    for pdf_data in pdfs_dados:
+                        if pdf_data.get('database_salvo', False):
+                            status = pdf_data.get('database_status', 'NORMAL')
+                            if status == 'NORMAL':
+                                faturas_salvas += 1
+                            elif status == 'DUPLICATA':
+                                faturas_duplicatas += 1
+                            elif status == 'CUIDADO':
+                                faturas_cuidado += 1
                     
                     # ✅ USAR LOG CONSOLIDADO REAL
                     if hasattr(processor, 'log_consolidado_email'):
@@ -332,7 +317,11 @@ def processar_emails_novos():
         print(f"\n✅ PROCESSAMENTO CONCLUÍDO:")
         print(f"   📧 Emails processados: {emails_processados}")
         print(f"   📎 PDFs extraídos: {pdfs_extraidos}")
-        if database_ativo:
+        
+        # 🔧 CORREÇÃO: database_ativo baseado em salvamentos reais
+        database_teve_salvamentos = faturas_salvas + faturas_duplicatas + faturas_cuidado > 0
+        
+        if database_teve_salvamentos:
             print(f"   💾 Faturas novas: {faturas_salvas}")
             print(f"   🔄 Duplicatas: {faturas_duplicatas}")
             print(f"   ⚠️ Atenção: {faturas_cuidado}")
@@ -347,6 +336,7 @@ def processar_emails_novos():
             },
             "database_brk": {
                 "integrado": database_ativo,
+                "teve_salvamentos": database_teve_salvamentos,
                 "faturas_salvas": faturas_salvas,
                 "faturas_duplicatas": faturas_duplicatas,
                 "faturas_cuidado": faturas_cuidado,
@@ -398,6 +388,7 @@ def processar_emails_form():
                         <li>✅ DatabaseBRK com lógica SEEK (NORMAL/DUPLICATA/CUIDADO)</li>
                         <li>✅ Salva organizadamente em /BRK/Faturas/YYYY/MM/</li>
                         <li>✅ Logs detalhados no Render</li>
+                        <li>🔧 CORRIGIDO: Remove duplicidade de salvamento</li>
                     </ul>
                 </div>
                 
@@ -732,6 +723,7 @@ def dbedit():
             </div>
         </body></html>
         """, 500
+
 # GERADOR EXCEL BRK
 @app.route('/gerar-planilha-brk', methods=['GET', 'POST'])
 def gerar_planilha_brk():
@@ -906,8 +898,10 @@ def inicializar_aplicacao():
     print(f"   🔍 SEEK + detecção duplicatas ativo")
     print(f"   📊 Monitor integrado: emails + planilha a cada 30 min")  # ← NOVO
     print(f"   🌐 Interface web completa disponível")
+    print(f"   🔧 CORREÇÃO: Duplicidade de salvamento removida")
     
     return True
+
 # ============================================================================
 # FUNÇÕES AUXILIARES DBEDIT (adicionar antes do if __name__ == '__main__')
 # ============================================================================
@@ -1182,6 +1176,7 @@ if __name__ == '__main__':
         print(f"🌐 Servidor iniciando na porta {port}")
         print(f"📱 Sistema integrado com processor/ funcionando!")
         print(f"🗃️ DatabaseBRK + SEEK + OneDrive organizados!")
+        print(f"🔧 CORREÇÃO: Loop de duplicidade removido!")
         
         app.run(host='0.0.0.0', port=port, debug=debug)
     else:
