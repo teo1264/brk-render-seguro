@@ -68,14 +68,14 @@ def processar_alerta_fatura(dados_fatura):
         # PRIMEIRO: Tentar usar PDF dos dados (registros novos)
         content_bytes = dados_fatura.get('content_bytes')
         if content_bytes and content_bytes.strip() and len(content_bytes) > 100:
-           try:
-               import base64
-               pdf_bytes = base64.b64decode(content_bytes)
-               fonte_pdf = "content_bytes"
-               print(f"✅ PDF dos dados (novo): {len(pdf_bytes)} bytes")
-           except Exception as e:
-               print(f"⚠️ Erro decodificando content_bytes: {e}")
-               pdf_bytes = None
+            try:
+                import base64
+                pdf_bytes = base64.b64decode(content_bytes)
+                fonte_pdf = "content_bytes"
+                print(f"✅ PDF dos dados (novo): {len(pdf_bytes)} bytes")
+            except Exception as e:
+                print(f"⚠️ Erro decodificando content_bytes: {e}")
+                pdf_bytes = None
         else:
             print(f"📝 content_bytes: {'ausente' if not content_bytes else 'inválido'} - usando fallback")
 
@@ -134,12 +134,15 @@ def processar_alerta_fatura(dados_fatura):
                 enviados_erro += 1
                 print(f"❌ Falha enviando para {nome}")
         
-        # 6. 🧹 LIMPEZA DA MEMÓRIA
+        # 6. Salvar status ANTES da limpeza da memória
+        pdf_foi_anexado = bool(pdf_bytes)
+        
+        # 7. 🧹 LIMPEZA DA MEMÓRIA
         if pdf_bytes:
             pdf_bytes = None
             print(f"🧹 PDF removido da memória")
         
-        # 7. Resultado final
+        # 8. Resultado final
         print(f"\n📊 RESULTADO PROCESSAMENTO ALERTA:")
         print(f"   🏠 Casa: {codigo_casa}")
         print(f"   👥 Responsáveis: {len(responsaveis)}")
