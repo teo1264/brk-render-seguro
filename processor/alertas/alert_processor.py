@@ -60,15 +60,29 @@ def processar_alerta_fatura(dados_fatura):
         
         print(f"✅ Mensagem formatada: {len(mensagem)} caracteres")
         
-        # 4. 🔧 CORREÇÃO: BAIXAR PDF COM AUTENTICAÇÃO CORRETA
-        print(f"📎 Tentando baixar PDF do OneDrive...")
-        pdf_bytes = _baixar_pdf_onedrive_corrigido(dados_fatura)
-        nome_arquivo = _gerar_nome_arquivo_pdf(dados_fatura)
+        # 4. ✅ CORREÇÃO: Obter PDF dos dados OU OneDrive
+        print(f"📎 Obtendo PDF para anexo...")
+        pdf_bytes = None
         
-        if pdf_bytes:
-            print(f"✅ PDF baixado: {len(pdf_bytes)} bytes - {nome_arquivo}")
-        else:
-            print(f"⚠️ PDF não encontrado - enviando apenas mensagem")
+        # PRIMEIRO: Tentar usar PDF que já está nos dados
+        if dados_fatura.get('content_bytes'):
+            try:
+                import base64
+                pdf_bytes = base64.b64decode(dados_fatura.get('content_bytes'))
+                print(f"✅ PDF obtido dos dados originais: {len(pdf_bytes)} bytes")
+            except Exception as e:
+                print(f"⚠️ Erro decodificando content_bytes: {e}")
+        
+        # FALLBACK: Se não tem nos dados, baixar do OneDrive
+        if not pdf_bytes:
+            print(f"📥 Tentando baixar PDF do OneDrive...")
+            pdf_bytes = _baixar_pdf_onedrive_corrigido(dados_fatura)
+            if pdf_bytes:
+                print(f"✅ PDF baixado do OneDrive: {len(pdf_bytes)} bytes")
+            else:
+                print(f"⚠️ PDF não encontrado no OneDrive")
+        
+        nome_arquivo = _gerar_nome_arquivo_pdf(dados_fatura)   
         
         # 5. Enviar para cada responsável COM OU SEM ANEXO
         enviados_sucesso = 0
