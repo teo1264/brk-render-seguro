@@ -163,47 +163,48 @@ class DatabaseBRK:
             return False
     
     def _criar_estrutura_sqlite(self, conn):
-        """Cria estrutura SQLite com tabelas e índices."""
-        sql_create = """
-        CREATE TABLE IF NOT EXISTS faturas_brk (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data_processamento DATETIME DEFAULT CURRENT_TIMESTAMP,
-            status_duplicata TEXT DEFAULT 'NORMAL',
-            observacao TEXT DEFAULT '',
-            
-            email_id TEXT NOT NULL,
-            nome_arquivo_original TEXT NOT NULL,
-            nome_arquivo TEXT NOT NULL,
-            hash_arquivo TEXT UNIQUE,
-            
-            cdc TEXT,
-            nota_fiscal TEXT,
-            casa_oracao TEXT,
-            data_emissao TEXT,
-            vencimento TEXT,
-            competencia TEXT,
-            valor TEXT,
-            
-            medido_real INTEGER,
-            faturado INTEGER,
-            media_6m INTEGER,
-            porcentagem_consumo TEXT,
-            alerta_consumo TEXT,
-            
-            dados_extraidos_ok BOOLEAN DEFAULT TRUE,
-            relacionamento_usado BOOLEAN DEFAULT FALSE
-        );
+    """Cria estrutura SQLite com tabelas e índices."""
+    sql_create = """
+    CREATE TABLE IF NOT EXISTS faturas_brk (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        data_processamento DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status_duplicata TEXT DEFAULT 'NORMAL',
+        observacao TEXT DEFAULT '',
         
-        CREATE INDEX IF NOT EXISTS idx_cdc_competencia ON faturas_brk(cdc, competencia);
-        CREATE INDEX IF NOT EXISTS idx_status_duplicata ON faturas_brk(status_duplicata);
-        CREATE INDEX IF NOT EXISTS idx_casa_oracao ON faturas_brk(casa_oracao);
-        CREATE INDEX IF NOT EXISTS idx_data_processamento ON faturas_brk(data_processamento);
-        CREATE INDEX IF NOT EXISTS idx_competencia ON faturas_brk(competencia);
-        """
+        email_id TEXT NOT NULL,
+        nome_arquivo_original TEXT NOT NULL,
+        nome_arquivo TEXT NOT NULL,
+        hash_arquivo TEXT UNIQUE,
         
-        conn.executescript(sql_create)
-        conn.commit()
-        print(f"✅ Estrutura SQLite criada (tabelas + índices)")
+        cdc TEXT,
+        nota_fiscal TEXT,
+        casa_oracao TEXT,
+        data_emissao TEXT,
+        vencimento TEXT,
+        competencia TEXT,
+        valor TEXT,
+        
+        medido_real INTEGER,
+        faturado INTEGER,
+        media_6m INTEGER,
+        porcentagem_consumo TEXT,
+        alerta_consumo TEXT,
+        
+        dados_extraidos_ok BOOLEAN DEFAULT TRUE,
+        relacionamento_usado BOOLEAN DEFAULT FALSE,
+        content_bytes TEXT
+    );
+    
+    CREATE INDEX IF NOT EXISTS idx_cdc_competencia ON faturas_brk(cdc, competencia);
+    CREATE INDEX IF NOT EXISTS idx_status_duplicata ON faturas_brk(status_duplicata);
+    CREATE INDEX IF NOT EXISTS idx_casa_oracao ON faturas_brk(casa_oracao);
+    CREATE INDEX IF NOT EXISTS idx_data_processamento ON faturas_brk(data_processamento);
+    CREATE INDEX IF NOT EXISTS idx_competencia ON faturas_brk(competencia);
+    """
+    
+    conn.executescript(sql_create)
+    conn.commit()
+    print(f"✅ Estrutura SQLite criada (tabelas + índices + content_bytes)")
     
     def _upload_database_onedrive(self):
         """Faz upload do database local para OneDrive /BRK/."""
@@ -452,56 +453,57 @@ class DatabaseBRK:
             print(f"❌ Erro extraindo ano/mês: {e}")
             hoje = datetime.now()
             return hoje.year, hoje.month
-    
-    def _inserir_fatura_sqlite(self, dados_fatura, status_duplicata, nome_padronizado):
-        """Insere fatura no SQLite e retorna ID."""
-        try:
-            cursor = self.conn.cursor()
-            
-            sql_insert = """
-            INSERT INTO faturas_brk (
-                email_id, nome_arquivo_original, nome_arquivo, hash_arquivo,
-                cdc, nota_fiscal, casa_oracao, data_emissao, vencimento, 
-                competencia, valor, medido_real, faturado, media_6m,
-                porcentagem_consumo, alerta_consumo, dados_extraidos_ok, 
-                relacionamento_usado, status_duplicata, observacao
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """
-            
-            valores = (
-                dados_fatura.get('email_id'),
-                dados_fatura.get('nome_arquivo_original'),
-                nome_padronizado,
-                dados_fatura.get('hash_arquivo'),
-                dados_fatura.get('cdc'),
-                dados_fatura.get('nota_fiscal'),
-                dados_fatura.get('casa_oracao'),
-                dados_fatura.get('data_emissao'),
-                dados_fatura.get('vencimento'),
-                dados_fatura.get('competencia'),
-                dados_fatura.get('valor'),
-                dados_fatura.get('medido_real'),
-                dados_fatura.get('faturado'),
-                dados_fatura.get('media_6m'),
-                dados_fatura.get('porcentagem_consumo'),
-                dados_fatura.get('alerta_consumo'),
-                dados_fatura.get('dados_extraidos_ok', True),
-                dados_fatura.get('relacionamento_usado', False),
-                status_duplicata,
-                f'Processado via {"OneDrive" if self.usando_onedrive else "Fallback"} - Status: {status_duplicata}'
-            )
-            
-            cursor.execute(sql_insert, valores)
-            self.conn.commit()
-            
-            id_inserido = cursor.lastrowid
-            print(f"✅ Fatura salva - ID: {id_inserido} - Status: {status_duplicata}")
-            
-            return id_inserido
-            
-        except Exception as e:
-            print(f"❌ Erro inserindo SQLite: {e}")
-            return None
+
+   def _inserir_fatura_sqlite(self, dados_fatura, status_duplicata, nome_padronizado):
+    """Insere fatura no SQLite e retorna ID."""
+    try:
+        cursor = self.conn.cursor()
+        
+        sql_insert = """
+        INSERT INTO faturas_brk (
+            email_id, nome_arquivo_original, nome_arquivo, hash_arquivo,
+            cdc, nota_fiscal, casa_oracao, data_emissao, vencimento, 
+            competencia, valor, medido_real, faturado, media_6m,
+            porcentagem_consumo, alerta_consumo, dados_extraidos_ok, 
+            relacionamento_usado, status_duplicata, observacao, content_bytes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        
+        valores = (
+            dados_fatura.get('email_id'),
+            dados_fatura.get('nome_arquivo_original'),
+            nome_padronizado,
+            dados_fatura.get('hash_arquivo'),
+            dados_fatura.get('cdc'),
+            dados_fatura.get('nota_fiscal'),
+            dados_fatura.get('casa_oracao'),
+            dados_fatura.get('data_emissao'),
+            dados_fatura.get('vencimento'),
+            dados_fatura.get('competencia'),
+            dados_fatura.get('valor'),
+            dados_fatura.get('medido_real'),
+            dados_fatura.get('faturado'),
+            dados_fatura.get('media_6m'),
+            dados_fatura.get('porcentagem_consumo'),
+            dados_fatura.get('alerta_consumo'),
+            dados_fatura.get('dados_extraidos_ok', True),
+            dados_fatura.get('relacionamento_usado', False),
+            status_duplicata,
+            f'Processado via {"OneDrive" if self.usando_onedrive else "Fallback"} - Status: {status_duplicata}',
+            dados_fatura.get('content_bytes')
+        )
+        
+        cursor.execute(sql_insert, valores)
+        self.conn.commit()
+        
+        id_inserido = cursor.lastrowid
+        print(f"✅ Fatura salva - ID: {id_inserido} - Status: {status_duplicata}")
+        
+        return id_inserido
+        
+    except Exception as e:
+        print(f"❌ Erro inserindo SQLite: {e}")
+        return None 
     
     def obter_estatisticas(self):
         """Retorna estatísticas do database com informações OneDrive."""
