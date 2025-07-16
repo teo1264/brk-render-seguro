@@ -60,29 +60,44 @@ def processar_alerta_fatura(dados_fatura):
         
         print(f"✅ Mensagem formatada: {len(mensagem)} caracteres")
         
-        # 4. ✅ CORREÇÃO: Obter PDF dos dados OU OneDrive
+        # 4. ✅ VERSÃO DEFENSIVA: Obter PDF dos dados OU OneDrive
         print(f"📎 Obtendo PDF para anexo...")
         pdf_bytes = None
-        
-        # PRIMEIRO: Tentar usar PDF que já está nos dados
-        if dados_fatura.get('content_bytes'):
-            try:
-                import base64
-                pdf_bytes = base64.b64decode(dados_fatura.get('content_bytes'))
-                print(f"✅ PDF obtido dos dados originais: {len(pdf_bytes)} bytes")
-            except Exception as e:
-                print(f"⚠️ Erro decodificando content_bytes: {e}")
-        
-        # FALLBACK: Se não tem nos dados, baixar do OneDrive
+        fonte_pdf = "nenhuma"
+
+        # PRIMEIRO: Tentar usar PDF dos dados (registros novos)
+        content_bytes = dados_fatura.get('content_bytes')
+        if content_bytes and content_bytes.strip() and len(content_bytes) > 100:
+           try:
+               import base64
+               pdf_bytes = base64.b64decode(content_bytes)
+               fonte_pdf = "content_bytes"
+               print(f"✅ PDF dos dados (novo): {len(pdf_bytes)} bytes")
+           except Exception as e:
+               print(f"⚠️ Erro decodificando content_bytes: {e}")
+               pdf_bytes = None
+        else:
+            print(f"📝 content_bytes: {'ausente' if not content_bytes else 'inválido'} - usando fallback")
+
+        # FALLBACK: OneDrive (registros antigos)
         if not pdf_bytes:
-            print(f"📥 Tentando baixar PDF do OneDrive...")
+            print(f"📥 Usando fallback OneDrive (registro antigo)")
             pdf_bytes = _baixar_pdf_onedrive_corrigido(dados_fatura)
             if pdf_bytes:
-                print(f"✅ PDF baixado do OneDrive: {len(pdf_bytes)} bytes")
+                fonte_pdf = "onedrive"
+                print(f"✅ PDF do OneDrive: {len(pdf_bytes)} bytes")
             else:
                 print(f"⚠️ PDF não encontrado no OneDrive")
-        
-        nome_arquivo = _gerar_nome_arquivo_pdf(dados_fatura)   
+
+        # ÚLTIMO RECURSO: Log detalhado
+        if not pdf_bytes:
+            fonte_pdf = "nenhuma"
+            print(f"⚠️ PDF não disponível em nenhuma fonte")
+            print(f"   📝 content_bytes: {'presente' if content_bytes else 'ausente'}")
+            print(f"   📁 OneDrive: falhou")
+            print(f"   📨 Enviando apenas mensagem")
+
+        nome_arquivo = _gerar_nome_arquivo_pdf(dados_fatura)
         
         # 5. Enviar para cada responsável COM OU SEM ANEXO
         enviados_sucesso = 0
@@ -128,7 +143,8 @@ def processar_alerta_fatura(dados_fatura):
         print(f"\n📊 RESULTADO PROCESSAMENTO ALERTA:")
         print(f"   🏠 Casa: {codigo_casa}")
         print(f"   👥 Responsáveis: {len(responsaveis)}")
-        print(f"   📎 PDF anexado: {'✅ Sim' if pdf_bytes else '❌ Não'}")
+        print(f"   📎 PDF anexado: {'✅ Sim' if pdf_foi_anexado else '❌ Não'}")
+        print(f"   📁 Fonte PDF: {fonte_pdf}")
         print(f"   ✅ Enviados: {enviados_sucesso}")
         print(f"   ❌ Falhas: {enviados_erro}")
         
