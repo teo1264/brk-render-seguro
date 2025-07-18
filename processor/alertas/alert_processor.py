@@ -482,42 +482,29 @@ def _construir_caminho_onedrive(dados_fatura):
 
 def _extrair_ano_mes(competencia, vencimento):
     """
-    🔄 FUNÇÃO MANTIDA: Extrair ano e mês
+    ✅ FUNÇÃO CORRIGIDA: Extrair ano e mês - APENAS VENCIMENTO
+    PADRÃO TESOURARIA: Vencimento sempre, nunca competência
+    
+    Args:
+        competencia (str): Competência da fatura (ignorado)
+        vencimento (str): Data vencimento formato DD/MM/YYYY
+        
+    Returns:
+        tuple: (ano, mes) baseado APENAS no vencimento
     """
     try:
-        # Prioridade 1: Competência
-        if competencia:
-            meses_nome = {
-                'janeiro': 1, 'jan': 1, 'fevereiro': 2, 'fev': 2,
-                'março': 3, 'mar': 3, 'abril': 4, 'abr': 4,
-                'maio': 5, 'mai': 5, 'junho': 6, 'jun': 6,
-                'julho': 7, 'jul': 7, 'agosto': 8, 'ago': 8,
-                'setembro': 9, 'set': 9, 'outubro': 10, 'out': 10,
-                'novembro': 11, 'nov': 11, 'dezembro': 12, 'dez': 12
-            }
-            
-            if '/' in competencia:
-                mes_parte, ano_parte = competencia.split('/')
-                mes_parte = mes_parte.strip().lower()
-                ano_parte = ano_parte.strip()
-                
-                if mes_parte in meses_nome:
-                    return int(ano_parte), meses_nome[mes_parte]
-                
-                if mes_parte.isdigit():
-                    return int(ano_parte), int(mes_parte)
-        
-        # Prioridade 2: Vencimento
+        # ✅ ÚNICA PRIORIDADE: VENCIMENTO (padrão tesouraria)
         if vencimento:
             match = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', vencimento)
             if match:
                 dia, mes, ano = match.groups()
+                print(f"📅 Pasta por VENCIMENTO: {vencimento} → /{ano}/{mes:02d}/")
                 return int(ano), int(mes)
         
-        # Fallback: Mês atual
+        # ⚠️ Se não tem vencimento válido = data atual (fatura com erro)
         from datetime import datetime
         hoje = datetime.now()
-        print(f"⚠️ Usando mês atual como fallback: {hoje.year}/{hoje.month}")
+        print(f"⚠️ Vencimento inválido/ausente - usando mês atual: {hoje.year}/{hoje.month:02d}")
         return hoje.year, hoje.month
         
     except Exception as e:
@@ -525,7 +512,7 @@ def _extrair_ano_mes(competencia, vencimento):
         from datetime import datetime
         hoje = datetime.now()
         return hoje.year, hoje.month
-
+        
 def _gerar_nome_padronizado(dados_fatura):
     """
     🔄 FUNÇÃO MANTIDA: Gerar nome padronizado
