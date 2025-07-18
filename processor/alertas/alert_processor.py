@@ -259,11 +259,12 @@ def _baixar_pdf_onedrive_corrigido(dados_fatura):
         
         print(f"📁 Caminho construído: {caminho_arquivo}")
         
-        # 2. 🔧 CORREÇÃO: Reutilizar autenticação do sistema principal
-        auth_manager = _obter_auth_manager_global()
+        # 2. 🔧 CORREÇÃO: USAR MESMA LÓGICA DO CCB (QUE FUNCIONA)
+        from auth.microsoft_auth import MicrosoftAuth
+        auth_manager = MicrosoftAuth()
         
-        if not auth_manager or not auth_manager.access_token:
-            print(f"❌ Autenticação global não disponível")
+        if not auth_manager.access_token:
+            print(f"❌ Autenticação não disponível")
             return None
         
         headers = auth_manager.obter_headers_autenticados()
@@ -271,7 +272,7 @@ def _baixar_pdf_onedrive_corrigido(dados_fatura):
         # 3. Baixar via Microsoft Graph API
         url = f"https://graph.microsoft.com/v1.0/me/drive/root:{caminho_arquivo}:/content"
         
-        print(f"📥 Baixando PDF via Graph API (auth corrigida)...")
+        print(f"📥 Baixando PDF via Graph API (auth igual CCB)...")
         response = requests.get(url, headers=headers, timeout=30)
         
         if response.status_code == 200:
@@ -301,38 +302,6 @@ def _baixar_pdf_onedrive_corrigido(dados_fatura):
             
     except Exception as e:
         print(f"❌ Erro baixando PDF do OneDrive: {e}")
-        return None
-
-def _obter_auth_manager_global():
-    """
-    🔧 FUNÇÃO CORRIGIDA: Obter auth_manager do sistema principal
-    
-    CORREÇÃO: Reutilizar instância global ao invés de criar nova
-    """
-    try:
-        # Método 1: Importar do app.py global
-        import sys
-        if 'app' in sys.modules:
-            app_module = sys.modules['app']
-            if hasattr(app_module, 'auth_manager'):
-                print(f"🔐 Usando auth_manager do app.py")
-                return app_module.auth_manager
-        
-        # Método 2: Tentar importar diretamente
-        try:
-            from app import auth_manager
-            print(f"🔐 Usando auth_manager importado")
-            return auth_manager
-        except ImportError:
-            pass
-        
-        # Método 3: Criar nova instância (fallback)
-        print(f"🔐 Criando nova instância auth (fallback)")
-        from auth.microsoft_auth import MicrosoftAuth
-        return MicrosoftAuth()
-        
-    except Exception as e:
-        print(f"❌ Erro obtendo auth_manager: {e}")
         return None
 
 def _construir_caminho_onedrive(dados_fatura):
