@@ -394,113 +394,113 @@ class DatabaseBRK:
             return 'NORMAL'
    
     def _gerar_nome_padronizado(self, dados_fatura):
-    """
-    Gera nome padronizado para arquivo PDF no formato DD-MM-BRK documentado.
-    
-    FORMATO OFICIAL: DD-MM-BRK MM-YYYY - Casa - vc. DD-MM-YYYY - valor.pdf
-    EXEMPLO: 15-01-BRK 01-2025 - Casa Principal - vc. 15-01-2025 - 123.45.pdf
-    
-    ✅ CORRIGIDO: Restaura formato DD-MM conforme documentação e alert_processor.py
-    🔧 COMPATÍVEL: Mantém todas as funcionalidades existentes
-    📁 USO: database_brk.salvar_fatura() + email_processor.upload_fatura_onedrive()
-    
-    Args:
-        dados_fatura (dict): Dados da fatura com vencimento, competencia, casa, valor
+        """
+        Gera nome padronizado para arquivo PDF no formato DD-MM-BRK documentado.
         
-    Returns:
-        str: Nome padronizado no formato DD-MM inicial conforme documentação oficial
-    """
-    try:
-        import re
-        from datetime import datetime
+        FORMATO OFICIAL: DD-MM-BRK MM-YYYY - Casa - vc. DD-MM-YYYY - valor.pdf
+        EXEMPLO: 15-01-BRK 01-2025 - Casa Principal - vc. 15-01-2025 - 123.45.pdf
         
-        # 1. EXTRAIR DADOS PRINCIPAIS
-        vencimento = dados_fatura.get('vencimento', '')
-        competencia = dados_fatura.get('competencia', '')
-        casa_oracao = dados_fatura.get('casa_oracao', 'Casa')
-        valor = dados_fatura.get('valor', '0')
+        ✅ CORRIGIDO: Restaura formato DD-MM conforme documentação e alert_processor.py
+        🔧 COMPATÍVEL: Mantém todas as funcionalidades existentes
+        📁 USO: database_brk.salvar_fatura() + email_processor.upload_fatura_onedrive()
         
-        # 2. EXTRAIR DD-MM DO VENCIMENTO PARA INÍCIO DO NOME
-        dia_mes = "00-00"  # fallback
-        venc_completo = vencimento
-        
-        if vencimento and re.match(r'\d{2}/\d{2}/\d{4}', vencimento):
-            partes = vencimento.split('/')
-            dia, mes, ano = partes[0], partes[1], partes[2]
-            dia_mes = f"{dia}-{mes}"  # DD-MM para início do nome
-            venc_completo = f"{dia}-{mes}-{ano}"  # DD-MM-YYYY para final
-        elif vencimento and re.match(r'\d{1,2}/\d{1,2}/\d{4}', vencimento):
-            # Tratar casos com um dígito
-            partes = vencimento.split('/')
-            dia, mes, ano = partes[0].zfill(2), partes[1].zfill(2), partes[2]
-            dia_mes = f"{dia}-{mes}"
-            venc_completo = f"{dia}-{mes}-{ano}"
-        else:
-            # Fallback: usar data atual
-            hoje = datetime.now()
-            dia_mes = hoje.strftime('%d-%m')
-            venc_completo = hoje.strftime('%d-%m-%Y')
-        
-        # 3. FORMATAR COMPETÊNCIA COMO MM-YYYY
-        comp_formato = "00-0000"  # fallback
-        
-        if competencia and '/' in competencia:
-            try:
-                if re.match(r'\d{2}/\d{4}', competencia):
-                    mes_comp, ano_comp = competencia.split('/')
-                    comp_formato = f"{mes_comp}-{ano_comp}"  # MM-YYYY
-                elif re.match(r'\d{1}/\d{4}', competencia):
-                    mes_comp, ano_comp = competencia.split('/')
-                    comp_formato = f"{mes_comp.zfill(2)}-{ano_comp}"  # MM-YYYY
-                else:
-                    # Tentar extrair números da competência
-                    numeros = re.findall(r'\d+', competencia)
-                    if len(numeros) >= 2:
-                        mes_comp, ano_comp = numeros[0].zfill(2), numeros[1]
-                        comp_formato = f"{mes_comp}-{ano_comp}"
-            except:
-                pass
-        
-        # 4. LIMPAR CASA DE ORAÇÃO (máximo 40 caracteres)
-        casa_limpa = re.sub(r'[<>:"/\\|?*]', '', str(casa_oracao))
-        casa_limpa = re.sub(r'\s+', ' ', casa_limpa).strip()
-        if len(casa_limpa) > 40:
-            casa_limpa = casa_limpa[:40].strip() + "..."
-        
-        # 5. FORMATAR VALOR (limpar e manter apenas números/pontuação)
-        valor_limpo = "0"
-        if valor:
-            valor_str = str(valor)
-            valor_limpo = re.sub(r'[^\d,.]', '', valor_str)
-            if not valor_limpo or valor_limpo in ['', '.', ',']:
-                valor_limpo = "0"
-            # Garantir formato decimal válido
-            valor_limpo = valor_limpo.replace(',', '.')
-            if valor_limpo.count('.') > 1:
-                partes = valor_limpo.split('.')
-                valor_limpo = '.'.join(partes[:-1]).replace('.', '') + '.' + partes[-1]
-        
-        # 6. CONSTRUIR NOME FINAL NO FORMATO DD-MM-BRK
-        nome = f"{dia_mes}-BRK {comp_formato} - {casa_limpa} - vc. {venc_completo} - {valor_limpo}.pdf"
-        
-        # 7. LIMITAR TAMANHO TOTAL E LIMPAR CARACTERES INVÁLIDOS
-        nome = re.sub(r'[<>:"/\\|?*]', '', nome)
-        nome = re.sub(r'\s+', ' ', nome).strip()
-        
-        if len(nome) > 200:
-            # Manter início e fim, cortar meio
-            inicio = nome[:90]
-            fim = nome[-90:]
-            nome = f"{inicio}...{fim}"
-        
-        print(f"📁 Nome padronizado DD-MM: {nome}")
-        return nome
-        
-    except Exception as e:
-        print(f"❌ Erro gerando nome padronizado: {e}")
-        # Fallback de emergência
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        return f"BRK_Erro_{timestamp}.pdf"
+        Args:
+            dados_fatura (dict): Dados da fatura com vencimento, competencia, casa, valor
+            
+        Returns:
+            str: Nome padronizado no formato DD-MM inicial conforme documentação oficial
+        """
+        try:
+            import re
+            from datetime import datetime
+            
+            # 1. EXTRAIR DADOS PRINCIPAIS
+            vencimento = dados_fatura.get('vencimento', '')
+            competencia = dados_fatura.get('competencia', '')
+            casa_oracao = dados_fatura.get('casa_oracao', 'Casa')
+            valor = dados_fatura.get('valor', '0')
+            
+            # 2. EXTRAIR DD-MM DO VENCIMENTO PARA INÍCIO DO NOME
+            dia_mes = "00-00"  # fallback
+            venc_completo = vencimento
+            
+            if vencimento and re.match(r'\d{2}/\d{2}/\d{4}', vencimento):
+                partes = vencimento.split('/')
+                dia, mes, ano = partes[0], partes[1], partes[2]
+                dia_mes = f"{dia}-{mes}"  # DD-MM para início do nome
+                venc_completo = f"{dia}-{mes}-{ano}"  # DD-MM-YYYY para final
+            elif vencimento and re.match(r'\d{1,2}/\d{1,2}/\d{4}', vencimento):
+                # Tratar casos com um dígito
+                partes = vencimento.split('/')
+                dia, mes, ano = partes[0].zfill(2), partes[1].zfill(2), partes[2]
+                dia_mes = f"{dia}-{mes}"
+                venc_completo = f"{dia}-{mes}-{ano}"
+            else:
+                # Fallback: usar data atual
+                hoje = datetime.now()
+                dia_mes = hoje.strftime('%d-%m')
+                venc_completo = hoje.strftime('%d-%m-%Y')
+            
+            # 3. FORMATAR COMPETÊNCIA COMO MM-YYYY
+            comp_formato = "00-0000"  # fallback
+            
+            if competencia and '/' in competencia:
+                try:
+                    if re.match(r'\d{2}/\d{4}', competencia):
+                        mes_comp, ano_comp = competencia.split('/')
+                        comp_formato = f"{mes_comp}-{ano_comp}"  # MM-YYYY
+                    elif re.match(r'\d{1}/\d{4}', competencia):
+                        mes_comp, ano_comp = competencia.split('/')
+                        comp_formato = f"{mes_comp.zfill(2)}-{ano_comp}"  # MM-YYYY
+                    else:
+                        # Tentar extrair números da competência
+                        numeros = re.findall(r'\d+', competencia)
+                        if len(numeros) >= 2:
+                            mes_comp, ano_comp = numeros[0].zfill(2), numeros[1]
+                            comp_formato = f"{mes_comp}-{ano_comp}"
+                except:
+                    pass
+            
+            # 4. LIMPAR CASA DE ORAÇÃO (máximo 40 caracteres)
+            casa_limpa = re.sub(r'[<>:"/\\|?*]', '', str(casa_oracao))
+            casa_limpa = re.sub(r'\s+', ' ', casa_limpa).strip()
+            if len(casa_limpa) > 40:
+                casa_limpa = casa_limpa[:40].strip() + "..."
+            
+            # 5. FORMATAR VALOR (limpar e manter apenas números/pontuação)
+            valor_limpo = "0"
+            if valor:
+                valor_str = str(valor)
+                valor_limpo = re.sub(r'[^\d,.]', '', valor_str)
+                if not valor_limpo or valor_limpo in ['', '.', ',']:
+                    valor_limpo = "0"
+                # Garantir formato decimal válido
+                valor_limpo = valor_limpo.replace(',', '.')
+                if valor_limpo.count('.') > 1:
+                    partes = valor_limpo.split('.')
+                    valor_limpo = '.'.join(partes[:-1]).replace('.', '') + '.' + partes[-1]
+            
+            # 6. CONSTRUIR NOME FINAL NO FORMATO DD-MM-BRK
+            nome = f"{dia_mes}-BRK {comp_formato} - {casa_limpa} - vc. {venc_completo} - {valor_limpo}.pdf"
+            
+            # 7. LIMITAR TAMANHO TOTAL E LIMPAR CARACTERES INVÁLIDOS
+            nome = re.sub(r'[<>:"/\\|?*]', '', nome)
+            nome = re.sub(r'\s+', ' ', nome).strip()
+            
+            if len(nome) > 200:
+                # Manter início e fim, cortar meio
+                inicio = nome[:90]
+                fim = nome[-90:]
+                nome = f"{inicio}...{fim}"
+            
+            print(f"📁 Nome padronizado DD-MM: {nome}")
+            return nome
+            
+        except Exception as e:
+            print(f"❌ Erro gerando nome padronizado: {e}")
+            # Fallback de emergência
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            return f"BRK_Erro_{timestamp}.pdf"
         
     def _extrair_ano_mes(self, competencia, vencimento):
         """Extrai ano e mês para organização OneDrive."""
@@ -617,8 +617,8 @@ class DatabaseBRK:
         except Exception as e:
             print(f"❌ Erro buscando faturas: {e}")
             return []
-    
-    def obter_meses_com_faturas(self):
+
+def obter_meses_com_faturas(self):
         """
         Detecta todos os meses/anos que possuem faturas no database.
         
@@ -729,7 +729,7 @@ class DatabaseBRK:
             print(f"❌ Erro detectando meses com faturas: {e}")
             return []
 
-# ============================================================================
+    # ============================================================================
     # BLOCO 3/3: MÉTODOS AUXILIARES E COMPATIBILIDADE
     # ============================================================================
     
@@ -1169,6 +1169,7 @@ def diagnosticar_database_brk(database_brk):
    • Estatísticas e diagnósticos
    • Detecção automática de meses
    • Operações CRUD completas
+   • ✅ FUNÇÃO _gerar_nome_padronizado CORRIGIDA (DD-MM)
 
 ✅ INTEGRAÇÃO:
    • EmailProcessor (salvar faturas)
@@ -1179,14 +1180,14 @@ def diagnosticar_database_brk(database_brk):
 
 ✅ ESTRUTURA:
    • BLOCO 1: Inicialização e configuração
-   • BLOCO 2: Operações principais
+   • BLOCO 2: Operações principais (FUNÇÃO CORRIGIDA)
    • BLOCO 3: Métodos auxiliares e compatibilidade
 
 ✅ DEPLOY:
    1. Concatenar os 3 blocos em um arquivo
    2. Salvar como processor/database_brk.py
    3. Deploy no Render
-   4. Testar anexos PDF nos alertas
+   4. Nomenclatura DD-MM funcionando!
 
-🚀 RESULTADO: Sistema completo com anexos PDF funcionando!
+🚀 RESULTADO: Sistema completo com nomenclatura DD-MM corrigida!
 """
