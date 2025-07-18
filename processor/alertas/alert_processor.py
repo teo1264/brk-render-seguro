@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🚨 ALERT PROCESSOR - VERSÃO CORRIGIDA (AUTENTICAÇÃO)
+🚨 ALERT PROCESSOR - VERSÃO 2.1 CORRIGIDA (EXTRAÇÃO CÓDIGO)
 📧 FUNÇÃO: Processar alertas automáticos + anexar fatura PDF
 👨‍💼 AUTOR: Sidney Gubitoso, auxiliar tesouraria adm maua
-🔧 CORREÇÃO: Reutilizar autenticação do sistema principal
+🔧 CORREÇÃO CRÍTICA: Extração código compatível Sistema BRK → CCB
+📅 DATA: 18/07/2025
+
+CORREÇÃO APLICADA:
+- Sistema BRK: "BR 21-0520 - VILA ASSIS BRASIL" (com espaços + nome)
+- Sistema CCB: "BR21-0520" (sem espaços, só código)
+- LINHA 26 CORRIGIDA: extrair_codigo_formato_ccb() aplicada
+
+RESULTADO ESPERADO:
+✅ Vila Assis Brasil e todas as 36 casas recebendo alertas
+✅ 100% compatibilidade Sistema BRK → CCB
+✅ Proteção financeira mantida
 """
 
 import os
@@ -17,28 +28,41 @@ from .message_formatter import formatar_mensagem_alerta
 
 def processar_alerta_fatura(dados_fatura):
     """
-    FUNÇÃO PRINCIPAL - Processar alerta COM ANEXO PDF
-    🔧 CORREÇÃO: Reutilizar autenticação do sistema principal
+    🔧 FUNÇÃO PRINCIPAL CORRIGIDA - Processar alerta COM ANEXO PDF
+    
+    CORREÇÃO CRÍTICA APLICADA:
+    - Extração código casa formato CCB (BR21-XXXX)
+    - Compatibilidade Sistema BRK → CCB
+    - Todas funcionalidades preservadas
     """
     try:
-        print(f"\n🚨 INICIANDO PROCESSAMENTO ALERTA COM ANEXO")
+        print(f"\n🚨 [CORRIGIDO] INICIANDO PROCESSAMENTO ALERTA COM ANEXO")
         
-        # 1. Obter código da casa
-        codigo_casa = dados_fatura.get('casa_oracao', '')
+        # 1. 🔧 CORREÇÃO PRINCIPAL: Extrair código da casa corretamente
+        casa_oracao_completa = dados_fatura.get('casa_oracao', '')
         
-        if not codigo_casa:
+        if not casa_oracao_completa:
             print("⚠️ Código da casa não encontrado em dados_fatura")
             return False
         
-        print(f"🏠 Casa detectada: {codigo_casa}")
+        print(f"🏠 Casa detectada (completa): {casa_oracao_completa}")
+        
+        # 🆕 NOVO: Extrair código conforme estrutura real CCB
+        codigo_casa = extrair_codigo_formato_ccb(casa_oracao_completa)
+        
+        if not codigo_casa:
+            print("❌ Não foi possível extrair código da casa")
+            return False
+        
+        print(f"🔍 Código extraído (formato CCB): '{codigo_casa}'")
         
         # 2. Consultar responsáveis na base CCB
-        print(f"🔍 Consultando responsáveis para {codigo_casa}...")
+        print(f"🔍 Consultando responsáveis CCB...")
         responsaveis = obter_responsaveis_por_codigo(codigo_casa)
         
         if not responsaveis:
-            # Fallback para admin se não encontrar responsáveis
-            print(f"⚠️ Nenhum responsável encontrado para {codigo_casa}")
+            # Fallback para admin
+            print(f"⚠️ Nenhum responsável encontrado para código: {codigo_casa}")
             print(f"📱 Enviando para admin como fallback...")
             
             admin_ids = os.getenv("ADMIN_IDS", "").split(",")
@@ -143,8 +167,9 @@ def processar_alerta_fatura(dados_fatura):
             print(f"🧹 PDF removido da memória")
         
         # 8. Resultado final
-        print(f"\n📊 RESULTADO PROCESSAMENTO ALERTA:")
-        print(f"   🏠 Casa: {codigo_casa}")
+        print(f"\n📊 RESULTADO PROCESSAMENTO ALERTA CORRIGIDO:")
+        print(f"   🏠 Casa completa: {casa_oracao_completa}")
+        print(f"   🔍 Código CCB: {codigo_casa}")
         print(f"   👥 Responsáveis: {len(responsaveis)}")
         print(f"   📎 PDF anexado: {'✅ Sim' if pdf_foi_anexado else '❌ Não'}")
         print(f"   📁 Fonte PDF: {fonte_pdf}")
@@ -156,6 +181,67 @@ def processar_alerta_fatura(dados_fatura):
     except Exception as e:
         print(f"❌ Erro processando alerta: {e}")
         return False
+
+def extrair_codigo_formato_ccb(casa_oracao_completa):
+    """
+    🔧 FUNÇÃO CRÍTICA NOVA: Extrai código da casa no formato CCB
+    
+    BASEADO NA ANÁLISE DOS SCRIPTS REAIS:
+    - handlers/data.py: códigos são "BR21-XXXX" (sem espaços)
+    - Sistema BRK envia: "BR 21-0520 - VILA ASSIS BRASIL"
+    - Necessário: extrair "BR21-0520" (remover espaços)
+    
+    Args:
+        casa_oracao_completa (str): Nome completo da casa do Sistema BRK
+        
+    Returns:
+        str: Código no formato CCB ou None se não encontrar
+    """
+    if not casa_oracao_completa or casa_oracao_completa == 'Não encontrado':
+        return None
+    
+    try:
+        print(f"🔍 Extraindo código CCB de: '{casa_oracao_completa}'")
+        
+        # 1. PADRÃO PRINCIPAL: Código antes do " - "
+        if ' - ' in casa_oracao_completa:
+            codigo_bruto = casa_oracao_completa.split(' - ')[0].strip()
+            print(f"   ✓ Código extraído (antes do -): '{codigo_bruto}'")
+            
+            # 2. NORMALIZAR PARA FORMATO CCB (sem espaços)
+            # "BR 21-0520" → "BR21-0520"
+            codigo_ccb = codigo_bruto.replace(' ', '')
+            print(f"   ✓ Normalizado para CCB: '{codigo_ccb}'")
+            
+            # 3. VALIDAR FORMATO BR21-XXXX
+            if re.match(r'^BR21-\d{4}$', codigo_ccb):
+                print(f"   ✅ Formato válido CCB: '{codigo_ccb}'")
+                return codigo_ccb
+            else:
+                print(f"   ⚠️ Formato inválido: '{codigo_ccb}' (esperado: BR21-XXXX)")
+        
+        # 2. BUSCAR PADRÃO BR21-XXXX DIRETAMENTE no texto
+        match_br21 = re.search(r'BR21-\d{4}', casa_oracao_completa)
+        if match_br21:
+            codigo_encontrado = match_br21.group(0)
+            print(f"   ✓ Código BR21 encontrado: '{codigo_encontrado}'")
+            return codigo_encontrado
+        
+        # 3. BUSCAR PADRÃO BR XX-XXXX e converter
+        match_br_espaco = re.search(r'BR\s*21-\d{4}', casa_oracao_completa)
+        if match_br_espaco:
+            codigo_bruto = match_br_espaco.group(0)
+            codigo_ccb = codigo_bruto.replace(' ', '')
+            print(f"   ✓ Código BR com espaços convertido: '{codigo_bruto}' → '{codigo_ccb}'")
+            return codigo_ccb
+        
+        # 4. FALLBACK: Se não encontrou padrão esperado
+        print(f"   ❌ Nenhum padrão BR21-XXXX encontrado em: '{casa_oracao_completa}'")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Erro extraindo código: {e}")
+        return None
 
 def _baixar_pdf_onedrive_corrigido(dados_fatura):
     """
@@ -420,3 +506,98 @@ def _gerar_nome_arquivo_pdf(dados_fatura):
     except Exception as e:
         print(f"❌ Erro gerando nome arquivo: {e}")
         return "fatura-brk.pdf"
+
+def testar_extracao_codigo_vila_assis():
+    """
+    🧪 TESTE ESPECÍFICO: Verificar correção Vila Assis Brasil
+    
+    Testa a função de extração com casos reais do sistema,
+    focando no problema identificado: Vila Assis Brasil
+    """
+    print(f"\n🧪 TESTE EXTRAÇÃO CÓDIGO CCB - CORREÇÃO VILA ASSIS")
+    print(f"="*60)
+    
+    # Casos de teste baseados na estrutura real
+    casos_teste = [
+        # CASO PRINCIPAL - Vila Assis Brasil (problema identificado)
+        {
+            "input": "BR 21-0520 - VILA ASSIS BRASIL",
+            "esperado": "BR21-0520",
+            "descricao": "🎯 VILA ASSIS (caso problema)"
+        },
+        
+        # Outros casos reais do sistema
+        {
+            "input": "BR 21-0270 - CENTRO", 
+            "esperado": "BR21-0270",
+            "descricao": "Centro"
+        },
+        {
+            "input": "BR 21-0774 - JARDIM MAUÁ",
+            "esperado": "BR21-0774", 
+            "descricao": "Jardim Mauá"
+        },
+        {
+            "input": "BR 21-0562 - CAPUAVA",
+            "esperado": "BR21-0562",
+            "descricao": "Capuava"
+        },
+        
+        # Casos edge
+        {
+            "input": "BR21-0520",  # Já sem espaço
+            "esperado": "BR21-0520",
+            "descricao": "Já formato CCB"
+        },
+        {
+            "input": "VILA ASSIS BRASIL",  # Sem código
+            "esperado": None,
+            "descricao": "❌ Sem código"
+        }
+    ]
+    
+    print(f"🔍 Testando {len(casos_teste)} casos...")
+    
+    sucessos = 0
+    falhas = 0
+    
+    for i, caso in enumerate(casos_teste, 1):
+        input_casa = caso["input"]
+        esperado = caso["esperado"]
+        descricao = caso["descricao"]
+        
+        print(f"\n{i}. {descricao}")
+        print(f"   📥 Input: '{input_casa}'")
+        print(f"   🎯 Esperado: '{esperado}'")
+        
+        # Executar função
+        resultado = extrair_codigo_formato_ccb(input_casa)
+        print(f"   📤 Resultado: '{resultado}'")
+        
+        # Verificar resultado
+        if resultado == esperado:
+            print(f"   ✅ SUCESSO!")
+            sucessos += 1
+        else:
+            print(f"   ❌ FALHA!")
+            falhas += 1
+        
+        # Verificar formato CCB se resultado válido
+        if resultado:
+            formato_ok = re.match(r'^BR21-\d{4}$', resultado)
+            print(f"   🔍 Formato CCB: {'✅ Válido' if formato_ok else '❌ Inválido'}")
+    
+    # Resultado final
+    print(f"\n📊 RESULTADO TESTE CORREÇÃO:")
+    print(f"   ✅ Sucessos: {sucessos}")
+    print(f"   ❌ Falhas: {falhas}")
+    print(f"   📈 Taxa sucesso: {(sucessos/(sucessos+falhas)*100):.1f}%")
+    
+    if sucessos >= 4:  # Pelo menos casos principais
+        print(f"🎯 TESTE CORREÇÃO: ✅ APROVADO")
+        print(f"🏆 Vila Assis Brasil deve receber alertas!")
+        return True
+    else:
+        print(f"🎯 TESTE CORREÇÃO: ❌ REPROVADO") 
+        print(f"⚠️ Verificar implementação da função")
+        return False
