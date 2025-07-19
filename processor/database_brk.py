@@ -566,7 +566,7 @@ class DatabaseBRK:
                 partes = vencimento.split('/')
                 dia, mes, ano = partes[0], int(partes[1]), int(partes[2])
                 print(f"📅 Pasta por VENCIMENTO: {vencimento} → /{ano}/{mes:02d}/")
-                return ano, mes
+                return int(ano), int(mes)
             
             # OPÇÃO 2: Usar competência se válida  
             if competencia and '/' in competencia:
@@ -575,7 +575,7 @@ class DatabaseBRK:
                         mes, ano = competencia.split('/')
                         mes, ano = int(mes), int(ano)
                         print(f"📅 Pasta por COMPETÊNCIA: {competencia} → /{ano}/{mes:02d}/")
-                        return ano, mes
+                        return int(ano), int(mes)
                 except:
                     pass
             
