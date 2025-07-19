@@ -555,6 +555,8 @@ def _gerar_nome_padronizado(dados_fatura):
             valor_limpo = re.sub(r'[^\d,.]', '', str(valor))
             if not valor_limpo:
                 valor_limpo = "0"
+                # ✅ LINHA ADICIONADA: Conversão obrigatória vírgula→ponto
+            valor_limpo = valor_limpo.replace(',', '.')
         else:
             valor_limpo = "0"
         
