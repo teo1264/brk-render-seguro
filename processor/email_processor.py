@@ -1263,8 +1263,10 @@ class EmailProcessor:
                 'email_id': pdf_data.get('email_id', ''),
                 'nome_arquivo_original': pdf_data.get('filename', pdf_data.get('nome_arquivo', 'arquivo_desconhecido.pdf')),
                 'hash_arquivo': pdf_data.get('hash_arquivo', ''),
-                
-                # ==================== CAMPOS PRINCIPAIS - MAPEAMENTO CORRIGIDO ====================
+                # ==================== CAMPOS PRINCIPAIS - MAPEAMENTO CORRIGIDO =================== 
+                # 🚨 ADICIONAR ESTA LINHA AQUI:
+                'content_bytes': pdf_data.get('content_bytes', ''),
+                   
                 # ✅ CORREÇÃO: 'Codigo_Cliente' → 'cdc'
                 'cdc': pdf_data.get('Codigo_Cliente', 'Não encontrado'),
                 
