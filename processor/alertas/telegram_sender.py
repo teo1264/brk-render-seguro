@@ -137,7 +137,7 @@ def enviar_telegram_com_anexo(user_id, mensagem, pdf_bytes, nome_arquivo):
         print(f"📤 Enviando documento via sendDocument...")
         
         # 4. Fazer requisição (timeout maior para upload)
-        response = requests.post(url, data=data, files=files, timeout=60)
+        response = requests.post(url, data=data, files=files, timeout=180)
         
         # 5. Verificar resultado
         if response.status_code == 200:
