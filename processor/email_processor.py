@@ -1003,330 +1003,345 @@ class EmailProcessor:
         return self.relacionamento_carregado
 
     def extrair_pdfs_do_email(self, email):
-        """
-        MÉTODO PRINCIPAL compatível com app.py existente.
+    """
+    MÉTODO PRINCIPAL compatível com app.py existente.
+    
+    ✅ VERSÃO COMPLETA COM UPLOAD ONEDRIVE INTEGRADO
+    
+    Agora usa a nova funcionalidade de extração completa,
+    mas mantém interface TOTALMENTE compatível com código existente.
+    
+    Args:
+        email (Dict): Dados do email do Microsoft Graph
         
-        ✅ VERSÃO COMPLETA COM UPLOAD ONEDRIVE INTEGRADO
+    Returns:
+        List[Dict]: Lista de PDFs (compatível + dados expandidos)
+    """
+    pdfs_com_dados = []
+    
+    try:
+        attachments = email.get('attachments', [])
+        email_id = email.get('id', 'unknown')
         
-        Agora usa a nova funcionalidade de extração completa,
-        mas mantém interface TOTALMENTE compatível com código existente.
+        if not attachments:
+            print("📎 Nenhum anexo encontrado no email")
+            return []
         
-        Args:
-            email (Dict): Dados do email do Microsoft Graph
-            
-        Returns:
-            List[Dict]: Lista de PDFs (compatível + dados expandidos)
-        """
-        pdfs_com_dados = []
+        pdfs_brutos = 0
+        pdfs_processados = 0
         
-        try:
-            attachments = email.get('attachments', [])
-            email_id = email.get('id', 'unknown')
+        # Garantir que relacionamento está carregado
+        relacionamento_ok = self.garantir_relacionamento_carregado()
+        if relacionamento_ok:
+            print(f"✅ Relacionamento disponível: {len(self.cdc_brk_vetor)} registros")
+        else:
+            print("⚠️ Relacionamento não disponível - processará apenas dados básicos")
+        
+        for attachment in attachments:
+            filename = attachment.get('name', '').lower()
             
-            if not attachments:
-                print("📎 Nenhum anexo encontrado no email")
-                return []
-            
-            pdfs_brutos = 0
-            pdfs_processados = 0
-            
-            # Garantir que relacionamento está carregado
-            relacionamento_ok = self.garantir_relacionamento_carregado()
-            if relacionamento_ok:
-                print(f"✅ Relacionamento disponível: {len(self.cdc_brk_vetor)} registros")
-            else:
-                print("⚠️ Relacionamento não disponível - processará apenas dados básicos")
-            
-            for attachment in attachments:
-                filename = attachment.get('name', '').lower()
+            # Verificar se é PDF
+            if filename.endswith('.pdf'):
+                pdfs_brutos += 1
+                nome_original = attachment.get('name', 'unnamed.pdf')
                 
-                # Verificar se é PDF
-                if filename.endswith('.pdf'):
-                    pdfs_brutos += 1
-                    nome_original = attachment.get('name', 'unnamed.pdf')
+                try:
+                    # Informações básicas do PDF (COMPATIBILIDADE 100% com código existente)
+                    pdf_info_basico = {
+                        'email_id': email_id,
+                        'filename': nome_original,
+                        'size': attachment.get('size', 0),
+                        'content_bytes': attachment.get('contentBytes', ''),
+                        'received_date': email.get('receivedDateTime', ''),
+                        'email_subject': email.get('subject', ''),
+                        'sender': email.get('from', {}).get('emailAddress', {}).get('address', 'unknown')
+                    }
                     
-                    try:
-                        # Informações básicas do PDF (COMPATIBILIDADE 100% com código existente)
-                        pdf_info_basico = {
-                            'email_id': email_id,
-                            'filename': nome_original,
-                            'size': attachment.get('size', 0),
-                            'content_bytes': attachment.get('contentBytes', ''),
-                            'received_date': email.get('receivedDateTime', ''),
-                            'email_subject': email.get('subject', ''),
-                            'sender': email.get('from', {}).get('emailAddress', {}).get('address', 'unknown')
-                        }
-                        
-                        # NOVA FUNCIONALIDADE: Extrair dados completos do PDF
-                        content_bytes = attachment.get('contentBytes', '')
-                        if content_bytes:
-                            try:
-                                # Decodificar PDF bytes
-                                pdf_bytes = base64.b64decode(content_bytes)
+                    # NOVA FUNCIONALIDADE: Extrair dados completos do PDF
+                    content_bytes = attachment.get('contentBytes', '')  # ← JÁ EXISTE
+                    if content_bytes:
+                        try:
+                            # Decodificar PDF bytes
+                            pdf_bytes = base64.b64decode(content_bytes)
+                            
+                            # Extrair dados completos usando nova função
+                            dados_extraidos = self.extrair_dados_fatura_pdf(pdf_bytes, nome_original)
+                            
+                            if dados_extraidos:
+                                # Combinar informações básicas + dados extraídos
+                                pdf_completo = {
+                                    **pdf_info_basico,  # Informações básicas (COMPATIBILIDADE)
+                                    **dados_extraidos,  # Dados extraídos do PDF (NOVA FUNCIONALIDADE)
+                                    'hash_arquivo': hashlib.sha256(pdf_bytes).hexdigest(),
+                                    'dados_extraidos_ok': True,
+                                    'relacionamento_usado': relacionamento_ok
+                                }
                                 
-                                # Extrair dados completos usando nova função
-                                dados_extraidos = self.extrair_dados_fatura_pdf(pdf_bytes, nome_original)
+                                pdfs_com_dados.append(pdf_completo)
+                                pdfs_processados += 1
                                 
-                                if dados_extraidos:
-                                    # Combinar informações básicas + dados extraídos
-                                    pdf_completo = {
-                                        **pdf_info_basico,  # Informações básicas (COMPATIBILIDADE)
-                                        **dados_extraidos,  # Dados extraídos do PDF (NOVA FUNCIONALIDADE)
-                                        'hash_arquivo': hashlib.sha256(pdf_bytes).hexdigest(),
-                                        'dados_extraidos_ok': True,
-                                        'relacionamento_usado': relacionamento_ok
-                                    }
-                                    
-                                    pdfs_com_dados.append(pdf_completo)
-                                    pdfs_processados += 1
-                                    
-                                    print(f"✅ PDF processado: {nome_original}")
-                                    
-                                    # 🆕 SALVAMENTO AUTOMÁTICO NO DatabaseBRK + UPLOAD ONEDRIVE
-                                    if self.database_brk and dados_extraidos:
-                                        try:
-                                            resultado_db = self.salvar_fatura_database(pdf_completo)
-                                            if resultado_db.get('status') == 'sucesso':
-                                                pdf_completo['database_salvo'] = True
-                                                pdf_completo['database_id'] = resultado_db.get('id_salvo')
-                                                pdf_completo['database_status'] = resultado_db.get('status_duplicata', 'NORMAL')
+                                print(f"✅ PDF processado: {nome_original}")
+                                
+                                # 🆕 SALVAMENTO AUTOMÁTICO NO DatabaseBRK + UPLOAD ONEDRIVE
+                                if self.database_brk and dados_extraidos:
+                                    try:
+                                        # 🔧 CORREÇÃO 2A: Passar content_bytes para preparar_dados_para_database
+                                        dados_para_db = self.preparar_dados_para_database(pdf_completo, content_bytes)  # ← CORREÇÃO AQUI
+                                        
+                                        resultado_db = self.salvar_fatura_database(dados_para_db)  # ← USANDO DADOS CORRIGIDOS
+                                        if resultado_db.get('status') == 'sucesso':
+                                            pdf_completo['database_salvo'] = True
+                                            pdf_completo['database_id'] = resultado_db.get('id_salvo')
+                                            pdf_completo['database_status'] = resultado_db.get('status_duplicata', 'NORMAL')
+                                            
+                                            # ✅ UPLOAD ONEDRIVE - ELEGANTE (reutiliza DatabaseBRK)
+                                            try:
+                                                print(f"☁️ Iniciando upload OneDrive após database...")
+                                                # 🔧 CORREÇÃO 2B: Usar dados já corrigidos para upload também
+                                                resultado_upload = self.upload_fatura_onedrive(pdf_bytes, dados_para_db)  # ← USANDO DADOS CORRIGIDOS
                                                 
-                                                # ✅ UPLOAD ONEDRIVE - ELEGANTE (reutiliza DatabaseBRK)
-                                                try:
-                                                    print(f"☁️ Iniciando upload OneDrive após database...")
-                                                    # Usar dados já mapeados para database
-                                                    dados_mapeados = self.preparar_dados_para_database(pdf_completo)
-                                                    resultado_upload = self.upload_fatura_onedrive(pdf_bytes, dados_mapeados)
-                                                    
-                                                    if resultado_upload.get('status') == 'sucesso':
-                                                        pdf_completo['onedrive_upload'] = True
-                                                        pdf_completo['onedrive_url'] = resultado_upload.get('url_arquivo')
-                                                        pdf_completo['onedrive_pasta'] = resultado_upload.get('pasta_path')
-                                                        pdf_completo['nome_onedrive'] = resultado_upload.get('nome_arquivo')
-                                                        print(f"📁 OneDrive: {resultado_upload.get('pasta_path')}{resultado_upload.get('nome_arquivo')}")
-                                                    else:
-                                                        pdf_completo['onedrive_upload'] = False
-                                                        pdf_completo['onedrive_erro'] = resultado_upload.get('mensagem')
-                                                        print(f"⚠️ Upload OneDrive falhou: {resultado_upload.get('mensagem')}")
-                                                        
-                                                except Exception as e:
-                                                    print(f"⚠️ Erro upload OneDrive: {e}")
+                                                if resultado_upload.get('status') == 'sucesso':
+                                                    pdf_completo['onedrive_upload'] = True
+                                                    pdf_completo['onedrive_url'] = resultado_upload.get('url_arquivo')
+                                                    pdf_completo['onedrive_pasta'] = resultado_upload.get('pasta_path')
+                                                    pdf_completo['nome_onedrive'] = resultado_upload.get('nome_arquivo')
+                                                    print(f"📁 OneDrive: {resultado_upload.get('pasta_path')}{resultado_upload.get('nome_arquivo')}")
+                                                else:
                                                     pdf_completo['onedrive_upload'] = False
-                                                    pdf_completo['onedrive_erro'] = str(e)
-                                            else:
-                                                pdf_completo['database_salvo'] = False
-                                                pdf_completo['database_erro'] = resultado_db.get('mensagem', 'Erro desconhecido')
-                                                print(f"⚠️ Database falhou - pulando upload OneDrive")
-                                        except Exception as e:
-                                            print(f"⚠️ Erro salvamento automático: {e}")
+                                                    pdf_completo['onedrive_erro'] = resultado_upload.get('mensagem')
+                                                    print(f"⚠️ Upload OneDrive falhou: {resultado_upload.get('mensagem')}")
+                                                    
+                                            except Exception as e:
+                                                print(f"⚠️ Erro upload OneDrive: {e}")
+                                                pdf_completo['onedrive_upload'] = False
+                                                pdf_completo['onedrive_erro'] = str(e)
+                                        else:
                                             pdf_completo['database_salvo'] = False
-                                            pdf_completo['database_erro'] = str(e)
-                                    
-                                else:
-                                    # Falha na extração - manter dados básicos (COMPATIBILIDADE)
-                                    pdf_completo = {
-                                        **pdf_info_basico,
-                                        'dados_extraidos_ok': False,
-                                        'erro_extracao': 'Falha na extração de dados',
-                                        'relacionamento_usado': False
-                                    }
-                                    pdfs_com_dados.append(pdf_completo)
-                                    print(f"⚠️ PDF básico (falha extração): {nome_original}")
-                                    
-                            except Exception as e:
-                                print(f"❌ Erro extraindo dados do PDF {nome_original}: {e}")
-                                # Manter dados básicos em caso de erro (COMPATIBILIDADE)
+                                            pdf_completo['database_erro'] = resultado_db.get('mensagem', 'Erro desconhecido')
+                                            print(f"⚠️ Database falhou - pulando upload OneDrive")
+                                    except Exception as e:
+                                        print(f"⚠️ Erro salvamento automático: {e}")
+                                        pdf_completo['database_salvo'] = False
+                                        pdf_completo['database_erro'] = str(e)
+                                
+                            else:
+                                # Falha na extração - manter dados básicos (COMPATIBILIDADE)
                                 pdf_completo = {
                                     **pdf_info_basico,
                                     'dados_extraidos_ok': False,
-                                    'erro_extracao': str(e),
+                                    'erro_extracao': 'Falha na extração de dados',
                                     'relacionamento_usado': False
                                 }
                                 pdfs_com_dados.append(pdf_completo)
-                        else:
-                            print(f"⚠️ PDF sem conteúdo: {nome_original}")
-                            # Ainda assim retorna estrutura básica (COMPATIBILIDADE)
-                            pdfs_com_dados.append(pdf_info_basico)
-                            
-                    except Exception as e:
-                        print(f"❌ Erro processando anexo {nome_original}: {e}")
-            
-            # Log resumo do processamento
-            if pdfs_brutos > 0:
-                print(f"\n📊 RESUMO PROCESSAMENTO:")
-                print(f"   📎 PDFs encontrados: {pdfs_brutos}")
-                print(f"   ✅ PDFs processados: {pdfs_processados}")
-                print(f"   📋 Relacionamento: {'✅ Usado' if relacionamento_ok else '❌ Indisponível'}")
-                print(f"   🔄 Extração avançada: {'✅ Ativa' if pdfs_processados > 0 else '❌ Falhou'}")
-                print(f"   ☁️ Upload OneDrive: {'✅ Integrado' if self.database_brk else '❌ DatabaseBRK indisponível'}")
-                
-            return pdfs_com_dados
-            
-        except Exception as e:
-            print(f"❌ Erro extraindo PDFs do email: {e}")
-            return []        
-    def log_consolidado_email(self, email_data, pdfs_processados):
-        """
-        Exibe log consolidado bonito de um email processado.
-        Inclui dados extraídos, relacionamento e análises.
-        
-        Args:
-            email_data (Dict): Dados do email
-            pdfs_processados (List[Dict]): PDFs processados com dados
-        """
-        try:
-            email_subject = email_data.get('subject', 'Sem assunto')[:50]
-            email_date = email_data.get('receivedDateTime', 'N/A')[:10]
-            
-            print(f"\n" + "="*60)
-            print(f"📧 EMAIL PROCESSADO: {email_subject}")
-            print(f"📅 Data recebimento: {email_date}")
-            print(f"📎 PDFs encontrados: {len(pdfs_processados)}")
-            print(f"="*60)
-            
-            for i, pdf in enumerate(pdfs_processados, 1):
-                print(f"\n📄 PDF {i}/{len(pdfs_processados)}: {pdf.get('filename', 'unnamed.pdf')}")
-                
-                # Status da extração
-                if pdf.get('dados_extraidos_ok', False):
-                    print(f"   ✅ Dados extraídos com sucesso")
-                    
-                    # Dados principais
-                    if pdf.get('Codigo_Cliente') != 'Não encontrado':
-                        print(f"   🏢 CDC: {pdf.get('Codigo_Cliente')}")
-                    if pdf.get('Casa de Oração') != 'Não encontrado':
-                        print(f"   🏪 Casa: {pdf.get('Casa de Oração')}")
-                    if pdf.get('Valor') != 'Não encontrado':
-                        print(f"   💰 Valor: R$ {pdf.get('Valor')}")
-                    if pdf.get('Vencimento') != 'Não encontrado':
-                        print(f"   📅 Vencimento: {pdf.get('Vencimento')}")
-                    
-                    # Dados de consumo (se disponíveis)
-                    if pdf.get('Medido_Real') is not None:
-                        print(f"   💧 Consumo: {pdf.get('Medido_Real')}m³", end="")
-                        if pdf.get('Média 6M') is not None:
-                            print(f" (Média: {pdf.get('Média 6M')}m³)")
-                        else:
-                            print()
-                    
-                    # Alertas de consumo
-                    if pdf.get('Alerta de Consumo'):
-                        alerta = pdf.get('Alerta de Consumo')
-                        if '🚨' in alerta:
-                            print(f"   🚨 ALERTA: {alerta}")
-                        elif '⚠️' in alerta:
-                            print(f"   ⚠️ Aviso: {alerta}")
-                        elif '✅' in alerta:
-                            print(f"   ✅ Status: {alerta}")
-                        else:
-                            print(f"   📊 Análise: {alerta}")
-                    
-                    # Status relacionamento
-                    if pdf.get('relacionamento_usado', False):
-                        print(f"   🔗 Relacionamento: ✅ Aplicado")
+                                print(f"⚠️ PDF básico (falha extração): {nome_original}")
+                                
+                        except Exception as e:
+                            print(f"❌ Erro extraindo dados do PDF {nome_original}: {e}")
+                            # Manter dados básicos em caso de erro (COMPATIBILIDADE)
+                            pdf_completo = {
+                                **pdf_info_basico,
+                                'dados_extraidos_ok': False,
+                                'erro_extracao': str(e),
+                                'relacionamento_usado': False
+                            }
+                            pdfs_com_dados.append(pdf_completo)
                     else:
-                        print(f"   🔗 Relacionamento: ❌ Não aplicado")
+                        print(f"⚠️ PDF sem conteúdo: {nome_original}")
+                        # Ainda assim retorna estrutura básica (COMPATIBILIDADE)
+                        pdfs_com_dados.append(pdf_info_basico)
                         
-                else:
-                    print(f"   ❌ Falha na extração de dados")
-                    if pdf.get('erro_extracao'):
-                        print(f"   💬 Erro: {pdf.get('erro_extracao')}")
-                    print(f"   📦 Tamanho: {pdf.get('size', 0)} bytes")
+                except Exception as e:
+                    print(f"❌ Erro processando anexo {nome_original}: {e}")
+        
+        # Log resumo do processamento
+        if pdfs_brutos > 0:
+            print(f"\n📊 RESUMO PROCESSAMENTO:")
+            print(f"   📎 PDFs encontrados: {pdfs_brutos}")
+            print(f"   ✅ PDFs processados: {pdfs_processados}")
+            print(f"   📋 Relacionamento: {'✅ Usado' if relacionamento_ok else '❌ Indisponível'}")
+            print(f"   🔄 Extração avançada: {'✅ Ativa' if pdfs_processados > 0 else '❌ Falhou'}")
+            print(f"   ☁️ Upload OneDrive: {'✅ Integrado' if self.database_brk else '❌ DatabaseBRK indisponível'}")
             
-            print(f"="*60)
-            print(f"✅ EMAIL PROCESSADO COMPLETAMENTE")
-            print(f"="*60)
-            
-        except Exception as e:
-            print(f"❌ Erro no log consolidado: {e}")
+        return pdfs_com_dados
+        
+    except Exception as e:
+        print(f"❌ Erro extraindo PDFs do email: {e}")
+        return []        
 
-    def preparar_dados_para_database(self, pdf_data):
-        """
-        ✅ CORREÇÃO: Prepara dados extraídos para salvamento no database.
-        PROBLEMA CORRIGIDO: Mapeamento incorreto de campos entre extração e database.
+def log_consolidado_email(self, email_data, pdfs_processados):
+    """
+    Exibe log consolidado bonito de um email processado.
+    Inclui dados extraídos, relacionamento e análises.
+    
+    Args:
+        email_data (Dict): Dados do email
+        pdfs_processados (List[Dict]): PDFs processados com dados
+    """
+    try:
+        email_subject = email_data.get('subject', 'Sem assunto')[:50]
+        email_date = email_data.get('receivedDateTime', 'N/A')[:10]
         
-        ANTES: Campos extraídos tinham nomes diferentes dos esperados pelo database
-        AGORA: Mapeamento correto garantindo que todos os dados sejam salvos
+        print(f"\n" + "="*60)
+        print(f"📧 EMAIL PROCESSADO: {email_subject}")
+        print(f"📅 Data recebimento: {email_date}")
+        print(f"📎 PDFs encontrados: {len(pdfs_processados)}")
+        print(f"="*60)
         
-        Args:
-            pdf_data (Dict): Dados do PDF processado
+        for i, pdf in enumerate(pdfs_processados, 1):
+            print(f"\n📄 PDF {i}/{len(pdfs_processados)}: {pdf.get('filename', 'unnamed.pdf')}")
             
-        Returns:
-            Dict: Dados formatados corretamente para database
-        """
-        try:
-            print(f"🔧 Mapeando dados para database...")
+            # Status da extração
+            if pdf.get('dados_extraidos_ok', False):
+                print(f"   ✅ Dados extraídos com sucesso")
+                
+                # Dados principais
+                if pdf.get('Codigo_Cliente') != 'Não encontrado':
+                    print(f"   🏢 CDC: {pdf.get('Codigo_Cliente')}")
+                if pdf.get('Casa de Oração') != 'Não encontrado':
+                    print(f"   🏪 Casa: {pdf.get('Casa de Oração')}")
+                if pdf.get('Valor') != 'Não encontrado':
+                    print(f"   💰 Valor: R$ {pdf.get('Valor')}")
+                if pdf.get('Vencimento') != 'Não encontrado':
+                    print(f"   📅 Vencimento: {pdf.get('Vencimento')}")
+                
+                # Dados de consumo (se disponíveis)
+                if pdf.get('Medido_Real') is not None:
+                    print(f"   💧 Consumo: {pdf.get('Medido_Real')}m³", end="")
+                    if pdf.get('Média 6M') is not None:
+                        print(f" (Média: {pdf.get('Média 6M')}m³)")
+                    else:
+                        print()
+                
+                # Alertas de consumo
+                if pdf.get('Alerta de Consumo'):
+                    alerta = pdf.get('Alerta de Consumo')
+                    if '🚨' in alerta:
+                        print(f"   🚨 ALERTA: {alerta}")
+                    elif '⚠️' in alerta:
+                        print(f"   ⚠️ Aviso: {alerta}")
+                    elif '✅' in alerta:
+                        print(f"   ✅ Status: {alerta}")
+                    else:
+                        print(f"   📊 Análise: {alerta}")
+                
+                # Status relacionamento
+                if pdf.get('relacionamento_usado', False):
+                    print(f"   🔗 Relacionamento: ✅ Aplicado")
+                else:
+                    print(f"   🔗 Relacionamento: ❌ Não aplicado")
+                    
+            else:
+                print(f"   ❌ Falha na extração de dados")
+                if pdf.get('erro_extracao'):
+                    print(f"   💬 Erro: {pdf.get('erro_extracao')}")
+                print(f"   📦 Tamanho: {pdf.get('size', 0)} bytes")
+        
+        print(f"="*60)
+        print(f"✅ EMAIL PROCESSADO COMPLETAMENTE")
+        print(f"="*60)
+        
+    except Exception as e:
+        print(f"❌ Erro no log consolidado: {e}")       
+ 
+
+    def preparar_dados_para_database(self, pdf_data, content_bytes=None):  # ← ADICIONADO PARÂMETRO
+    """
+    ✅ CORREÇÃO: Prepara dados extraídos para salvamento no database.
+    PROBLEMA CORRIGIDO: Mapeamento incorreto de campos entre extração e database.
+    
+    ANTES: Campos extraídos tinham nomes diferentes dos esperados pelo database
+    AGORA: Mapeamento correto garantindo que todos os dados sejam salvos
+    
+    🆕 CORREÇÃO ANEXO PDF: Incluído content_bytes para sistema de alertas
+    
+    Args:
+        pdf_data (Dict): Dados do PDF processado
+        content_bytes (str, optional): PDF em base64 para sistema de alertas  # ← NOVA LINHA
+        
+    Returns:
+        Dict: Dados formatados corretamente para database
+    """
+    try:
+        print(f"🔧 Mapeando dados para database...")
+        
+        # ✅ MAPEAMENTO CORRETO - Converter nomes de campos da extração para database
+        dados_completos = {
+            # ==================== CAMPOS DE CONTROLE ====================
+            'email_id': pdf_data.get('email_id', ''),
+            'nome_arquivo_original': pdf_data.get('filename', pdf_data.get('nome_arquivo', 'arquivo_desconhecido.pdf')),
+            'hash_arquivo': pdf_data.get('hash_arquivo', ''),
+            'content_bytes': content_bytes if content_bytes else None,  # ← NOVA LINHA ADICIONADA AQUI
             
-            # ✅ MAPEAMENTO CORRETO - Converter nomes de campos da extração para database
-            dados_completos = {
-                # ==================== CAMPOS DE CONTROLE ====================
-                'email_id': pdf_data.get('email_id', ''),
-                'nome_arquivo_original': pdf_data.get('filename', pdf_data.get('nome_arquivo', 'arquivo_desconhecido.pdf')),
-                'hash_arquivo': pdf_data.get('hash_arquivo', ''),
-                
-                # ==================== CAMPOS PRINCIPAIS - MAPEAMENTO CORRIGIDO ====================
-                # ✅ CORREÇÃO: 'Codigo_Cliente' → 'cdc'
-                'cdc': pdf_data.get('Codigo_Cliente', 'Não encontrado'),
-                
-                # ✅ CORREÇÃO: 'Nota_Fiscal' → 'nota_fiscal'  
-                'nota_fiscal': pdf_data.get('Nota_Fiscal', 'Não encontrado'),
-                
-                # ✅ CORREÇÃO: 'Casa de Oração' → 'casa_oracao'
-                'casa_oracao': pdf_data.get('Casa de Oração', 'Não encontrado'),
-                
-                # ✅ CORREÇÃO: 'Data_Emissao' → 'data_emissao'
-                'data_emissao': pdf_data.get('Data_Emissao', 'Não encontrado'),
-                
-                # ✅ CORREÇÃO: 'Vencimento' → 'vencimento'
-                'vencimento': pdf_data.get('Vencimento', 'Não encontrado'),
-                
-                # ✅ CORREÇÃO: 'Competencia' → 'competencia'
-                'competencia': pdf_data.get('Competencia', 'Não encontrado'),
-                
-                # ✅ CORREÇÃO: 'Valor' → 'valor'
-                'valor': pdf_data.get('Valor', 'Não encontrado'),
-                
-                # ==================== CAMPOS DE CONSUMO ====================
-                'medido_real': pdf_data.get('Medido_Real'),
-                'faturado': pdf_data.get('Faturado'),
-                'media_6m': pdf_data.get('Média 6M'),
-                'porcentagem_consumo': pdf_data.get('Porcentagem Consumo', ''),
-                'alerta_consumo': pdf_data.get('Alerta de Consumo', ''),
-                
-                # ==================== FLAGS DE CONTROLE ====================
-                'dados_extraidos_ok': pdf_data.get('dados_extraidos_ok', False),
-                'relacionamento_usado': pdf_data.get('relacionamento_usado', False)
-            }
+            # ==================== CAMPOS PRINCIPAIS - MAPEAMENTO CORRIGIDO ====================
+            # ✅ CORREÇÃO: 'Codigo_Cliente' → 'cdc'
+            'cdc': pdf_data.get('Codigo_Cliente', 'Não encontrado'),
             
-            # 🔍 LOG DE VERIFICAÇÃO - Para auditoria
-            print(f"   📋 Mapeamento realizado:")
-            print(f"      🏢 CDC: {pdf_data.get('Codigo_Cliente')} → {dados_completos['cdc']}")
-            print(f"      📋 Nota: {pdf_data.get('Nota_Fiscal')} → {dados_completos['nota_fiscal']}")
-            print(f"      🏪 Casa: {pdf_data.get('Casa de Oração')} → {dados_completos['casa_oracao']}")
-            print(f"      💰 Valor: {pdf_data.get('Valor')} → {dados_completos['valor']}")
-            print(f"      📅 Venc: {pdf_data.get('Vencimento')} → {dados_completos['vencimento']}")
-            print(f"      📆 Comp: {pdf_data.get('Competencia')} → {dados_completos['competencia']}")
+            # ✅ CORREÇÃO: 'Nota_Fiscal' → 'nota_fiscal'  
+            'nota_fiscal': pdf_data.get('Nota_Fiscal', 'Não encontrado'),
             
-            # ✅ VALIDAÇÃO: Verificar se campos principais foram mapeados
-            campos_principais = ['cdc', 'nota_fiscal', 'casa_oracao', 'valor', 'vencimento', 'competencia']
-            campos_ok = 0
+            # ✅ CORREÇÃO: 'Casa de Oração' → 'casa_oracao'
+            'casa_oracao': pdf_data.get('Casa de Oração', 'Não encontrado'),
             
-            for campo in campos_principais:
-                valor = dados_completos.get(campo, 'Não encontrado')
-                if valor and valor != 'Não encontrado':
-                    campos_ok += 1
+            # ✅ CORREÇÃO: 'Data_Emissao' → 'data_emissao'
+            'data_emissao': pdf_data.get('Data_Emissao', 'Não encontrado'),
             
-            print(f"   ✅ Campos principais mapeados: {campos_ok}/{len(campos_principais)}")
+            # ✅ CORREÇÃO: 'Vencimento' → 'vencimento'
+            'vencimento': pdf_data.get('Vencimento', 'Não encontrado'),
             
-            if campos_ok == 0:
-                print(f"   ⚠️ AVISO: Nenhum campo principal foi mapeado - verificar dados de entrada")
-                
-            return dados_completos
+            # ✅ CORREÇÃO: 'Competencia' → 'competencia'
+            'competencia': pdf_data.get('Competencia', 'Não encontrado'),
             
-        except Exception as e:
-            print(f"❌ Erro preparando dados para database: {e}")
-            print(f"   📊 Dados recebidos: {list(pdf_data.keys()) if pdf_data else 'None'}")
-            return None
+            # ✅ CORREÇÃO: 'Valor' → 'valor'
+            'valor': pdf_data.get('Valor', 'Não encontrado'),
+        
+            # ==================== CAMPOS DE CONSUMO ====================
+            'medido_real': pdf_data.get('Medido_Real'),
+            'faturado': pdf_data.get('Faturado'),
+            'media_6m': pdf_data.get('Média 6M'),
+            'porcentagem_consumo': pdf_data.get('Porcentagem Consumo', ''),
+            'alerta_consumo': pdf_data.get('Alerta de Consumo', ''),
+            
+            # ==================== FLAGS DE CONTROLE ====================
+            'dados_extraidos_ok': pdf_data.get('dados_extraidos_ok', False),
+            'relacionamento_usado': pdf_data.get('relacionamento_usado', False)
+        }
+        
+        # 🔍 LOG DE VERIFICAÇÃO - Para auditoria
+        print(f"   📋 Mapeamento realizado:")
+        print(f"      🏢 CDC: {pdf_data.get('Codigo_Cliente')} → {dados_completos['cdc']}")
+        print(f"      📋 Nota: {pdf_data.get('Nota_Fiscal')} → {dados_completos['nota_fiscal']}")
+        print(f"      🏪 Casa: {pdf_data.get('Casa de Oração')} → {dados_completos['casa_oracao']}")
+        print(f"      💰 Valor: {pdf_data.get('Valor')} → {dados_completos['valor']}")
+        print(f"      📅 Venc: {pdf_data.get('Vencimento')} → {dados_completos['vencimento']}")
+        print(f"      📆 Comp: {pdf_data.get('Competencia')} → {dados_completos['competencia']}")
+        
+        # 🆕 LOG NOVO: Status do content_bytes
+        if content_bytes:
+            tamanho_kb = len(content_bytes) // 1024
+            print(f"      📎 PDF anexo: ✅ Incluído ({tamanho_kb} KB)")  # ← NOVO LOG
+        else:
+            print(f"      📎 PDF anexo: ❌ Não fornecido")  # ← NOVO LOG
+        
+        # ✅ VALIDAÇÃO: Verificar se campos principais foram mapeados
+        campos_principais = ['cdc', 'nota_fiscal', 'casa_oracao', 'valor', 'vencimento', 'competencia']
+        campos_ok = 0
+        
+        for campo in campos_principais:
+            valor = dados_completos.get(campo, 'Não encontrado')
+            if valor and valor != 'Não encontrado':
+                campos_ok += 1
+        
+        print(f"   ✅ Campos principais mapeados: {campos_ok}/{len(campos_principais)}")
+        
+        if campos_ok == 0:
+            print(f"   ⚠️ AVISO: Nenhum campo principal foi mapeado - verificar dados de entrada")
+            
+        return dados_completos
+        
+    except Exception as e:
+        print(f"❌ Erro preparando dados para database: {e}")
+        print(f"   📊 Dados recebidos: {list(pdf_data.keys()) if pdf_data else 'None'}")
+        return None
     
     def status_processamento_completo(self):
         """
