@@ -7,11 +7,10 @@
 📅 DATA CRIAÇÃO: 04/07/2025
 📁 SALVAR EM: processor/alertas/message_formatter.py
 """
-
 def formatar_mensagem_alerta(dados_fatura):
     """
-    Formatar mensagem usando lógica do script criar_alerta21.py
-    Baseado nos modelos definidos no documento de integração
+    ✅ VERSÃO CORRIGIDA - Formatar mensagem incluindo novo template "Atenção"
+    🔧 ADIÇÃO: Template para categoria "Atenção" (25% a 50%)
     
     Args:
         dados_fatura (dict): Dados completos da fatura do Sistema BRK
@@ -35,7 +34,7 @@ def formatar_mensagem_alerta(dados_fatura):
         print(f"   📊 Consumo: {cons}")
         print(f"   📉 Média: {media}")
         
-        # Determinar tipo de alerta
+        # Determinar tipo de alerta (usando função corrigida)
         tipo_alerta = determinar_tipo_alerta(dados_fatura)
         print(f"   🎯 Tipo alerta: {tipo_alerta}")
         
@@ -52,6 +51,32 @@ def formatar_mensagem_alerta(dados_fatura):
 📉 *Média (6 meses):* {media}  
 ✅ *Consumo dentro do padrão*  
 ━━━━━━━━━━━━━━━━  
+
+🤖 *Sistema BRK Automático*
+🙏 *Deus abençoe!*"""
+
+        elif tipo_alerta == "Atenção":  # ✅ NOVO TEMPLATE PARA 25% a 50%
+            perc = dados_fatura.get('porcentagem_consumo', 'N/A')
+            dif_str = calcular_diferenca_m3(dados_fatura)
+            
+            mensagem = f"""*A Paz de Deus!* 
+
+🟡 *AUMENTO MODERADO NO CONSUMO*  
+
+📍 Casa de Oração: {casa}  
+📆 Vencimento: {venc}  
+💰 Valor da Conta: {valor}  
+
+━━━━━━━━━━━━━━━━  
+📊 *Consumo Atual:* {cons}  
+📉 *Média (6 meses):* {media}  
+📈 *Aumento:* {dif_str} ({perc})  
+━━━━━━━━━━━━━━━━  
+
+ℹ️ *INFORMATIVO:*  
+🔹 Aumento dentro do aceitável  
+🔹 Monitorar próximas faturas  
+🔹 Verificar se foi uso pontual  
 
 🤖 *Sistema BRK Automático*
 🙏 *Deus abençoe!*"""
@@ -165,8 +190,8 @@ def formatar_mensagem_alerta(dados_fatura):
 
 def determinar_tipo_alerta(dados_fatura):
     """
-    Determinar tipo de alerta baseado no consumo
-    Lógica baseada no script criar_alerta21.py
+    ✅ VERSÃO CORRIGIDA - Determinar tipo de alerta baseado no consumo
+    🔧 CORREÇÃO: Thresholds ajustados para 25%, 50%, 100%
     
     Args:
         dados_fatura (dict): Dados da fatura
@@ -189,32 +214,39 @@ def determinar_tipo_alerta(dados_fatura):
         print(f"   📉 Média: {media_6m} m³")
         print(f"   📈 Variação: {variacao_percentual:.1f}% ({variacao_absoluta:.1f} m³)")
         
-        # Lógica de determinação (baseada no documento)
-        if medido_real <= media_6m:
+        # ============================================================================
+        # ✅ LÓGICA CORRIGIDA COM THRESHOLDS ADEQUADOS:
+        # ============================================================================
+        
+        # Verificar consumo baixo primeiro
+        if variacao_percentual < -50:
+            return "Consumo Baixo"
+        
+        # ✅ CORREÇÃO: Consumo normal até 25%
+        elif variacao_percentual <= 25:  # ← 12.5% fica aqui!
             return "Consumo Normal"
+        
+        # ✅ NOVO: Atenção para aumentos moderados 25% a 50%
         elif variacao_percentual <= 50:
-            return "Alto Consumo"
+            return "Atenção"
+        
+        # Alto consumo - aumento significativo 50% a 100%
         elif variacao_percentual <= 100:
             if variacao_absoluta >= 5:  # Crítico se variação ≥5m³
                 return "Crítico"
             else:
                 return "Alto Consumo"
-        else:  # variação > 100%
+                
+        # Emergência - aumento muito alto > 100%
+        else:
             if variacao_absoluta >= 10:  # Emergência se variação ≥10m³
                 return "Emergência"
             else:
                 return "Crítico"
-        
-        # Verificar consumo baixo
-        if variacao_percentual < -50:
-            if variacao_absoluta <= -10:  # Consumo muito baixo
-                return "Consumo Baixo"
-            else:
-                return "Consumo Baixo"
                 
     except Exception as e:
         print(f"❌ Erro determinando tipo alerta: {e}")
-        return "Alto Consumo"  # Fallback seguro
+        return "Consumo Normal"  # ✅ Fallback mais seguro
 
 def fmt_data(data):
     """Formatar data para exibição"""
