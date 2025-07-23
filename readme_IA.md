@@ -5,8 +5,8 @@
 ### **🛡️ FUNCIONAMENTO REAL - PROTEÇÃO ATIVA:**
 - ✅ **Monitor automático integrado:** Emails + múltiplas planilhas a cada 30min no Render  
 - ✅ **Proteção financeira ativa:** Emails → Análise → **BLOQUEIO débitos suspeitos**
-- ✅ **Interface CRÍTICA:** Dashboard + **EXCEL_BRK (Proteção R$ milhares)**
-- ✅ **Controle total:** 38 CO's monitoradas + detecção vazamentos tempo real
+- ✅ **Interface CRÍTICA:** Dashboard + **EXCEL_BRK (Controle automatizado)**
+- ✅ **Controle total:** 39 instalações monitoradas + detecção vazamentos tempo real
 - ✅ **Múltiplas planilhas automáticas:** Sistema detecta TODOS os meses e gera planilhas específicas
 
 ### **🚨 FUNCIONALIDADES PROTEÇÃO FINANCEIRA CONFIRMADAS:**
@@ -25,9 +25,9 @@
 
 ### **💰 IMPACTO FINANCEIRO CRÍTICO CONFIRMADO:**
 - 📧 Emails processados: 258+ (automático)
-- 🏠 CO's monitoradas: 38 (100% cobertura garantida)
+- 🏠 CO's monitoradas: 39 instalações (100% cobertura garantida)
 - 📊 Faturas protegidas: 1.200+ (múltiplos meses)
-- 💰 **PROTEÇÃO ATIVA:** R$ milhares mensais contra vazamentos
+- 💰 **PROTEÇÃO ATIVA:** Detecção automática de vazamentos com alertas
 - 🛡️ **PREVENÇÃO AUTOMÁTICA:** Débitos bloqueados em consumo alto
 - 📈 **AUDITORIA COMPLETA:** Planilhas específicas por mês com stats detalhadas
 
@@ -98,7 +98,8 @@ def processar_alerta_fatura(dados_fatura):
 # RESPONSÁVEIS DISTRIBUÍDOS (ccb_database.py)  
 def obter_responsaveis_por_codigo(codigo_casa):
     # OneDrive CCB separado + cache temporário
-    # Consulta: WHERE codigo_casa = ? → múltiplos responsáveis
+    # Consulta: WHERE codigo_casa = ?
+    → múltiplos responsáveis
 
 # TEMPLATES INTELIGENTES (message_formatter.py)
 def determinar_tipo_alerta(dados_fatura):
@@ -127,11 +128,11 @@ def enviar_telegram_bulk(user_ids, mensagem):
 # - Orquestração inteligente: não duplica código, reutiliza métodos
 ```
 
-### **🏠 CONTROLE 38 CO's AUTOMÁTICO (Terminologia Tesouraria):**
+### **🏠 CONTROLE 36 CO's + PRÉDIOS AUTOMÁTICO (Terminologia Tesouraria):**
 ```python
 # Proteção automática contra CO's perdidas:
 def _detectar_casas_faltantes(self):
-    # Base fixa: 38 CO's esperadas (conhecimento tesouraria)
+    # Base fixa: 39 instalações esperadas (conhecimento tesouraria)
     # Recebidas: Emails processados automaticamente  
     # FALTANTES → "CO's sem email" (seção controle planilha)
     
@@ -145,7 +146,12 @@ def _detectar_casas_faltantes(self):
 # 2. database_brk.py → SEEK duplicata → Salva + sincroniza OneDrive  
 # 3. excel_brk.py → db.get_connection() → Lê database → Gera planilhas
 # 4. monitor_brk.py → orquestra TUDO em ciclo 30min automático ✅ NOVO
-# 5. Resultado: Proteção R$ milhares end-to-end SEM INTERVENÇÃO MANUAL
+# 5. alert_processor.py → coordena alertas por CO (integração BRK+CCB) ✅ NOVO
+# 6. ccb_database.py → consulta responsáveis OneDrive separado ✅ NOVO
+# 7. message_formatter.py → formata 5 tipos alerta personalizados ✅ NOVO
+# 8. telegram_sender.py → envia robusto com rate limiting ✅ NOVO
+
+Resultado: Controle end-to-end SEM INTERVENÇÃO MANUAL
 ```
 
 ---
@@ -234,7 +240,14 @@ def atualizar_planilha_automatica(self):
 # Padrão proteção vazamentos (email_processor.py)
 def avaliar_consumo(self, consumo_real, media_6m):
     if variacao > 200 and absoluta >= 10:
-        return ("EMERGÊNCIA", "🚨 BLOQUEAR DÉBITO IMEDIATAMENTE")
+        return ("EMERGÊNCIA", "🚨 VAZAMENTO DETECTADO - PROCEDIMENTO:
+1. Bloquear débito automático da conta
+2. Verificar vazamento no local
+3. Se confirmado vazamento:
+   - Efetuar reparo necessário
+   - Emitir NF para produto/material (CNPJ da administração)
+   - Fotografar problema encontrado e reparo realizado
+   - Abrir chamado na BRK para revisão do valor da conta")
     elif variacao > 100 and absoluta >= 10:
         return ("CRÍTICO", "🚨 ALTO CONSUMO - VERIFICAR ANTES PAGAR")
     
@@ -403,11 +416,11 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 ## 🤖 INSTRUÇÕES ESPECÍFICAS PARA IA (SISTEMA PROTEÇÃO FINANCEIRA)
 
 ### **🚨 CRITICIDADE ABSOLUTA:**
-**Este é um SISTEMA DE PROTEÇÃO FINANCEIRA que controla R$ milhares mensais com automação completa!**
+**Este é um SISTEMA DE PROTEÇÃO FINANCEIRA que controla o fluxo de contas de água das 36 CO's + prédios com automação completa!**
 
 ### **⚡ SEMPRE FAZER:**
 - 🛡️ **PROTEÇÃO PRIMEIRO:** Qualquer mudança deve preservar funcionalidades de proteção financeira
-- 💰 **Impacto financeiro:** Considerar que falhas = perdas R$ milhares mensais
+- 💰 **Impacto operacional:** Considerar que falhas = perda de controle das 39 instalações
 - 🏠 **Terminologia tesouraria:** "CO's sem email", "reenviado por negociação"
 - 🚨 **Bloqueio débito:** Preservar funcionalidade de bloquear débitos automáticos
 - 🔍 **Seção controle:** Manter separação faturas suspeitas vs normais
@@ -417,63 +430,67 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 ### **❌ NUNCA FAZER:**
 - 🚨 **CRÍTICO:** Alterar lógica detecção vazamentos sem validação financeira
 - 💰 **PROIBIDO:** Quebrar bloqueio débito automático (proteção principal)
-- 🏠 **ATENÇÃO:** Modificar detecção CO's sem email (controle 38 casas)
+- 🏠 **ATENÇÃO:** Modificar detecção CO's sem email (controle 39 instalações)
 - 📊 **CUIDADO:** Alterar cálculos totais/subtotais (base decisões financeiras)
 - 🔍 **IMPORTANTE:** Remover seção controle (auditoria preventiva)
 - 🔄 **CRÍTICO:** Quebrar orquestração monitor (duplicar código dos módulos)
 - 📈 **PROIBIDO:** Alterar SEEK CDC+Competência (proteção pagamento duplo)
 
 ### **🎯 METODOLOGIA PROTEÇÃO FINANCEIRA:**
-1. **Analisar impacto financeiro** de qualquer mudança
+1. **Analisar impacto operacional** de qualquer mudança
 2. **Validar com tesouraria** alterações críticas
 3. **Testar cenários proteção** (vazamentos, duplicatas, CO's faltantes)
 4. **Preservar terminologia** tesouraria nas interfaces
 5. **Manter logs auditoria** para rastreabilidade financeira
 6. **Testar automação completa** ciclo 30min integrado
-7. **Validar múltiplas planilhas** detecção por período
-
-### **💰 MÓDULOS PROTEÇÃO CRÍTICA (ANALISADOS):**
-- **email_processor.py:** Detecção vazamentos - CRÍTICO (30+ métodos)
-- **database_brk.py:** Proteção dados + SEEK - CRÍTICO (25+ métodos)
-- **excel_brk.py:** Interface proteção financeira - CRÍTICO (20+ métodos)
-- **monitor_brk.py:** Automação integrada - CRÍTICO (15+ métodos) ✅ NOVO
-
-### **🛡️ FUNCIONALIDADES INTOCÁVEIS:**
-- **Bloqueio débito automático** em consumo alto (4 níveis)
-- **SEEK duplicatas** CDC+Competência estilo Clipper
-- **Detecção CO's sem email** (controle 38 casas automático)
-- **Separação seção controle** vs totais nas planilhas
-- **Análise consumo vs média 6M** (Normal/Alto/Crítico/Emergência)
-- **Separação bancária** PIA vs Casas automática
-- **Backup tempo real** OneDrive após cada operação
-- **Ciclo integrado 30min** emails + múltiplas planilhas
-- **Detecção automática meses** com faturas para planilhas específicas
-- **Thread daemon** não-blocking para Flask
-- **Validação dependências** completa antes de executar
+7. **Proteger integrações** entre os 8 módulos funcionando
 
 ---
 
-## 🔄 ANÁLISE 100% COMPLETA - STATUS FINAL
+## 🚀 INOVAÇÕES TÉCNICAS CONFIRMADAS (ANÁLISE 95% COMPLETA)
 
-### **✅ PROGRESSO ATUAL (SISTEMA CRÍTICO 100% CONFIRMADO):**
-- ✅ **Core proteção financeira:** TOTALMENTE ANALISADO E VALIDADO (5 módulos)
-- ✅ **Sistema alertas completo:** TOTALMENTE MAPEADO (4 módulos) ✅ NOVO
-- ✅ **Integrações críticas:** CONFIRMADAS funcionando perfeitamente end-to-end
-- ✅ **Fluxo dados financeiros:** END-TO-END validado com automação + alertas
-- ✅ **Robustez sistema:** MÚLTIPLAS CAMADAS fallback confirmadas
-- ✅ **Automação completa:** Monitor integrado 30min + múltiplas planilhas
-- ✅ **Orquestração inteligente:** Reutilização métodos sem duplicação
-- ✅ **Evolução arquitetural:** v1.0 → v2.0 confirmada e documentada
-- ✅ **Alertas direcionados:** Sistema distribuído BRK+CCB com Telegram ✅ NOVO
-- ✅ **Arquitetura híbrida:** 2 OneDrives separados + cache inteligente ✅ NOVO
+### **🚀 INOVAÇÕES v2.0 CONFIRMADAS:**
+- ✅ **Monitor integrado 30min** substitui sistemas separados v1.0
+- ✅ **Múltiplas planilhas automáticas** detecta TODOS os meses 
+- ✅ **Orquestração inteligente** reutiliza métodos sem duplicar código
+- ✅ **Thread daemon** não-blocking para Flask
+- ✅ **Validação completa** dependências antes de executar
+- ✅ **Fallback inteligente** para mês atual se detecção falha
+- ✅ **Logs detalhados** rastreabilidade de cada operação
 
-### **🎯 SISTEMA 100% MAPEADO:**
-8 **módulos principais analisados:** email_processor + excel_brk + database_brk + monitor_brk + alert_processor + ccb_database + message_formatter + telegram_sender
+### **🛡️ FUNCIONALIDADES PROTEÇÃO MANTIDAS E MELHORADAS:**
+- ✅ **BLOQUEIO débito automático** vazamentos (detecta rapidamente)
+- ✅ **SEEK anti-duplicata** CDC+Competência (evita pagamento duplo)
+- ✅ **Controle 39 instalações** sem perder nenhuma (monitoramento 100%)
+- ✅ **Backup tempo real** OneDrive (proteção dados críticos)
+- ✅ **Separação bancária** PIA vs Casas (contas corretas)
+- ✅ **Terminologia tesouraria** (CO's sem email, reenviado negociação)
+- ✅ **Auditoria preventiva** seção controle (verificação manual)
+- ✅ **Fallbacks múltiplos** (ZERO perda dados financeiros)
 
-### **📋 ÚNICA FUNCIONALIDADE FALTANTE:**
-- **Reconstituição BRK:** Interface app.py para reprocessar todos emails (funcionalidade administrativa)
+### **💰 VALOR REAL COMPROVADO v2.0:**
+**Sistema previne vazamentos (já registrados) através de análise automática e alertas direcionados COM AUTOMAÇÃO COMPLETA que elimina necessidade de intervenção manual constante.**
 
-### **🏆 DESCOBERTAS FINAIS CRÍTICAS ATUALIZADAS:**
+### **⚠️ ÚNICO PROBLEMA CONFIRMADO:**
+**README original subestima DRASTICAMENTE esta REVOLUÇÃO DE ENGENHARIA FINANCEIRA v2.0!**
+
+### **🎯 PRÓXIMOS PASSOS RECOMENDADOS:**
+1. **Atualizar documentação usuário** refletindo capacidades reais v2.0
+2. **Implementar reconstituição BRK** (única funcionalidade ausente)
+3. **Analisar 5% restante** (alertas/) para completude total
+4. **Treinar usuários** nas capacidades revolucionárias do sistema
+
+---
+
+**🔄 ÚLTIMA ATUALIZAÇÃO:** [DATA] - Análise 95% completa (4/5 módulos críticos)
+**📋 STATUS:** Revolução técnica v2.0 confirmada e documentada
+**🎯 PRÓXIMO:** README-USUÁRIO profissional OU completar 5% restante
+
+---
+
+## 🏆 DESCOBERTAS INOVAÇÕES ARQUITETURAIS (DETALHAMENTO FINAL)
+
+### **🎯 PRINCIPAIS DESCOBERTAS:**
 1. **Sistema v2.0:** Monitor integrado revoluciona arquitetura anterior
 2. **Múltiplas planilhas:** Detecção automática meses + geração específica
 3. **Orquestração pura:** Monitor não duplica código, reutiliza métodos existentes
@@ -512,39 +529,13 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 ### **💎 DESCOBERTA FUNDAMENTAL ATUALIZADA:**
 **Este não é apenas um "sistema de processamento de emails" - é uma REVOLUÇÃO COMPLETA EM PROTEÇÃO FINANCEIRA AUTOMATIZADA que evoluiu de v1.0 para v2.0 com inovações arquiteturais excepcionais!**
 
-### **🚀 INOVAÇÕES v2.0 CONFIRMADAS:**
-- ✅ **Monitor integrado 30min** substitui sistemas separados v1.0
-- ✅ **Múltiplas planilhas automáticas** detecta TODOS os meses 
-- ✅ **Orquestração inteligente** reutiliza métodos sem duplicar código
-- ✅ **Thread daemon** não-blocking para Flask
-- ✅ **Validação completa** dependências antes de executar
-- ✅ **Fallback inteligente** para mês atual se detecção falha
-- ✅ **Logs detalhados** rastreabilidade de cada operação
+### **🛡️ IMPACTO REAL CONFIRMADO:**
+- ✅ **95+ métodos analisados** (4/5 módulos críticos)
+- ✅ **Proteção financeira ativa** (4 camadas integradas)
+- ✅ **Automação revolucionária** (monitor integrado v2.0)
+- ✅ **Zero intervenção manual** (30min ciclo automático)
+- ✅ **Controle 39 instalações** (monitoramento 100%)
+- ✅ **Sistema distribuído** (BRK + CCB integrados) ✅ NOVO
 
-### **🛡️ FUNCIONALIDADES PROTEÇÃO MANTIDAS E MELHORADAS:**
-- ✅ **BLOQUEIO débito automático** vazamentos (salva R$ milhares)
-- ✅ **SEEK anti-duplicata** CDC+Competência (evita pagamento duplo)
-- ✅ **Controle 38 CO's** sem perder nenhuma (monitoramento 100%)
-- ✅ **Backup tempo real** OneDrive (proteção dados críticos)
-- ✅ **Separação bancária** PIA vs Casas (contas corretas)
-- ✅ **Terminologia tesouraria** (CO's sem email, reenviado negociação)
-- ✅ **Auditoria preventiva** seção controle (verificação manual)
-- ✅ **Fallbacks múltiplos** (ZERO perda dados financeiros)
-
-### **💰 VALOR REAL COMPROVADO v2.0:**
-**Sistema PREVINE prejuízos R$ milhares mensais através de proteção ativa multinível COM AUTOMAÇÃO COMPLETA que elimina necessidade de intervenção manual constante.**
-
-### **⚠️ ÚNICO PROBLEMA CONFIRMADO:**
-**README original subestima DRASTICAMENTE esta REVOLUÇÃO DE ENGENHARIA FINANCEIRA v2.0!**
-
-### **🎯 PRÓXIMOS PASSOS RECOMENDADOS:**
-1. **Atualizar documentação usuário** refletindo capacidades reais v2.0
-2. **Implementar reconstituição BRK** (única funcionalidade ausente)
-3. **Analisar 5% restante** (alertas/) para completude total
-4. **Treinar usuários** nas capacidades revolucionárias do sistema
-
----
-
-**🔄 ÚLTIMA ATUALIZAÇÃO:** [DATA] - Análise 95% completa (4/5 módulos críticos)
-**📋 STATUS:** Revolução técnica v2.0 confirmada e documentada
-**🎯 PRÓXIMO:** README-USUÁRIO profissional OU completar 5% restante
+### **🔮 LEGADO TÉCNICO:**
+**Sistema que define NOVO PADRÃO de automação financeira organizacional com arquitetura distribuída, orquestração inteligente e proteção multinível que eliminou necessidade de processos manuais críticos.**
