@@ -3,7 +3,7 @@
 ## 📊 STATUS ATUAL DO SISTEMA (PROTEÇÃO FINANCEIRA ATIVA)
 
 ### **🛡️ FUNCIONAMENTO REAL - PROTEÇÃO ATIVA:**
-- ✅ **Monitor automático integrado:** Emails + múltiplas planilhas a cada 30min no Render  
+- ✅ **Monitor automático integrado:** Emails + múltiplas planilhas a cada 60min no Render  
 - ✅ **Proteção financeira ativa:** Emails → Análise → **BLOQUEIO débitos suspeitos**
 - ✅ **Interface CRÍTICA:** Dashboard + **EXCEL_BRK (Controle automatizado)**
 - ✅ **Controle total:** 39 instalações monitoradas + detecção vazamentos tempo real
@@ -26,7 +26,7 @@
 ### **💰 IMPACTO FINANCEIRO CRÍTICO CONFIRMADO:**
 - 📧 Emails processados: 258+ (automático)
 - 🏠 CO's monitoradas: 39 instalações (100% cobertura garantida)
-- 📊 Faturas protegidas: 1.200+ (múltiplos meses)
+- 📊 Até 39 faturas/mês processadas
 - 💰 **PROTEÇÃO ATIVA:** Detecção automática de vazamentos com alertas
 - 🛡️ **PREVENÇÃO AUTOMÁTICA:** Débitos bloqueados em consumo alto
 - 📈 **AUDITORIA COMPLETA:** Planilhas específicas por mês com stats detalhadas
@@ -45,7 +45,7 @@
     ↓
 📊 excel_brk.py → SEPARA: Normais (totais) vs Suspeitos (controle) (20+ métodos)
     ↓
-🔄 monitor_brk.py → ORQUESTRA: Ciclo 30min + múltiplas planilhas (15+ métodos)
+🔄 monitor_brk.py → ORQUESTRA: Ciclo 60min + múltiplas planilhas (15+ métodos)
     ↓
 🚨 alert_processor.py → COORDENA alerta por casa (integração BRK+CCB) ✅ NOVO
     ↓
@@ -122,7 +122,7 @@ def enviar_telegram_bulk(user_ids, mensagem):
 # - Sistemas separados
 
 # v2.0 (AGORA - ANALISADO):
-# - Monitor 30min integrado: emails + múltiplas planilhas
+# - Monitor 60min integrado: emails + múltiplas planilhas
 # - Detecção automática: TODOS os meses com faturas
 # - Geração específica: planilha individual por período
 # - Orquestração inteligente: não duplica código, reutiliza métodos
@@ -145,7 +145,7 @@ def _detectar_casas_faltantes(self):
 # 1. email_processor.py → self.database_brk.salvar_fatura(dados)
 # 2. database_brk.py → SEEK duplicata → Salva + sincroniza OneDrive  
 # 3. excel_brk.py → db.get_connection() → Lê database → Gera planilhas
-# 4. monitor_brk.py → orquestra TUDO em ciclo 30min automático ✅ NOVO
+# 4. monitor_brk.py → orquestra TUDO em ciclo 60min automático ✅ NOVO
 # 5. alert_processor.py → coordena alertas por CO (integração BRK+CCB) ✅ NOVO
 # 6. ccb_database.py → consulta responsáveis OneDrive separado ✅ NOVO
 # 7. message_formatter.py → formata 5 tipos alerta personalizados ✅ NOVO
@@ -424,7 +424,7 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 - 🏠 **Terminologia tesouraria:** "CO's sem email", "reenviado por negociação"
 - 🚨 **Bloqueio débito:** Preservar funcionalidade de bloquear débitos automáticos
 - 🔍 **Seção controle:** Manter separação faturas suspeitas vs normais
-- 🔄 **Automação integrada:** Preservar ciclo 30min emails + múltiplas planilhas
+- 🔄 **Automação integrada:** Preservar ciclo 60min emails + múltiplas planilhas
 - 📊 **Múltiplas planilhas:** Não quebrar detecção automática meses com faturas
 
 ### **❌ NUNCA FAZER:**
@@ -442,7 +442,7 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 3. **Testar cenários proteção** (vazamentos, duplicatas, CO's faltantes)
 4. **Preservar terminologia** tesouraria nas interfaces
 5. **Manter logs auditoria** para rastreabilidade financeira
-6. **Testar automação completa** ciclo 30min integrado
+6. **Testar automação completa** ciclo 60min integrado
 7. **Proteger integrações** entre os 8 módulos funcionando
 
 ---
@@ -450,7 +450,7 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 ## 🚀 INOVAÇÕES TÉCNICAS CONFIRMADAS (ANÁLISE 95% COMPLETA)
 
 ### **🚀 INOVAÇÕES v2.0 CONFIRMADAS:**
-- ✅ **Monitor integrado 30min** substitui sistemas separados v1.0
+- ✅ **Monitor integrado 60min** substitui sistemas separados v1.0
 - ✅ **Múltiplas planilhas automáticas** detecta TODOS os meses 
 - ✅ **Orquestração inteligente** reutiliza métodos sem duplicar código
 - ✅ **Thread daemon** não-blocking para Flask
@@ -513,7 +513,7 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 **Integridade Dados:** 10/10 ✅ **PERFEITA** (OneDrive+Cache+Fallback tempo real)  
 **SEEK Anti-duplicata:** 10/10 ✅ **CLIPPER STYLE** (CDC+Competência)  
 **Interface Tesouraria:** 10/10 ✅ **PROFISSIONAL** (Terminologia + controle)  
-**Automação Integrada:** 10/10 ✅ **REVOLUCIONÁRIA** (30min emails+múltiplas planilhas) ✅ NOVO  
+**Automação Integrada:** 10/10 ✅ **REVOLUCIONÁRIA** (60min emails+múltiplas planilhas) ✅ NOVO  
 **Orquestração Inteligente:** 10/10 ✅ **OBRA PRIMA** (reutilização sem duplicação) ✅ NOVO  
 **Robustez Financeira:** 10/10 ✅ **MISSÃO CRÍTICA** (95+ métodos validados)  
 **Arquitetura Sistema:** 10/10 ✅ **ENGENHARIA EXCEPCIONAL** (4 módulos integrados)  
@@ -533,7 +533,7 @@ def verificar_dependencias_monitor(email_processor) -> dict:
 - ✅ **95+ métodos analisados** (4/5 módulos críticos)
 - ✅ **Proteção financeira ativa** (4 camadas integradas)
 - ✅ **Automação revolucionária** (monitor integrado v2.0)
-- ✅ **Zero intervenção manual** (30min ciclo automático)
+- ✅ **Zero intervenção manual** (60min ciclo automático)
 - ✅ **Controle 39 instalações** (monitoramento 100%)
 - ✅ **Sistema distribuído** (BRK + CCB integrados) ✅ NOVO
 
