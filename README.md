@@ -4,7 +4,7 @@
 
 Sistema automático de processamento e controle financeiro para faturas da BRK, desenvolvido especificamente para a tesouraria. Monitora emails, detecta vazamentos, previne pagamentos duplicados e gera planilhas organizadas para tomada de decisão financeira.
 
-**🎯 Objetivo Principal:** Proteger R$ milhares mensais através de controle automatizado e prevenção de irregularidades nas contas de água.
+**🎯 Objetivo Principal:** Automatizar controle de contas de água e prevenção de irregularidades nas 36 Casas de Oração + 2 prédios administrativos.
 
 ### **4. 🚨 Sistema de Alertas Inteligente** ✅ NOVO
 
@@ -39,7 +39,7 @@ Sistema automático de processamento e controle financeiro para faturas da BRK, 
 ## ✅ Status do Sistema
 
 ### **🟢 Funcionamento Atual**
-- ✅ **Monitoramento Automático:** Verifica emails BRK a cada 30 minutos
+- ✅ **Monitoramento Automático:** Verifica emails BRK a cada 60 minutos
 - ✅ **Processamento Inteligente:** Extrai e analisa todas as faturas automaticamente  
 - ✅ **Proteção Ativa:** Detecta e bloqueia débitos suspeitos
 - ✅ **Planilhas Múltiplas:** Gera relatórios específicos por mês automaticamente
@@ -49,10 +49,11 @@ Sistema automático de processamento e controle financeiro para faturas da BRK, 
 - ✅ **Sistema Distribuído:** Integração BRK + CCB para gestão completa ✅ NOVO
 
 ### **📊 Números Atuais**
-- **38 CO's monitoradas** (100% de cobertura)
-- **1.200+ faturas protegidas** (múltiplos períodos)
+- **39 instalações monitoradas** (100% de cobertura)
+- **36 Casas de Oração + 2 prédios administrativos**
+- **Até 39 faturas/mês processadas**
 - **258+ emails processados** automaticamente
-- **R$ milhares protegidos** mensalmente contra vazamentos
+- **Detecção automática de vazamentos** com alertas direcionados
 - **Múltiplos responsáveis** notificados automaticamente por CO ✅ NOVO
 - **5 tipos de alerta** personalizados por consumo ✅ NOVO
 
@@ -66,7 +67,7 @@ Sistema automático de processamento e controle financeiro para faturas da BRK, 
 - Análise automática do consumo vs. média dos últimos 6 meses
 - **4 níveis de alerta:** Normal, Alto, Crítico, Emergência
 - **Bloqueio automático** de débitos quando detecta consumo anômalo
-- Prevenção de prejuízos de milhares de reais
+- Prevenção de custos desnecessários
 
 #### **Controle de Duplicatas**
 - Sistema SEEK impede processamento de faturas duplicadas
@@ -85,13 +86,13 @@ Sistema automático de processamento e controle financeiro para faturas da BRK, 
 #### **Seções Organizadas**
 - **Principais:** Faturas aprovadas (entram nos totais)
 - **Controle:** Faturas que precisam verificação manual
-- **CO's Sem Email:** Lista das 38 CO's que não enviaram fatura
+- **CO's Sem Email:** Lista das 39 instalações que não enviaram fatura
 - **Totais e Subtotais:** Base para decisões de pagamento
 
 ### **3. 🔄 Automação Completa**
 
 #### **Monitor Integrado v2.0**
-- **Ciclo automático a cada 30 minutos:**
+- **Ciclo automático a cada 60 minutos:**
   - Processamento de emails novos
   - Atualização de múltiplas planilhas
   - Backup automático dos dados
@@ -112,7 +113,7 @@ Acesse: `https://[seu-dominio]/`
 
 #### **Dashboard Principal**
 - Visão geral do sistema e status do monitor
-- Estatísticas das 38 CO's monitoradas
+- Estatísticas das 39 instalações monitoradas
 - Links rápidos para principais funções
 
 #### **Processamento Manual**
@@ -148,12 +149,12 @@ Acesse: `https://[seu-dominio]/`
 
 ### **🏦 Separação Bancária Automática**
 - **PIA:** Faturas que devem ser pagas pela conta PIA
-- **Casas de Oração:** Faturas das 38 CO's monitoradas
+- **Casas de Oração:** Faturas das 39 instalações monitoradas
 - **Subtotais separados** para cada conta bancária
 - **Prevenção de confusão** entre contas
 
 ### **🚨 Alertas e Controles**
-- **CO's Sem Email:** Detecta quando alguma das 38 CO's não enviou fatura
+- **CO's Sem Email:** Detecta quando alguma das 39 instalações não enviou fatura
 - **Consumo Anômalo:** Identifica vazamentos ou medições incorretas
 - **Faturas Duplicadas:** Evita reprocessamento de emails reenviados
 - **Seção Controle:** Separação de faturas que precisam verificação
@@ -197,7 +198,7 @@ ONEDRIVE_ALERTA_ID=id_pasta_responsaveis_ccb
 
 ### **📊 Dados Disponíveis**
 - **Total de faturas processadas** por período
-- **Distribuição por CO** (38 casas monitoradas)
+- **Distribuição por CO** (39 instalações monitoradas)
 - **Análise de consumo** (normal vs. alto vs. crítico)
 - **Status de processamento** (sucesso vs. erro vs. pendente)
 
@@ -212,9 +213,9 @@ ONEDRIVE_ALERTA_ID=id_pasta_responsaveis_ccb
 ## 🎯 Benefícios Práticos
 
 ### **💰 Proteção Financeira**
-- **Evita vazamentos não detectados** que podem custar milhares
+- **Evita vazamentos não detectados** que podem gerar custos desnecessários
 - **Previne pagamento duplicado** de faturas reenviadas
-- **Controla 38 CO's automaticamente** sem perder nenhuma
+- **Controla 39 instalações automaticamente** sem perder nenhuma
 - **Separa contas bancárias** para pagamento correto
 - **Notifica responsáveis automaticamente** para ação preventiva ✅ NOVO
 
@@ -243,7 +244,7 @@ ONEDRIVE_ALERTA_ID=id_pasta_responsaveis_ccb
 ## 🛠️ Suporte e Manutenção
 
 ### **🔄 Automação Ativa**
-O sistema funciona automaticamente a cada 30 minutos:
+O sistema funciona automaticamente a cada 60 minutos:
 1. **Verifica emails novos** na pasta BRK
 2. **Processa faturas encontradas** automaticamente
 3. **Atualiza planilhas** de todos os meses com dados
@@ -269,7 +270,7 @@ O sistema funciona automaticamente a cada 30 minutos:
 ## 📚 Histórico de Versões
 
 ### **v2.0 - Monitor Integrado (Atual)**
-- ✅ Monitor automático 30min (emails + múltiplas planilhas)
+- ✅ Monitor automático 60min (emails + múltiplas planilhas)
 - ✅ Detecção automática de meses com faturas
 - ✅ Geração de planilha específica por período
 - ✅ Orquestração inteligente sem duplicação de código
@@ -288,13 +289,13 @@ O sistema funciona automaticamente a cada 30 minutos:
 **O Sistema BRK v2.0 é uma solução completa de proteção financeira que:**
 
 ✅ **Monitora automaticamente** emails da BRK 24/7  
-✅ **Detecta e previne vazamentos** que custam milhares  
+✅ **Detecta e previne vazamentos** rapidamente através de análise inteligente  
 ✅ **Evita pagamentos duplicados** através de controle SEEK  
 ✅ **Gera múltiplas planilhas** organizadas por período  
-✅ **Controla 38 CO's** sem perder nenhuma fatura  
+✅ **Controla 39 instalações** sem perder nenhuma fatura  
 ✅ **Funciona sem intervenção manual** com backup automático  
 ✅ **Notifica responsáveis automaticamente** via Telegram ✅ NOVO  
 ✅ **Integra sistemas BRK + CCB** para gestão completa ✅ NOVO  
 ✅ **Oferece 5 tipos de alerta** personalizados por criticidade ✅ NOVO  
 
-**Resultado:** Proteção de R$ milhares mensais com redução drástica de trabalho manual, eliminação de riscos financeiros e comunicação automática para ação preventiva por responsáveis específicos de cada Casa de Oração.
+**Resultado:** Controle automatizado de contas de água com redução drástica de trabalho manual, prevenção de vazamentos e comunicação automática para ação preventiva por responsáveis específicos de cada Casa de Oração.
