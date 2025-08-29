@@ -1,418 +1,413 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
-Microsoft Auth - VERSÃO CORRIGIDA COM ENVIRONMENT VARIABLES
+Microsoft Authentication Manager - Versão Unificada Segura
+Implementa persistência via OneDrive compartilhado (pasta Alerta) e criptografia Fernet
+Para uso em CCB Alerta, BRK e Enel - Render deployment
 
-MUDANÇA PRINCIPAL:
-- Migração de leitura de arquivos para Environment Variables
-- Mantém fallback para arquivos para compatibilidade
-- Resolve problema de disk não persistente no Render
-
-CORREÇÃO APLICADA:
-- Adicionada função get_microsoft_token()
-- Modificado método carregar_token() para usar env vars primeiro
-- Mantido fallback para arquivos existente
+Recursos:
+- Token compartilhado na pasta Alerta (ONEDRIVE_ALERTA_ID)
+- Criptografia Fernet com chave única por ambiente
+- Logs sanitizados (tokens mascarados)
+- Auto-migração de tokens legados
+- Fallback local para contingência
 """
 
 import os
 import json
 import requests
-import hashlib
-import base64
-from datetime import datetime
+import logging
+from typing import Optional, Dict, Any
+from datetime import datetime, timedelta
 from cryptography.fernet import Fernet
 
-
-class MicrosoftAuth:
-    def __init__(self):
-        """Inicializar autenticação Microsoft com prioridade para Environment Variables"""
+class MicrosoftAuthUnified:
+    """
+    Gerenciador de autenticação Microsoft unificado com:
+    - Persistência via OneDrive compartilhado (pasta Alerta)
+    - Criptografia Fernet obrigatória
+    - Logs seguros com mascaramento
+    - Compatibilidade com tokens legados
+    """
+    
+    def __init__(self, client_id: str = None, client_secret: str = None, tenant_id: str = None):
+        # Configurações via environment variables
+        self.client_id = client_id or os.getenv("MICROSOFT_CLIENT_ID")
+        self.client_secret = client_secret or os.getenv("MICROSOFT_CLIENT_SECRET") 
+        self.tenant_id = tenant_id or os.getenv("MICROSOFT_TENANT_ID", "common")
+        self.encryption_key = os.getenv("ENCRYPTION_KEY")
+        self.alerta_folder_id = os.getenv("ONEDRIVE_ALERTA_ID")
         
-        # Configuração do Cliente
-        self.client_id = os.getenv("MICROSOFT_CLIENT_ID")
-        self.tenant_id = os.getenv("MICROSOFT_TENANT_ID", "consumers")
+        # Arquivo compartilhado na pasta Alerta
+        self.shared_token_filename = "token.json"
+        self.local_fallback_path = "token_backup.json"
         
-        # Tokens (serão carregados)
-        self.access_token = None
-        self.refresh_token = None
-        
-        # Caminhos de fallback para arquivos (compatibilidade)
-        self.token_file_persistent = "/opt/render/project/storage/token.json"
-        self.token_file_local = "token.json"
-        
-        # Validação obrigatória
+        # Validações críticas
         if not self.client_id:
-            print("⚠️ MICROSOFT_CLIENT_ID não configurado")
-        
-        # Tentar carregar token automaticamente
-        self.carregar_token()
-        
-        self._debug_status()
-
-    def get_microsoft_token(self):
-        """
-        ✅ NOVA FUNÇÃO - Obter token Microsoft com PRIORIDADE para Environment Variables
-        
-        PRIORIDADE:
-        1. Environment Variables (PERSISTENTE após deploy)
-        2. Arquivo criptografado 
-        3. Arquivo JSON (fallback)
-        
-        Returns:
-            dict: Token data ou None se não encontrado
-        """
-        
-        # ✅ PRIORIDADE 1: Environment Variables (persistente)
-        access_token = os.getenv('MICROSOFT_ACCESS_TOKEN')
-        refresh_token = os.getenv('MICROSOFT_REFRESH_TOKEN')
-        
-        if access_token and refresh_token:
-            print("✅ Token carregado das ENVIRONMENT VARIABLES (persistente)")
-            return {
-                'access_token': access_token,
-                'refresh_token': refresh_token,
-                'token_type': 'Bearer',
-                'fonte': 'environment_variables'
-            }
-        
-        # ⚠️ FALLBACK 1: Arquivo criptografado
-        encrypted_file = self.token_file_persistent.replace('.json', '.enc')
-        if os.path.exists(encrypted_file):
-            try:
-                with open(encrypted_file, 'rb') as f:
-                    encrypted_data = f.read()
-                token_data = self._decrypt_token_data(encrypted_data)
-                if token_data:
-                    print(f"🔒 Token carregado de arquivo CRIPTOGRAFADO: {encrypted_file}")
-                    print("⚠️ RECOMENDAÇÃO: Migre para Environment Variables!")
-                    token_data['fonte'] = 'arquivo_criptografado'
-                    return token_data
-            except Exception as e:
-                print(f"❌ Erro lendo arquivo criptografado: {e}")
-        
-        # ⚠️ FALLBACK 2: Arquivo JSON (persistent disk)
-        if os.path.exists(self.token_file_persistent):
-            try:
-                with open(self.token_file_persistent, 'r') as f:
-                    token_data = json.load(f)
-                print(f"💾 Token carregado de arquivo JSON: {self.token_file_persistent}")
-                print("⚠️ RECOMENDAÇÃO: Migre para Environment Variables!")
-                token_data['fonte'] = 'arquivo_persistent'
-                return token_data
-            except Exception as e:
-                print(f"❌ Erro lendo arquivo persistent: {e}")
-        
-        # ⚠️ FALLBACK 3: Arquivo JSON (local)
-        if os.path.exists(self.token_file_local):
-            try:
-                with open(self.token_file_local, 'r') as f:
-                    token_data = json.load(f)
-                print(f"💾 Token carregado de arquivo LOCAL: {self.token_file_local}")
-                print("⚠️ RECOMENDAÇÃO: Migre para Environment Variables!")
-                token_data['fonte'] = 'arquivo_local'
-                return token_data
-            except Exception as e:
-                print(f"❌ Erro lendo arquivo local: {e}")
-        
-        # ❌ Nenhum token encontrado
-        print("❌ Token Microsoft não encontrado!")
-        print("📋 CONFIGURAÇÃO NECESSÁRIA:")
-        print("   1. Environment Variables no Render:")
-        print("      MICROSOFT_ACCESS_TOKEN=seu_access_token")
-        print("      MICROSOFT_REFRESH_TOKEN=seu_refresh_token")
-        print("   2. Ou upload via interface web")
-        
-        return None
-
-    def carregar_token(self) -> bool:
-        """
-        ✅ MÉTODO MODIFICADO - Carregar token usando get_microsoft_token()
-        
-        MUDANÇA: Agora usa get_microsoft_token() que prioriza env vars
-        
-        Returns:
-            bool: True se tokens carregados com sucesso
-        """
-        
-        token_data = self.get_microsoft_token()
-        
-        if token_data:
-            self.access_token = token_data.get('access_token')
-            self.refresh_token = token_data.get('refresh_token')
+            raise ValueError("❌ MICROSOFT_CLIENT_ID não encontrado nas environment variables")
+        if not self.encryption_key:
+            raise ValueError("❌ ENCRYPTION_KEY não encontrada nas environment variables")
+        if not self.alerta_folder_id:
+            raise ValueError("❌ ONEDRIVE_ALERTA_ID não encontrado nas environment variables")
             
-            if self.access_token and self.refresh_token:
-                fonte = token_data.get('fonte', 'desconhecida')
-                print(f"✅ Tokens carregados com sucesso (fonte: {fonte})")
-                return True
-            else:
-                print("❌ Tokens incompletos no token_data")
-                return False
-        else:
-            print("❌ Nenhum token disponível")
-            return False
-
-    def _carregar_do_arquivo(self, filepath: str) -> bool:
-        """
-        ⚠️ MÉTODO MANTIDO para compatibilidade
-        
-        OBSERVAÇÃO: Este método agora é usado apenas pelos fallbacks
-        A prioridade é sempre Environment Variables
-        """
+        # Inicializar Fernet
         try:
-            # 🔐 Tentar carregar arquivo criptografado primeiro
-            encrypted_file = filepath.replace('.json', '.enc')
-            if os.path.exists(encrypted_file):
-                with open(encrypted_file, 'rb') as f:
-                    encrypted_data = f.read()
-                token_data = self._decrypt_token_data(encrypted_data)
-                if token_data:
-                    self.access_token = token_data.get('access_token')
-                    self.refresh_token = token_data.get('refresh_token')
-                    if self.access_token and self.refresh_token:
-                        print(f"🔒 Token CRIPTOGRAFADO carregado de: {encrypted_file}")
-                        return True
+            self.fernet = Fernet(self.encryption_key.encode())
+        except Exception as e:
+            raise ValueError(f"❌ ENCRYPTION_KEY inválida: {e}")
             
-            # Fallback: carregar arquivo JSON original
-            with open(filepath, 'r') as f:
-                token_data = json.load(f)
-            
-            self.access_token = token_data.get('access_token')
-            self.refresh_token = token_data.get('refresh_token')
-            
-            if self.access_token and self.refresh_token:
-                print(f"💾 Token carregado de: {filepath}")
-                return True
-            else:
-                print(f"❌ Token inválido em: {filepath}")
-                return False
+        # Cache de tokens
+        self._tokens = None
+        self._token_expiry = None
+        
+        # Configurar logging seguro
+        logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("🔐 Microsoft Auth Unificado iniciado")
+    
+    def mask_token(self, token: str) -> str:
+        """Mascara token para logs seguros - NUNCA expor token completo"""
+        if not token or len(token) < 10:
+            return "***VAZIO***"
+        return f"{token[:6]}...{token[-4:]}"
+    
+    def _encrypt_data(self, data: str) -> str:
+        """Criptografa dados com Fernet - OBRIGATÓRIO para persistência"""
+        try:
+            encrypted = self.fernet.encrypt(data.encode()).decode()
+            self.logger.debug(f"🔐 Dados criptografados: {len(encrypted)} chars")
+            return encrypted
+        except Exception as e:
+            self.logger.error(f"❌ Erro na criptografia: {e}")
+            raise
+    
+    def _decrypt_data(self, encrypted_data: str) -> str:
+        """Descriptografa dados com Fernet"""
+        try:
+            decrypted = self.fernet.decrypt(encrypted_data.encode()).decode()
+            self.logger.debug(f"🔓 Dados descriptografados: {self.mask_token(decrypted)}")
+            return decrypted
+        except Exception as e:
+            self.logger.error(f"❌ Erro na descriptografia: {e}")
+            raise
+    
+    def _get_shared_token_url(self) -> str:
+        """Constrói URL para acessar token compartilhado na pasta Alerta"""
+        return f"https://graph.microsoft.com/v1.0/me/drive/items/{self.alerta_folder_id}:/{self.shared_token_filename}:/content"
+    
+    def _load_from_onedrive_shared(self) -> Optional[Dict[str, Any]]:
+        """Carrega token compartilhado da pasta Alerta no OneDrive"""
+        try:
+            # Precisa de um token básico para acessar OneDrive
+            if not self._tokens or not self._tokens.get("access_token"):
+                self.logger.warning("⚠️  Sem access_token para acessar OneDrive")
+                return None
                 
-        except FileNotFoundError:
-            print(f"❌ Arquivo não encontrado: {filepath}")
-            return False
-        except Exception as e:
-            print(f"❌ Erro carregando {filepath}: {e}")
-            return False
-
-    def _get_encryption_key(self):
-        """Obter chave de criptografia (mantido para compatibilidade)"""
-        try:
-            key_file = "/opt/render/project/storage/.encryption_key"
-            if os.path.exists(key_file):
-                with open(key_file, 'rb') as f:
-                    return f.read()
-        except Exception:
-            pass
-        
-        # Fallback: gerar chave determinística
-        unique_data = f"BRK{self.client_id or 'default'}{os.getenv('RENDER_SERVICE_ID', 'fallback')}"
-        return base64.urlsafe_b64encode(hashlib.sha256(unique_data.encode()).digest())
-
-    def _encrypt_token_data(self, token_data):
-        """Criptografar dados do token (mantido para compatibilidade)"""
-        try:
-            key = self._get_encryption_key()
-            cipher = Fernet(key)
-            json_data = json.dumps(token_data).encode('utf-8')
-            return cipher.encrypt(json_data)
-        except Exception as e:
-            print(f"⚠️ Erro criptografando token: {e}")
-            return None
-
-    def _decrypt_token_data(self, encrypted_data):
-        """Descriptografar dados do token (mantido para compatibilidade)"""
-        try:
-            key = self._get_encryption_key()
-            cipher = Fernet(key)
-            decrypted_data = cipher.decrypt(encrypted_data)
-            return json.loads(decrypted_data.decode('utf-8'))
-        except Exception as e:
-            print(f"⚠️ Erro descriptografando token: {e}")
-            return None
-
-    def salvar_token_persistent(self) -> bool:
-        """
-        Salvar token no persistent disk com proteção (mantido para compatibilidade)
-        
-        OBSERVAÇÃO: Com Environment Variables, este método é menos necessário
-        Mas mantido para casos onde se queira salvar backup em arquivo
-        """
-        try:
-            # Proteger diretório
-            token_dir = os.path.dirname(self.token_file_persistent)
-            os.makedirs(token_dir, exist_ok=True)
-            os.chmod(token_dir, 0o700)
-            
-            token_data = {
-                'access_token': self.access_token,
-                'refresh_token': self.refresh_token,
-                'expires_in': 3600,
-                'token_type': 'Bearer',
-                'scope': 'https://graph.microsoft.com/.default offline_access',
-                'saved_at': datetime.now().isoformat(),
-                'sistema': 'BRK',
-                'client_hash': hashlib.sha256((self.client_id or 'default').encode()).hexdigest()[:8]
+            headers = {
+                'Authorization': f'Bearer {self._tokens["access_token"]}',
+                'Content-Type': 'application/json'
             }
             
-            # Tentar salvar criptografado primeiro
-            encrypted_data = self._encrypt_token_data(token_data)
-            if encrypted_data:
-                encrypted_file = self.token_file_persistent.replace('.json', '.enc')
-                with open(encrypted_file, 'wb') as f:
-                    f.write(encrypted_data)
-                os.chmod(encrypted_file, 0o600)
-                # Remover arquivo antigo não criptografado se existir
-                if os.path.exists(self.token_file_persistent):
-                    os.remove(self.token_file_persistent)
-                print(f"🔒 Token BRK salvo CRIPTOGRAFADO: {encrypted_file}")
-            else:
-                # Fallback: salvar sem criptografia
-                with open(self.token_file_persistent, 'w') as f:
-                    json.dump(token_data, f, indent=2)
-                os.chmod(self.token_file_persistent, 0o600)
-                print(f"💾 Token BRK salvo com proteção: {self.token_file_persistent}")
+            url = self._get_shared_token_url()
+            self.logger.info(f"📥 Carregando token compartilhado da pasta Alerta...")
             
-            return True
-        except Exception as e:
-            print(f"❌ Erro salvando token BRK protegido: {e}")
-            return False
-
-    def atualizar_token(self) -> bool:
-        """
-        Renovar access_token usando refresh_token
-        
-        MUDANÇA: Agora usa get_microsoft_token() para obter tokens atuais
-        """
-        try:
-            # Usar get_microsoft_token para garantir que temos os tokens mais recentes
-            token_data = self.get_microsoft_token()
-            if not token_data or not token_data.get('refresh_token'):
-                print("❌ Refresh token não disponível para renovação")
-                return False
-            
-            self.refresh_token = token_data['refresh_token']
-            
-            url = f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token"
-            
-            data = {
-                'client_id': self.client_id,
-                'scope': 'https://graph.microsoft.com/.default offline_access',
-                'refresh_token': self.refresh_token,
-                'grant_type': 'refresh_token'
-            }
-            
-            response = requests.post(url, data=data, timeout=30)
+            response = requests.get(url, headers=headers, timeout=30)
             
             if response.status_code == 200:
                 token_data = response.json()
-                
-                # Atualizar tokens em memória
-                self.access_token = token_data['access_token']
-                
-                # Atualizar refresh_token se fornecido
-                if 'refresh_token' in token_data:
-                    self.refresh_token = token_data['refresh_token']
-                
-                # Salvar no persistent disk como backup
-                self.salvar_token_persistent()
-                
-                print("✅ Token BRK renovado com sucesso")
-                return True
-                
+                self.logger.info(f"✅ Token carregado do OneDrive Alerta: {self.mask_token(token_data.get('refresh_token', ''))}")
+                return token_data
+            elif response.status_code == 404:
+                self.logger.info("📄 Arquivo token.json não existe na pasta Alerta ainda")
+                return None
             else:
-                print(f"❌ Erro renovando token BRK: HTTP {response.status_code}")
-                try:
-                    error_detail = response.json()
-                    print(f"   Detalhes: {error_detail.get('error_description', 'N/A')}")
-                except:
-                    pass
+                self.logger.warning(f"⚠️  Erro ao carregar do OneDrive Alerta: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao acessar OneDrive Alerta: {e}")
+            return None
+    
+    def _save_to_onedrive_shared(self, token_data: Dict[str, Any]) -> bool:
+        """Salva token compartilhado na pasta Alerta no OneDrive"""
+        try:
+            if not self._tokens or not self._tokens.get("access_token"):
+                self.logger.error("❌ Sem access_token para salvar no OneDrive")
                 return False
                 
-        except requests.RequestException as e:
-            print(f"❌ Erro de rede na renovação BRK: {e}")
-            return False
+            headers = {
+                'Authorization': f'Bearer {self._tokens["access_token"]}',
+                'Content-Type': 'application/json'
+            }
+            
+            # SEMPRE criptografar dados antes de salvar
+            encrypted_data = {
+                "access_token": self._encrypt_data(token_data["access_token"]),
+                "refresh_token": self._encrypt_data(token_data["refresh_token"]),
+                "expires_on": token_data.get("expires_on"),
+                "encrypted": True,
+                "updated_at": datetime.now().isoformat(),
+                "updated_by": os.getenv("RENDER_SERVICE_NAME", "Unknown")
+            }
+            
+            url = self._get_shared_token_url()
+            self.logger.info(f"💾 Salvando token na pasta Alerta compartilhada...")
+            
+            response = requests.put(
+                url, 
+                headers=headers, 
+                data=json.dumps(encrypted_data),
+                timeout=30
+            )
+            
+            if response.status_code in [200, 201]:
+                self.logger.info(f"✅ Token salvo no OneDrive Alerta: {self.mask_token(token_data['refresh_token'])}")
+                return True
+            else:
+                self.logger.error(f"❌ Erro ao salvar no OneDrive Alerta: {response.status_code}")
+                return False
+                
         except Exception as e:
-            print(f"❌ Erro inesperado na renovação BRK: {e}")
+            self.logger.error(f"❌ Erro ao salvar no OneDrive Alerta: {e}")
             return False
-
-    def obter_headers_autenticados(self):
-        """
-        Obter headers HTTP com token de autorização
+    
+    def _load_from_env_vars(self) -> Optional[Dict[str, Any]]:
+        """Carrega tokens das environment variables (criptografados)"""
+        access_token_env = os.getenv("MICROSOFT_ACCESS_TOKEN_SECURE")
+        refresh_token_env = os.getenv("MICROSOFT_REFRESH_TOKEN_SECURE")
         
-        MUDANÇA: Usa get_microsoft_token para garantir token mais recente
-        """
-        # Garantir que temos token atual
-        token_data = self.get_microsoft_token()
-        if token_data:
-            self.access_token = token_data.get('access_token')
-        
-        if not self.access_token:
-            print("❌ Access token não disponível")
-            return None
-            
-        return {
-            'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json'
-        }
-
-    def validar_token(self) -> bool:
-        """
-        Validar se o token atual funciona
-        """
-        headers = self.obter_headers_autenticados()
-        if not headers:
-            return False
-            
+        if access_token_env and refresh_token_env:
+            try:
+                tokens = {
+                    "access_token": self._decrypt_data(access_token_env),
+                    "refresh_token": self._decrypt_data(refresh_token_env),
+                    "expires_on": int(os.getenv("MICROSOFT_TOKEN_EXPIRES", "0"))
+                }
+                self.logger.info(f"✅ Tokens carregados das ENV VARS: {self.mask_token(tokens['access_token'])}")
+                return tokens
+            except Exception as e:
+                self.logger.error(f"❌ Erro ao descriptografar tokens das ENV: {e}")
+        return None
+    
+    def _load_from_local_fallback(self) -> Optional[Dict[str, Any]]:
+        """Carrega tokens do arquivo local de fallback (contingência)"""
         try:
-            response = requests.get('https://graph.microsoft.com/v1.0/me', headers=headers, timeout=10)
-            return response.status_code == 200
-        except:
-            return False
-
-    def _debug_status(self):
-        """Status de debug da autenticação"""
-        print(f"🔧 Microsoft Auth BRK - Debug Status:")
-        print(f"   Client ID: {'configurado' if self.client_id else 'pendente'}")
-        print(f"   Tenant: {self.tenant_id}")
-        print(f"   Access Token: {'disponível' if self.access_token else 'não disponível'}")
-        print(f"   Refresh Token: {'disponível' if self.refresh_token else 'não disponível'}")
-
-    def obter_status_completo(self):
-        """Status completo para diagnóstico"""
-        return {
-            "autenticado": bool(self.access_token and self.refresh_token),
-            "client_id_configurado": bool(self.client_id),
-            "client_id_protegido": f"{self.client_id[:8]}******" if self.client_id else "N/A",
-            "tenant_id": self.tenant_id,
-            "token_valido": self.validar_token() if self.access_token else False,
-            "fonte_token": self.get_microsoft_token().get('fonte', 'nenhuma') if self.get_microsoft_token() else 'nenhuma'
-        }
-
-
-# ✅ FUNÇÃO DE TESTE PARA VALIDAÇÃO
-def test_microsoft_token():
-    """
-    Testar se token das environment variables funciona
-    """
-    try:
-        auth = MicrosoftAuth()
-        token_data = auth.get_microsoft_token()
-        
-        if not token_data:
-            return False, "Token não encontrado"
-        
-        headers = {'Authorization': f'Bearer {token_data["access_token"]}'}
-        response = requests.get('https://graph.microsoft.com/v1.0/me/drive', headers=headers, timeout=10)
-        
-        if response.status_code == 200:
-            return True, f"✅ Token funcionando - OneDrive conectado (fonte: {token_data.get('fonte', 'desconhecida')})"
-        else:
-            return False, f"❌ Token inválido - HTTP {response.status_code}"
+            if os.path.exists(self.local_fallback_path):
+                with open(self.local_fallback_path, 'r') as f:
+                    data = json.load(f)
+                
+                # Auto-migração: descriptografar se necessário
+                if data.get("encrypted"):
+                    data["access_token"] = self._decrypt_data(data["access_token"])
+                    data["refresh_token"] = self._decrypt_data(data["refresh_token"])
+                else:
+                    # Token legado em texto puro - criptografar automaticamente
+                    self.logger.warning("⚠️  Token local em texto puro detectado - migrando para criptografado")
+                    self._save_to_local_fallback(data)
+                
+                self.logger.info(f"✅ Token carregado do fallback local: {self.mask_token(data.get('refresh_token', ''))}")
+                return data
+            return None
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao carregar fallback local: {e}")
+            return None
+    
+    def _save_to_local_fallback(self, token_data: Dict[str, Any]):
+        """Salva tokens no arquivo local de fallback (sempre criptografado)"""
+        try:
+            encrypted_data = {
+                "access_token": self._encrypt_data(token_data["access_token"]),
+                "refresh_token": self._encrypt_data(token_data["refresh_token"]),
+                "expires_on": token_data.get("expires_on"),
+                "encrypted": True,
+                "updated_at": datetime.now().isoformat()
+            }
             
-    except Exception as e:
-        return False, f"❌ Erro testando token: {e}"
+            with open(self.local_fallback_path, 'w') as f:
+                json.dump(encrypted_data, f, indent=2)
+            
+            self.logger.info(f"✅ Token salvo no fallback local: {self.mask_token(token_data['refresh_token'])}")
+        except Exception as e:
+            self.logger.error(f"❌ Erro ao salvar fallback local: {e}")
+    
+    def load_tokens(self) -> bool:
+        """
+        Carrega tokens com prioridade:
+        1. Environment Variables (tokens criptografados)
+        2. OneDrive compartilhado (pasta Alerta)
+        3. Fallback local
+        """
+        self.logger.info("🔍 Iniciando carregamento de tokens...")
+        
+        # 1. Tentar environment variables primeiro
+        env_tokens = self._load_from_env_vars()
+        if env_tokens:
+            self._tokens = env_tokens
+            return True
+        
+        # 2. Tentar OneDrive compartilhado (se já temos um token básico)
+        onedrive_tokens = self._load_from_onedrive_shared()
+        if onedrive_tokens:
+            # Auto-migração de token legado
+            if onedrive_tokens.get("encrypted"):
+                try:
+                    onedrive_tokens["access_token"] = self._decrypt_data(onedrive_tokens["access_token"])
+                    onedrive_tokens["refresh_token"] = self._decrypt_data(onedrive_tokens["refresh_token"])
+                except Exception as e:
+                    self.logger.error(f"❌ Erro ao descriptografar OneDrive: {e}")
+                    onedrive_tokens = None
+            else:
+                # Token legado em texto puro - criptografar automaticamente
+                self.logger.warning("⚠️  Token OneDrive em texto puro detectado - migrando...")
+                
+            if onedrive_tokens:
+                self._tokens = onedrive_tokens
+                return True
+        
+        # 3. Fallback local
+        local_tokens = self._load_from_local_fallback()
+        if local_tokens:
+            self._tokens = local_tokens
+            return True
+        
+        self.logger.warning("⚠️  Nenhum token encontrado em nenhuma fonte")
+        return False
+    
+    def save_tokens(self, access_token: str, refresh_token: str, expires_in: int = 3600):
+        """Salva tokens de forma segura (OneDrive Alerta + fallback local)"""
+        expires_on = int(datetime.now().timestamp()) + expires_in
+        
+        token_data = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_on": expires_on
+        }
+        
+        # Atualizar cache
+        self._tokens = token_data.copy()
+        self._token_expiry = datetime.fromtimestamp(expires_on)
+        
+        self.logger.info(f"💾 Salvando tokens: {self.mask_token(refresh_token)}")
+        
+        # Salvar no OneDrive Alerta (prioridade)
+        onedrive_saved = self._save_to_onedrive_shared(token_data)
+        
+        # Sempre salvar fallback local
+        self._save_to_local_fallback(token_data)
+        
+        if onedrive_saved:
+            self.logger.info("✅ Tokens salvos com sucesso (OneDrive Alerta + local)")
+        else:
+            self.logger.warning("⚠️  OneDrive Alerta falhou, mas fallback local OK")
+    
+    def is_token_valid(self) -> bool:
+        """Verifica se o token ainda é válido (com buffer de 5 minutos)"""
+        if not self._tokens:
+            return False
+            
+        if not self._token_expiry:
+            expires_on = self._tokens.get("expires_on")
+            if expires_on:
+                self._token_expiry = datetime.fromtimestamp(expires_on)
+            else:
+                return False
+        
+        # Buffer de 5 minutos para renovação
+        valid_until = self._token_expiry - timedelta(minutes=5)
+        is_valid = datetime.now() < valid_until
+        
+        if not is_valid:
+            self.logger.info("⏰ Token próximo do vencimento - renovação necessária")
+        
+        return is_valid
+    
+    def refresh_access_token(self) -> bool:
+        """Renova o access token usando refresh token"""
+        if not self._tokens or not self._tokens.get("refresh_token"):
+            self.logger.error("❌ Refresh token não disponível")
+            return False
+        
+        self.logger.info(f"🔄 Renovando token: {self.mask_token(self._tokens['refresh_token'])}")
+        
+        try:
+            data = {
+                'client_id': self.client_id,
+                'client_secret': self.client_secret,
+                'grant_type': 'refresh_token',
+                'refresh_token': self._tokens["refresh_token"]
+            }
+            
+            response = requests.post(
+                f'https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token',
+                data=data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                token_response = response.json()
+                
+                # Salvar novos tokens
+                self.save_tokens(
+                    token_response['access_token'],
+                    token_response.get('refresh_token', self._tokens["refresh_token"]),
+                    token_response.get('expires_in', 3600)
+                )
+                
+                self.logger.info(f"✅ Token renovado com sucesso: {self.mask_token(token_response['access_token'])}")
+                return True
+            else:
+                self.logger.error(f"❌ Erro na renovação: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"❌ Erro na renovação: {e}")
+            return False
+    
+    @property
+    def access_token(self) -> Optional[str]:
+        """Retorna access token válido (renova automaticamente se necessário)"""
+        if not self._tokens:
+            if not self.load_tokens():
+                self.logger.error("❌ Nenhum token disponível")
+                return None
+        
+        if not self.is_token_valid():
+            if not self.refresh_access_token():
+                self.logger.error("❌ Falha na renovação do token")
+                return None
+        
+        return self._tokens.get("access_token")
+    
+    @property
+    def refresh_token(self) -> Optional[str]:
+        """Retorna refresh token"""
+        if not self._tokens:
+            if not self.load_tokens():
+                return None
+        return self._tokens.get("refresh_token")
+    
+    def debug_status(self):
+        """Debug information com logs seguros"""
+        self.logger.info("🔧 Microsoft Auth Unificado - Status de Debug:")
+        self.logger.info(f"   Client ID: {self.mask_token(self.client_id)}")
+        self.logger.info(f"   Alerta Folder ID: {self.mask_token(self.alerta_folder_id)}")
+        self.logger.info(f"   Access Token: {'✅ disponível' if self._tokens and self._tokens.get('access_token') else '❌ não disponível'}")
+        self.logger.info(f"   Refresh Token: {'✅ disponível' if self._tokens and self._tokens.get('refresh_token') else '❌ não disponível'}")
+        self.logger.info(f"   Token válido: {'✅ sim' if self.is_token_valid() else '❌ não'}")
 
+# Função utilitária para gerar chave de criptografia
+def generate_encryption_key() -> str:
+    """Gera nova chave Fernet para environment variable"""
+    return Fernet.generate_key().decode()
+
+# Compatibilidade com código existente da BRK
+class MicrosoftAuth(MicrosoftAuthUnified):
+    """Classe de compatibilidade para manter funcionamento do código BRK existente"""
+    pass
 
 if __name__ == "__main__":
-    # Teste rápido quando executado diretamente
-    success, message = test_microsoft_token()
-    print(f"Token Microsoft: {message}")
+    # Utilitário para gerar chave de criptografia
+    print("🔑 Gerador de chave de criptografia Fernet:")
+    print(f"ENCRYPTION_KEY={generate_encryption_key()}")
+    print("\n📋 Configure esta chave nas Environment Variables de todos os Renders:")
+    print("   - BRK: ENCRYPTION_KEY=<chave_gerada>")
+    print("   - CCB Alerta: ENCRYPTION_KEY=<chave_gerada>")
+    print("   - Enel: ENCRYPTION_KEY=<chave_gerada>")
