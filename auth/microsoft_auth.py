@@ -96,13 +96,15 @@ class MicrosoftAuthUnified:
     def _load_from_onedrive_shared(self) -> Optional[Dict[str, Any]]:
         """Carrega token compartilhado da pasta Alerta no OneDrive"""
         try:
-            # Precisa de um token básico para acessar OneDrive
-            if not self._tokens or not self._tokens.get("access_token"):
+            # CORREÇÃO RÁPIDA: Tentar usar qualquer token disponível nas env vars primeiro
+            access_token = os.getenv("MICROSOFT_ACCESS_TOKEN") or (self._tokens and self._tokens.get("access_token"))
+            
+            if not access_token:
                 self.logger.warning("⚠️  Sem access_token para acessar OneDrive")
                 return None
                 
             headers = {
-                'Authorization': f'Bearer {self._tokens["access_token"]}',
+                'Authorization': f'Bearer {access_token}',
                 'Content-Type': 'application/json'
             }
             
@@ -129,12 +131,15 @@ class MicrosoftAuthUnified:
     def _save_to_onedrive_shared(self, token_data: Dict[str, Any]) -> bool:
         """Salva token compartilhado na pasta Alerta no OneDrive"""
         try:
-            if not self._tokens or not self._tokens.get("access_token"):
+            # CORREÇÃO RÁPIDA: Tentar usar qualquer token disponível
+            access_token = os.getenv("MICROSOFT_ACCESS_TOKEN") or (self._tokens and self._tokens.get("access_token"))
+            
+            if not access_token:
                 self.logger.error("❌ Sem access_token para salvar no OneDrive")
                 return False
                 
             headers = {
-                'Authorization': f'Bearer {self._tokens["access_token"]}',
+                'Authorization': f'Bearer {access_token}',
                 'Content-Type': 'application/json'
             }
             
@@ -230,23 +235,55 @@ class MicrosoftAuthUnified:
     
     def load_tokens(self) -> bool:
         """
-        Carrega tokens com prioridade:
-        1. Environment Variables (tokens criptografados)
-        2. OneDrive compartilhado (pasta Alerta)
+        CORREÇÃO RÁPIDA: Carrega tokens com bootstrap inicial
+        1. Environment Variables (compatibilidade)
+        2. OneDrive compartilhado (pasta Alerta) - COM BOOTSTRAP
         3. Fallback local
         """
         self.logger.info("🔍 Iniciando carregamento de tokens...")
         
-        # 1. Tentar environment variables primeiro
+        # 1. Tentar environment variables primeiro (criptografadas)
         env_tokens = self._load_from_env_vars()
         if env_tokens:
             self._tokens = env_tokens
             return True
         
-        # 2. Tentar OneDrive compartilhado (se já temos um token básico)
+        # 2. NOVO: Tentar environment variables em texto puro (bootstrap)
+        access_token_plain = os.getenv("MICROSOFT_ACCESS_TOKEN")
+        refresh_token_plain = os.getenv("MICROSOFT_REFRESH_TOKEN")
+        
+        if access_token_plain and refresh_token_plain:
+            self._tokens = {
+                "access_token": access_token_plain,
+                "refresh_token": refresh_token_plain,
+                "expires_on": int(os.getenv("MICROSOFT_TOKEN_EXPIRES", str(int(datetime.now().timestamp()) + 3600)))
+            }
+            self.logger.info("✅ Tokens bootstrap carregados das ENV VARS texto plano")
+            
+            # Tentar carregar do OneDrive e migrar automaticamente
+            onedrive_tokens = self._load_from_onedrive_shared()
+            if onedrive_tokens:
+                # Auto-migração de token legado
+                if onedrive_tokens.get("encrypted"):
+                    try:
+                        onedrive_tokens["access_token"] = self._decrypt_data(onedrive_tokens["access_token"])
+                        onedrive_tokens["refresh_token"] = self._decrypt_data(onedrive_tokens["refresh_token"])
+                        self._tokens = onedrive_tokens
+                        self.logger.info("✅ Migrado para token OneDrive criptografado")
+                    except Exception as e:
+                        self.logger.error(f"❌ Erro ao descriptografar OneDrive: {e}")
+                else:
+                    # Token legado em texto puro - usar e criptografar
+                    self._tokens = onedrive_tokens
+                    self.logger.warning("⚠️  Token OneDrive em texto puro detectado - usando e migrando...")
+                    # Auto-salvar criptografado
+                    self.save_tokens(onedrive_tokens["access_token"], onedrive_tokens["refresh_token"])
+            
+            return True
+        
+        # 3. Tentar OneDrive compartilhado diretamente
         onedrive_tokens = self._load_from_onedrive_shared()
         if onedrive_tokens:
-            # Auto-migração de token legado
             if onedrive_tokens.get("encrypted"):
                 try:
                     onedrive_tokens["access_token"] = self._decrypt_data(onedrive_tokens["access_token"])
@@ -254,15 +291,12 @@ class MicrosoftAuthUnified:
                 except Exception as e:
                     self.logger.error(f"❌ Erro ao descriptografar OneDrive: {e}")
                     onedrive_tokens = None
-            else:
-                # Token legado em texto puro - criptografar automaticamente
-                self.logger.warning("⚠️  Token OneDrive em texto puro detectado - migrando...")
-                
+                    
             if onedrive_tokens:
                 self._tokens = onedrive_tokens
                 return True
         
-        # 3. Fallback local
+        # 4. Fallback local
         local_tokens = self._load_from_local_fallback()
         if local_tokens:
             self._tokens = local_tokens
