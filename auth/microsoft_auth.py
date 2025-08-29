@@ -435,7 +435,29 @@ def generate_encryption_key() -> str:
 # Compatibilidade com código existente da BRK
 class MicrosoftAuth(MicrosoftAuthUnified):
     """Classe de compatibilidade para manter funcionamento do código BRK existente"""
-    pass
+    
+    def obter_headers_autenticados(self) -> dict:
+        """Método de compatibilidade para código BRK existente"""
+        token = self.access_token
+        if not token:
+            raise Exception("Token de acesso não disponível")
+        
+        return {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json'
+        }
+    
+    def get_microsoft_token(self) -> dict:
+        """Método de compatibilidade para retornar token no formato esperado"""
+        if not self._tokens:
+            if not self.load_tokens():
+                return {}
+        
+        return {
+            'access_token': self.access_token,
+            'refresh_token': self.refresh_token,
+            'expires_on': self._tokens.get('expires_on', 0) if self._tokens else 0
+        }
 
 if __name__ == "__main__":
     # Utilitário para gerar chave de criptografia
