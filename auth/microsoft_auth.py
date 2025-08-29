@@ -321,6 +321,14 @@ class MicrosoftAuthUnified:
             'refresh_token': self.refresh_token,
             'expires_on': self._tokens.get('expires_on', 0) if self._tokens else 0
         }
+    
+    def atualizar_token(self) -> bool:
+        return self.refresh_access_token()
+    
+    def tentar_renovar_se_necessario(self) -> bool:
+        if not self.is_token_valid():
+            return self.refresh_access_token()
+        return True
 
 # Compatibilidade
 class MicrosoftAuth(MicrosoftAuthUnified):
